@@ -2,8 +2,9 @@
 
 ![](images/render.png)
 
-`NanoRT` is simple single header only ray tracing kernel(something like Intel's Embree ://embree.github.io/ )
-`NanoRT` BVH traversal kernel is based on mallie renderer https://github.com/lighttransport/mallie
+`NanoRT` is simple single header only ray tracing kernel.
+
+`NanoRT` BVH traversal kernel is based on mallie renderer: https://github.com/lighttransport/mallie
 
 ## Features
 
