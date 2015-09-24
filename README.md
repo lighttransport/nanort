@@ -8,7 +8,8 @@
 
 ## Features
 
-* C++
+* Portable C++
+  * Does not require C++11 compiler.
 * BVH spatial data structure for efficient ray intersection finding.
   * Should be able to handle ~10M triangles scene efficiently with moderate memory consumption
 * Triangle mesh only.
