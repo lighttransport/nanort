@@ -4,7 +4,7 @@
 
 `NanoRT` is simple single header only ray tracing kernel.
 
-`NanoRT` BVH traversal kernel is based on mallie renderer: https://github.com/lighttransport/mallie
+`NanoRT` BVH traversal is based on mallie renderer: https://github.com/lighttransport/mallie
 
 ## Features
 
@@ -16,6 +16,47 @@
   * Facevarying attributes(tex coords, vertex colors, etc)
 * Cross platform
   * MacOSX, Linux, Windows, ARM, x86, MIPS, etc.
+
+## API
+
+`nanort::Ray` represents ray.
+`nanort::Intersection` stores intersection information. `.t` must be set to max distance(e.g. 1.0e+30f) before ray traversal.
+`nanort::BVHAccel` builds BVH data structure from geometry, and provides the function to find intersection point for a given ray.
+
+```
+typedef struct {
+  float t;             // [inout] hit distance.
+  float u;             // [out] varycentric u of hit triangle.
+  float v;	       // [out] varicentric v of hit triangle.
+  unsigned int faceID; // [out] face ID of hit triangle.
+} Intersection;
+
+typedef struct {
+  float org[3];   // [in] must set
+  float dir[3];   // [in] must set
+  float invDir[3];// filled internally
+  int dirSign[3]; // filled internally
+} Ray;
+
+nanort::BVHBuildOptions options; // BVH build option
+nanort::BVHAccel accel;
+accel.Build(vertices, faces, numFaces, options);
+
+nanort::Intersection isect;
+isect.t = 1.0e+30f;
+
+nanort::Ray ray;
+// fill ray org and ray dir.
+
+bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray);
+```
+
+Application must prepare geometric information and store it in linear array.
+
+* `vertices` : The array of triangle vertices(xyz * numVertices)
+* `faces` : The array of triangle face indices(3 * numFaces)
+* uvs, normals, custom vertex attributes : We recommend the application define vertex attributes as facevarying.
+
 
 ## Usage
 

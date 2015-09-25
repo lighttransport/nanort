@@ -1,5 +1,5 @@
 //
-// NanoRT, single header only modern ray tracing library.
+// NanoRT, single header only modern ray tracing kernel.
 //
 
 /*
