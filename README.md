@@ -117,9 +117,9 @@ Application must prepare geometric information and store it in linear array.
           // Write your shader here.
           float3 normal;
           unsigned int fid = isect.faceID;
-          normal[0] = mesh.facevarying_normals[3*fid+0];
-          normal[1] = mesh.facevarying_normals[3*fid+1];
-          normal[2] = mesh.facevarying_normals[3*fid+2];
+          normal[0] = mesh.facevarying_normals[3*3*fid+0]; // @todo { interpolate normal }
+          normal[1] = mesh.facevarying_normals[3*3*fid+1];
+          normal[2] = mesh.facevarying_normals[3*3*fid+2];
           // Flip Y
           rgb[3 * ((height - y - 1) * width + x) + 0] = fabsf(normal[0]);
           rgb[3 * ((height - y - 1) * width + x) + 1] = fabsf(normal[1]);
