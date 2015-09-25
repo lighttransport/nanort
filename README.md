@@ -17,6 +17,12 @@
 * Cross platform
   * MacOSX, Linux, Windows, ARM, x86, MIPS, etc.
 
+## Applications
+
+* test renderer for your light trasport algorithm development.
+* test renderer for your shader language development.
+* Add 2D/3D rendering feature for non-GPU system.
+
 ## API
 
 `nanort::Ray` represents ray.
@@ -129,7 +135,7 @@ Application must prepare geometric information and store it in linear array.
       }
     }
 
-## Example
+## More example
 
 See `example` directory for example renderer using `NanoRT`.
 
@@ -140,4 +146,6 @@ MIT license.
 ## TODO
 
 * [ ] Set eplision value according to scene's bounding box size(BVHTraverse).
+  * [ ] Robust intersection calculation
 * [ ] OpenMP multithreaded BVH build.
+* [ ] Scene graph support
