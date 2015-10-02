@@ -162,14 +162,15 @@ struct BVHBuildStatistics {
   int maxTreeDepth;
   int numLeafNodes;
   int numBranchNodes;
+  float epsScale;
 
   // Set default value: Taabb = 0.2
-  BVHBuildStatistics() : maxTreeDepth(0), numLeafNodes(0), numBranchNodes(0) {}
+  BVHBuildStatistics() : maxTreeDepth(0), numLeafNodes(0), numBranchNodes(0), epsScale(1.0f) {}
 };
 
 class BVHAccel {
 public:
-  BVHAccel() {};
+  BVHAccel() : epsScale_(1.0f) {};
   ~BVHAccel() {};
 
   ///< Build BVH for input mesh.
@@ -193,12 +194,13 @@ public:
 private:
   ///< Builds BVH tree recursively.
   size_t BuildTree(const float *vertices, const unsigned int *faces, unsigned int leftIdx,
-                   unsigned int rightIdx, int depth);
+                   unsigned int rightIdx, int depth, float epsScale);
 
   BVHBuildOptions options_;
   std::vector<BVHNode> nodes_;
   std::vector<unsigned int> indices_; // max 4G triangles.
   BVHBuildStatistics stats_;
+  float epsScale_;
 };
 
 } // namespace nanort
@@ -264,8 +266,8 @@ inline void GetBoundingBoxOfTriangle(float3 &bmin, float3 &bmax,
 void ContributeBinBuffer(BinBuffer *bins, // [out]
                                 const float3 &sceneMin, const float3 &sceneMax,
                                 const float* vertices, const unsigned int* faces, unsigned int *indices,
-                                unsigned int leftIdx, unsigned int rightIdx) {
-  const float EPS = std::numeric_limits<float>::epsilon() * 8.0f;
+                                unsigned int leftIdx, unsigned int rightIdx, float epsScale) {
+  const float kEPS = std::numeric_limits<float>::epsilon() * epsScale;
 
   float binSize = (float)bins->binSize;
 
@@ -275,7 +277,7 @@ void ContributeBinBuffer(BinBuffer *bins, // [out]
   for (int i = 0; i < 3; ++i) {
     assert(sceneSize[i] >= 0.0);
 
-    if (sceneSize[i] > EPS) {
+    if (sceneSize[i] > kEPS) {
       sceneInvSize[i] = binSize / sceneSize[i];
     } else {
       sceneInvSize[i] = 0.0;
@@ -339,9 +341,10 @@ bool FindCutFromBinBuffer(float *cutPos,     // [out] xyz
                                  int &minCostAxis, // [out]
                                  const BinBuffer *bins, const float3 &bmin,
                                  const float3 &bmax, size_t numTriangles,
-                                 float costTaabb) // should be in [0.0, 1.0]
+                                 float costTaabb, // should be in [0.0, 1.0]
+                                 float epsScale)
 {
-  const float eps = std::numeric_limits<float>::epsilon() * 8.0f;
+  const float eps = std::numeric_limits<float>::epsilon() * epsScale;
 
   size_t left, right;
   float3 bsize, bstep;
@@ -468,8 +471,9 @@ private:
 void ComputeBoundingBox(float3 &bmin, float3 &bmax, const float *vertices,
                                const unsigned int *faces, unsigned int *indices,
                                unsigned int leftIndex,
-                               unsigned int rightIndex) {
-  const float kEPS = std::numeric_limits<float>::epsilon() * 8.0f;
+                               unsigned int rightIndex,
+                               float epsScale) {
+  const float kEPS = std::numeric_limits<float>::epsilon() * epsScale;
 
   size_t i = leftIndex;
   size_t idx = indices[i];
@@ -502,7 +506,7 @@ void ComputeBoundingBox(float3 &bmin, float3 &bmax, const float *vertices,
 //
 
 size_t BVHAccel::BuildTree(const float* vertices, const unsigned int* faces, unsigned int leftIdx,
-                           unsigned int rightIdx, int depth) {
+                           unsigned int rightIdx, int depth, float epsScale) {
   assert(leftIdx <= rightIdx);
 
   size_t offset = nodes_.size();
@@ -513,7 +517,7 @@ size_t BVHAccel::BuildTree(const float* vertices, const unsigned int* faces, uns
 
   float3 bmin, bmax;
   ComputeBoundingBox(bmin, bmax, vertices, faces, &indices_.at(0),
-                     leftIdx, rightIdx);
+                     leftIdx, rightIdx, epsScale);
 
   size_t n = rightIdx - leftIdx;
   if ((n < options_.minLeafPrimitives) || (depth >= options_.maxTreeDepth)) {
@@ -553,9 +557,9 @@ size_t BVHAccel::BuildTree(const float* vertices, const unsigned int* faces, uns
 
   BinBuffer bins(options_.binSize);
   ContributeBinBuffer(&bins, bmin, bmax, vertices, faces, &indices_.at(0), leftIdx,
-                      rightIdx);
+                      rightIdx, epsScale);
   FindCutFromBinBuffer(cutPos, minCutAxis, &bins, bmin, bmax, n,
-                       options_.costTaabb);
+                       options_.costTaabb, epsScale);
 
   // Try all 3 axis until good cut position avaiable.
   unsigned int midIdx;
@@ -597,8 +601,8 @@ size_t BVHAccel::BuildTree(const float* vertices, const unsigned int* faces, uns
   nodes_.push_back(node);
 
   // Recurively split tree.
-  unsigned int leftChildIndex = BuildTree(vertices, faces, leftIdx, midIdx, depth + 1);
-  unsigned int rightChildIndex = BuildTree(vertices, faces, midIdx, rightIdx, depth + 1);
+  unsigned int leftChildIndex = BuildTree(vertices, faces, leftIdx, midIdx, depth + 1, epsScale);
+  unsigned int rightChildIndex = BuildTree(vertices, faces, midIdx, rightIdx, depth + 1, epsScale);
 
   nodes_[offset].data[0] = leftChildIndex;
   nodes_[offset].data[1] = rightChildIndex;
@@ -633,9 +637,29 @@ bool BVHAccel::Build(const float* vertices, const unsigned int* faces, unsigned 
   }
 
   //
-  // 2. Build tree
+  // 2. Compute bounding box to find scene scale.
   //
-  BuildTree(vertices, faces, 0, n, 0);   // [0, n)
+  float epsScale = 1.0f;
+  float3 bmin, bmax;
+  ComputeBoundingBox(bmin, bmax, vertices, faces, &indices_.at(0), 0, n, epsScale);
+
+  // Find max
+  float3 bsize = bmax - bmin;
+  epsScale = std::abs(bsize[0]);
+  if (epsScale < std::abs(bsize[1])) {
+    epsScale = std::abs(bsize[1]);
+  }
+  if (epsScale < std::abs(bsize[2])) {
+    epsScale = std::abs(bsize[2]);
+  }
+
+  //
+  // 3. Build tree
+  //
+  BuildTree(vertices, faces, 0, n, 0, epsScale);   // [0, n)
+
+  stats_.epsScale = epsScale;
+  epsScale_ = epsScale;
 
   return true;
 }
@@ -753,8 +777,8 @@ inline bool IntersectRayAABB(float &tminOut, // [out]
 
 inline bool TriangleIsect(float &tInOut, float &uOut, float &vOut, const float3 &v0,
                           const float3 &v1, const float3 &v2, const float3 &rayOrg,
-                          const float3 &rayDir) {
-  const float kEPS = std::numeric_limits<float>::epsilon() * 8.0f;
+                          const float3 &rayDir, float epsScale) {
+  const float kEPS = std::numeric_limits<float>::epsilon() * epsScale;
 
   float3 p0(v0[0], v0[1], v0[2]);
   float3 p1(v1[0], v1[1], v1[2]);
@@ -798,7 +822,7 @@ inline bool TriangleIsect(float &tInOut, float &uOut, float &vOut, const float3 
 
 bool TestLeafNode(Intersection &isect, // [inout]
                   const BVHNode &node, const std::vector<unsigned int> &indices,
-                  const float* vertices, const unsigned int* faces, const Ray &ray) {
+                  const float* vertices, const unsigned int* faces, const Ray &ray, float epsScale) {
   bool hit = false;
 
   unsigned int numTriangles = node.data[0];
@@ -837,7 +861,7 @@ bool TestLeafNode(Intersection &isect, // [inout]
     v2[2] = vertices[3 * f2 + 2];
 
     float u, v;
-    if (TriangleIsect(t, u, v, v0, v1, v2, rayOrg, rayDir)) {
+    if (TriangleIsect(t, u, v, v0, v1, v2, rayOrg, rayDir, epsScale)) {
       // Update isect state
       isect.t = t;
       isect.u = u;
@@ -982,7 +1006,7 @@ bool BVHAccel::Traverse(Intersection &isect, const float* vertices, const unsign
     } else { // leaf node
 
       if (hit) {
-        if (TestLeafNode(isect, node, indices_, vertices, faces, ray)) {
+        if (TestLeafNode(isect, node, indices_, vertices, faces, ray, epsScale_)) {
           hitT = isect.t;
         }
       }

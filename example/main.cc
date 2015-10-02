@@ -321,7 +321,6 @@ bool LoadObj(Mesh &mesh, const char *filename) {
 
         float3 N;
         calcNormal(N, v0, v1, v2);
-        printf("%d n = %f\n", faceIdxOffset + f, N[2]);
 
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] = N[0];
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] = N[1];
@@ -415,6 +414,7 @@ int main(int argc, char** argv)
   printf("    # of leaf   nodes: %d\n", stats.numLeafNodes);
   printf("    # of branch nodes: %d\n", stats.numBranchNodes);
   printf("  Max tree depth   : %d\n", stats.maxTreeDepth);
+  printf("  Scene eps        : %f\n", stats.epsScale);
  
   std::vector<float> rgb(width * height * 3, 0.0f);
 
