@@ -146,6 +146,6 @@ MIT license.
 ## TODO
 
 * [x] Set eplision value according to scene's bounding box size(BVHTraverse).
+* [x] OpenMP multithreaded BVH build.
 * [ ] Robust intersection calculation.
-* [ ] OpenMP multithreaded BVH build.
 * [ ] Scene graph support.

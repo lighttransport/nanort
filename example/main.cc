@@ -10,6 +10,91 @@
 
 namespace {
 
+// This class is NOT thread-safe timer!
+
+#ifdef _WIN32
+#ifdef __cplusplus
+extern "C" {
+#endif
+#include <windows.h>
+#include <mmsystem.h>
+#ifdef __cplusplus
+}
+#endif
+#pragma comment(lib, "winmm.lib")
+#else
+#if defined(__unix__) || defined(__APPLE__)
+#include <sys/time.h>
+#else
+#include <ctime>
+#endif
+#endif
+
+class timerutil {
+public:
+#ifdef _WIN32
+  typedef DWORD time_t;
+
+  timerutil() { ::timeBeginPeriod(1); }
+  ~timerutil() { ::timeEndPeriod(1); }
+
+  void start() { t_[0] = ::timeGetTime(); }
+  void end() { t_[1] = ::timeGetTime(); }
+
+  time_t sec() { return (time_t)((t_[1] - t_[0]) / 1000); }
+  time_t msec() { return (time_t)((t_[1] - t_[0])); }
+  time_t usec() { return (time_t)((t_[1] - t_[0]) * 1000); }
+  time_t current() { return ::timeGetTime(); }
+
+#else
+#if defined(__unix__) || defined(__APPLE__)
+  typedef unsigned long int time_t;
+
+  void start() { gettimeofday(tv + 0, &tz); }
+  void end() { gettimeofday(tv + 1, &tz); }
+
+  time_t sec() { return (time_t)(tv[1].tv_sec - tv[0].tv_sec); }
+  time_t msec() {
+    return this->sec() * 1000 +
+           (time_t)((tv[1].tv_usec - tv[0].tv_usec) / 1000);
+  }
+  time_t usec() {
+    return this->sec() * 1000000 + (time_t)(tv[1].tv_usec - tv[0].tv_usec);
+  }
+  time_t current() {
+    struct timeval t;
+    gettimeofday(&t, NULL);
+    return (time_t)(t.tv_sec * 1000 + t.tv_usec);
+  }
+
+#else // C timer
+  // using namespace std;
+  typedef clock_t time_t;
+
+  void start() { t_[0] = clock(); }
+  void end() { t_[1] = clock(); }
+
+  time_t sec() { return (time_t)((t_[1] - t_[0]) / CLOCKS_PER_SEC); }
+  time_t msec() { return (time_t)((t_[1] - t_[0]) * 1000 / CLOCKS_PER_SEC); }
+  time_t usec() { return (time_t)((t_[1] - t_[0]) * 1000000 / CLOCKS_PER_SEC); }
+  time_t current() { return (time_t)clock(); }
+
+#endif
+#endif
+
+private:
+#ifdef _WIN32
+  DWORD t_[2];
+#else
+#if defined(__unix__) || defined(__APPLE__)
+  struct timeval tv[2];
+  struct timezone tz;
+#else
+  time_t t_[2];
+#endif
+#endif
+};
+
 struct float3 {
   float3() {}
   float3(float xx, float yy, float zz) {
@@ -385,8 +470,8 @@ int main(int argc, char** argv)
 
   std::string objFilename = "cornellbox_suzanne.obj";
 
-  if (argc > 2) {
-    objFilename = std::string(argv[2]);
+  if (argc > 1) {
+    objFilename = std::string(argv[1]);
   }
 
   bool ret = false;
@@ -399,30 +484,43 @@ int main(int argc, char** argv)
   }
 
   nanort::BVHBuildOptions options; // Use default option
+  options.cacheBBox = false;
 
   printf("  BVH build option:\n");
   printf("    # of leaf primitives: %d\n", options.minLeafPrimitives);
   printf("    SAH binsize         : %d\n", options.binSize);
 
+  timerutil t;
+  t.start();
+
   nanort::BVHAccel accel;
   ret = accel.Build(mesh.vertices, mesh.faces, mesh.numFaces, options);
   assert(ret);
+
+  t.end();
+  printf("  BVH build time: %f secs\n", t.msec() / 1000.0);
+
 
   nanort::BVHBuildStatistics stats = accel.GetStatistics();
 
   printf("  BVH statistics:\n");
   printf("    # of leaf   nodes: %d\n", stats.numLeafNodes);
   printf("    # of branch nodes: %d\n", stats.numBranchNodes);
-  printf("  Max tree depth   : %d\n", stats.maxTreeDepth);
-  printf("  Scene eps        : %f\n", stats.epsScale);
+  printf("  Max tree depth     : %d\n", stats.maxTreeDepth);
+  printf("  Scene eps          : %f\n", stats.epsScale);
+  float bmin[3], bmax[3];
+  accel.BoundingBox(bmin, bmax);
+  printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
+  printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
  
   std::vector<float> rgb(width * height * 3, 0.0f);
+
+  float tFar = 1.0e+30f;
 
   // Shoot rays.
   #ifdef _OPENMP
   #pragma omp parallel for
   #endif
-  float tFar = 1.0e+30f;
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
       nanort::Intersection isect;
