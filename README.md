@@ -19,9 +19,11 @@
 
 ## Applications
 
-* test renderer for your light trasport algorithm development.
-* test renderer for your shader language development.
+* Test renderer for your light trasport algorithm development.
+* Test renderer for your shader language development.
 * Add 2D/3D rendering feature for non-GPU system.
+  * [ ] ImGui backend?
+  * [ ] Nano SVG backend? https://github.com/memononen/nanosvg
 
 ## API
 
@@ -92,11 +94,12 @@ Application must prepare geometric information and store it in linear array.
  
     std::vector<float> rgb(width * height * 3, 0.0f);
 
+    const float tFar = 1.0e+30f;
+
     // Shoot rays.
     #ifdef _OPENMP
     #pragma omp parallel for
     #endif
-    float tFar = 1.0e+30f;
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
         nanort::Intersection isect;
@@ -148,4 +151,7 @@ MIT license.
 * [x] Set eplision value according to scene's bounding box size(BVHTraverse).
 * [x] OpenMP multithreaded BVH build.
 * [ ] Robust intersection calculation.
+  * http://jcgt.org/published/0002/02/02/
+  * http://jcgt.org/published/0002/01/05/
+  * http://people.csail.mit.edu/amy/papers/box-jgt.pdf
 * [ ] Scene graph support.
