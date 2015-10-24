@@ -223,6 +223,27 @@ void calcNormal(float3& N, float3 v0, float3 v1, float3 v2)
   N.normalize();
 }
 
+//Save in RAW headerless format, for use when exr tools are not available in system
+void SaveImageRaw(const char* filename, const float* rgb, int width, int height) {
+  std::vector<unsigned char>rawbuf;
+  rawbuf.resize(3*width*height);
+  unsigned char* raw = &rawbuf.at(0);
+
+  for (int i = 0; i < width * height; i++) {
+    raw[i*3] = (char)(rgb[3*i+0] * 255.0);
+    raw[i*3+1] = (char)(rgb[3*i+1] * 255.0);
+    raw[i*3+2] = (char)(rgb[3*i+2] * 255.0);
+  }
+  FILE* f=fopen(filename, "wb");
+  if(!f){
+    printf("Error: Couldnt open output binary file %s\n", filename);
+    return;
+  }
+  fwrite(raw, 3*width*height, 1, f);
+  fclose(f);
+  printf("Info: Saved RAW RGB image of [%dx%d] dimensions to [ %s ]\n", width, height, filename);
+}
+
 void SaveImage(const char* filename, const float* rgb, int width, int height) {
 
   float* image_ptr[3];
@@ -563,6 +584,8 @@ int main(int argc, char** argv)
 
   // Save image.
   SaveImage("render.exr", &rgb.at(0), width, height);
+  // Save Raw Image that can be opened by tools like GIMP
+  SaveImageRaw("render.data", &rgb.at(0), width, height);
 
   return 0;
 }
