@@ -146,6 +146,12 @@ See `example` directory for example renderer using `NanoRT`.
 
 MIT license.
 
+`NanoRT` uses `stack_container.h` which is licensed under:
+
+    // Copyright (c) 2006-2008 The Chromium Authors. All rights reserved.
+    // Use of this source code is governed by a BSD-style license that can be
+    // found in the LICENSE file.
+
 ## TODO
 
 * [x] Set eplision value according to scene's bounding box size(BVHTraverse).
@@ -155,3 +161,10 @@ MIT license.
   * http://jcgt.org/published/0002/01/05/
   * http://people.csail.mit.edu/amy/papers/box-jgt.pdf
 * [ ] Scene graph support.
+  * [ ] Instancing support.
+* [x] Multi-hit ray traversal.
+  * [ ] Use stack for small-sized priority queue
+* [ ] Ray traversal option.
+  * [ ] Double sided on/off.
+  * [ ] Ray offset.
+  * [ ] Avoid self-intersection.

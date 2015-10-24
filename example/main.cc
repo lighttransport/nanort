@@ -8,6 +8,8 @@
 
 #include <iostream>
 
+#define USE_MULTIHIT_RAY_TRAVERSAL (1)
+
 namespace {
 
 // This class is NOT thread-safe timer!
@@ -460,6 +462,28 @@ bool LoadObj(Mesh &mesh, const char *filename) {
   return true;
 }
 
+#if USE_MULTIHIT_RAY_TRAVERSAL
+void IdToCol(float col[3], int mid)
+{
+    float table[8][3] = {
+        { 1.0f, 0.0f, 0.0f },
+        { 0.0f, 0.0f, 1.0f },
+        { 0.0f, 1.0f, 0.0f },
+        { 1.0f, 0.0f, 1.0f },
+        { 0.0f, 1.0f, 1.0f },
+        { 1.0f, 1.0f, 0.0f },
+        { 1.0f, 1.0f, 1.0f },
+        { 0.5f, 0.5f, 0.5f }
+    };
+
+    int id = mid % 8; 
+
+    col[0] = table[id][0];
+    col[1] = table[id][1];
+    col[2] = table[id][2];
+}
+#endif
+
 } // namespace
 
 
@@ -515,7 +539,6 @@ int main(int argc, char** argv)
  
   std::vector<float> rgb(width * height * 3, 0.0f);
 
-  float tFar = 1.0e+30f;
 
   // Shoot rays.
   #ifdef _OPENMP
@@ -523,8 +546,6 @@ int main(int argc, char** argv)
   #endif
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
-      nanort::Intersection isect;
-      isect.t = tFar;
 
       // Simple camera. change eye pos and direction fit to .obj model. 
 
@@ -542,6 +563,10 @@ int main(int argc, char** argv)
       ray.dir[1] = dir[1];
       ray.dir[2] = dir[2];
 
+#if !USE_MULTIHIT_RAY_TRAVERSAL 
+      nanort::Intersection isect;
+      float tFar = 1.0e+30f;
+      isect.t = tFar;
       bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray);
       if (hit) {
         // Write your shader here.
@@ -557,6 +582,26 @@ int main(int argc, char** argv)
         rgb[3 * ((height - y - 1) * width + x) + 1] = fabsf(normal[1]);
         rgb[3 * ((height - y - 1) * width + x) + 2] = fabsf(normal[2]);
       }
+#else // multi-hit ray traversal.
+      nanort::StackVector<nanort::Intersection, 128> isects;
+      int maxIsects = 8;
+      bool hit = accel.MultiHitTraverse(isects, maxIsects, mesh.vertices, mesh.faces, ray);
+      if (hit) {
+        float col[3];
+        IdToCol(col, isects->size()-1);
+        //if (isects.size() >= 3) {
+        //  for (int i = 0; i < (int)isects.size(); i++) {
+        //    printf("t[%d]: %f\n", i, isects[i].t);
+        //  }
+        //  printf("max: %d\n", (int)isects.size());
+        //}
+
+        // Flip Y
+        rgb[3 * ((height - y - 1) * width + x) + 0] = col[0];
+        rgb[3 * ((height - y - 1) * width + x) + 1] = col[1];
+        rgb[3 * ((height - y - 1) * width + x) + 2] = col[2];
+      }
+#endif
 
     }
   }
