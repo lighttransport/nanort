@@ -16,11 +16,14 @@
   * Facevarying attributes(tex coords, vertex colors, etc)
 * Cross platform
   * MacOSX, Linux, Windows, ARM, x86, MIPS, etc.
+* GPU effient data structure
+  * Built BVH tree is a linear array and does not have pointers, thus it is suited for GPU raytracing(GPU ray traversal).
 
 ## Applications
 
 * Test renderer for your light trasport algorithm development.
 * Test renderer for your shader language development.
+* BVH builder for GPU/Accelerator ray traversal.
 * Add 2D/3D rendering feature for non-GPU system.
   * [ ] ImGui backend?
   * [ ] Nano SVG backend? https://github.com/memononen/nanosvg
