@@ -8,7 +8,7 @@
 
 #include <iostream>
 
-#define USE_MULTIHIT_RAY_TRAVERSAL (1)
+#define USE_MULTIHIT_RAY_TRAVERSAL (0)
 
 namespace {
 
