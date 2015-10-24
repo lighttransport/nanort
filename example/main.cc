@@ -231,6 +231,7 @@ void SaveImageRaw(const char* filename, const float* rgb, int width, int height)
   rawbuf.resize(3*width*height);
   unsigned char* raw = &rawbuf.at(0);
 
+  // @note { Apply gamma correction would be nice? }
   for (int i = 0; i < width * height; i++) {
     raw[i*3] = (char)(rgb[3*i+0] * 255.0);
     raw[i*3+1] = (char)(rgb[3*i+1] * 255.0);
