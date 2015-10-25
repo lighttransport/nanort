@@ -59,7 +59,13 @@ isect.t = 1.0e+30f;
 nanort::Ray ray;
 // fill ray org and ray dir.
 
+// Returns nearest hit point(if exists)
 bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray);
+
+// Multi-hit ray traversal
+nanort::StackVector<nanort::Intersection, 128> isects;
+int maxIsects = 8;
+bool hit = accel.MultiHitTraverse(isects, maxIsects, mesh.vertices, mesh.faces, ray);
 ```
 
 Application must prepare geometric information and store it in linear array.
