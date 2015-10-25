@@ -1,5 +1,7 @@
 # NanoRT, single header only modern ray tracing kernel.
 
+[![Build Status](https://travis-ci.org/lighttransport/nanort.svg)](https://travis-ci.org/lighttransport/nanort)
+
 ![](images/render.png)
 
 `NanoRT` is simple single header only ray tracing kernel.
