@@ -266,6 +266,7 @@ void SaveImage(const char* filename, const float* rgb, int width, int height) {
   image_ptr[2] = &(images[0].at(0)); // R
 
   EXRImage image;
+  InitEXRImage(&image);
 
   image.num_channels = 3;
   const char* channel_names[] = {"B", "G", "R"}; // must be BGR order.
