@@ -33,6 +33,9 @@ THE SOFTWARE.
 #include <queue>
 #include <cmath>
 #include <limits>
+#include <cstdlib>
+#include <cstring>
+#include <string>
 
 namespace nanort {
 
