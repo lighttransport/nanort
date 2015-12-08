@@ -16,33 +16,34 @@
 
 namespace {
 
+// PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
+// Licensed under Apache License 2.0 (NO WARRANTY, etc. see website)
 // http://www.pcg-random.org/
-// PCG random number
 typedef struct {
-    unsigned long long state;
-    unsigned long long inc;     // not used?
+  unsigned long long state;
+  unsigned long long inc; // not used?
 } pcg32_state_t;
 
-#define PCG32_INITIALIZER   { 0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL }
+#define PCG32_INITIALIZER                                                      \
+  { 0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL }
 
-float pcg32_random(pcg32_state_t* rng) {
-    unsigned long long oldstate = rng->state;
-    rng->state = oldstate * 6364136223846793005ULL + rng->inc;
-    unsigned int xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
-    unsigned int rot = oldstate >> 59u;
-    unsigned int ret = (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+float pcg32_random(pcg32_state_t *rng) {
+  unsigned long long oldstate = rng->state;
+  rng->state = oldstate * 6364136223846793005ULL + rng->inc;
+  unsigned int xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
+  unsigned int rot = oldstate >> 59u;
+  unsigned int ret = (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
 
-    return (float)((double)ret / (double)4294967296.0);
+  return (float)((double)ret / (double)4294967296.0);
 }
 
-void pcg32_srandom(pcg32_state_t* rng, uint64_t initstate, uint64_t initseq) {
-    rng->state = 0U;
-    rng->inc = (initseq << 1U) | 1U;
-    pcg32_random(rng);
-    rng->state += initstate;
-    pcg32_random(rng);
+void pcg32_srandom(pcg32_state_t *rng, uint64_t initstate, uint64_t initseq) {
+  rng->state = 0U;
+  rng->inc = (initseq << 1U) | 1U;
+  pcg32_random(rng);
+  rng->state += initstate;
+  pcg32_random(rng);
 }
-
 
 // This class is NOT thread-safe timer!
 
@@ -198,9 +199,7 @@ inline float vdot(float3 a, float3 b) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
-
-void calcNormal(float3& N, float3 v0, float3 v1, float3 v2)
-{
+void calcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
   float3 v10 = v1 - v0;
   float3 v20 = v2 - v0;
 
@@ -208,32 +207,34 @@ void calcNormal(float3& N, float3 v0, float3 v1, float3 v2)
   N.normalize();
 }
 
-unsigned char fclamp(float x)
-{
-  int i = (int)(powf(x, 1.0/2.2) * 256.0f);
-  if (i > 255) i = 255;
-  if (i < 0) i = 0;
-  
+unsigned char fclamp(float x) {
+  int i = (int)(powf(x, 1.0 / 2.2) * 256.0f);
+  if (i > 255)
+    i = 255;
+  if (i < 0)
+    i = 0;
+
   return (unsigned char)i;
 }
 
-void SaveImagePNG(const char* filename, const float* rgb, int width, int height) {
+void SaveImagePNG(const char *filename, const float *rgb, int width,
+                  int height) {
 
-  std::vector<unsigned char> ldr(width*height*3);
-  for (size_t i = 0; i < width*height*3; i++) {
+  std::vector<unsigned char> ldr(width * height * 3);
+  for (size_t i = 0; i < width * height * 3; i++) {
     ldr[i] = fclamp(rgb[i]);
   }
 
-  int len = stbi_write_png(filename, width, height, 3, &ldr.at(0), width*3);
+  int len = stbi_write_png(filename, width, height, 3, &ldr.at(0), width * 3);
   if (len < 1) {
     printf("Failed to save image\n");
     exit(-1);
   }
-
 }
 
-void BuildCameraFrame(float3& corner, float3& du, float3& dv, const float3& eye, const float3& lookat, const float3& up, int width, int height, float fov)
-{
+void BuildCameraFrame(float3 &corner, float3 &du, float3 &dv, const float3 &eye,
+                      const float3 &lookat, const float3 &up, int width,
+                      int height, float fov) {
   float flen =
       (0.5f * (double)height / tanf(0.5f * (double)(fov * M_PI / 180.0f)));
   float3 look;
@@ -246,24 +247,22 @@ void BuildCameraFrame(float3& corner, float3& du, float3& dv, const float3& eye,
 
   look.normalize();
   look = flen * look + eye;
-  
+
   corner = look - 0.5f * (width * du + height * dv);
 }
 
-
 typedef struct {
   std::vector<float> vertices;
-  std::vector<unsigned int> faces; 
+  std::vector<unsigned int> faces;
 } Mesh;
 
-bool BuildMSQ(Mesh& meshOut, int& imgW, int& imgH, const char* filename)
-{
+bool BuildMSQ(Mesh &meshOut, int &imgW, int &imgH, const char *filename) {
   int n;
   int cellsize = 4;
   float threshold = 0.3;
 
   // Load grayscale image.
-  unsigned char* data = stbi_load(filename, &imgW, &imgH, &n, 1);
+  unsigned char *data = stbi_load(filename, &imgW, &imgH, &n, 1);
   if (data == NULL) {
     printf("Failed to load %s\n", filename);
     return false;
@@ -277,16 +276,18 @@ bool BuildMSQ(Mesh& meshOut, int& imgW, int& imgH, const char* filename)
   }
 
   free(data);
-  
+
   printf("w x h = %d x %d\n", imgW, imgH);
-  par_msquares_meshlist *mlist = par_msquares_from_grayscale(&graydata.at(0), imgW, imgH, cellsize, threshold, PAR_MSQUARES_DUAL | PAR_MSQUARES_HEIGHTS);
+  par_msquares_meshlist *mlist = par_msquares_from_grayscale(
+      &graydata.at(0), imgW, imgH, cellsize, threshold,
+      PAR_MSQUARES_DUAL | PAR_MSQUARES_HEIGHTS);
   int numMeshes = par_msquares_get_count(mlist);
   printf("numMeshes = %d\n", numMeshes);
-  
+
   assert(numMeshes > 0);
   size_t vtxoffset = 0;
   for (int m = 0; m < numMeshes; m++) {
-    par_msquares_mesh const* mesh = par_msquares_get_mesh(mlist, m);
+    par_msquares_mesh const *mesh = par_msquares_get_mesh(mlist, m);
     printf("numTriangles = %d\n", mesh->ntriangles);
     printf("numVerts = %d\n", mesh->npoints);
     printf("dim = %d\n", mesh->dim);
@@ -294,24 +295,25 @@ bool BuildMSQ(Mesh& meshOut, int& imgW, int& imgH, const char* filename)
     float scale = 10.0f;
     for (int i = 0; i < mesh->npoints; i++) {
       if (mesh->dim == 2) {
-        meshOut.vertices.push_back(scale * mesh->points[2*i+0]);
-        meshOut.vertices.push_back(scale * mesh->points[2*i+1]);
+        meshOut.vertices.push_back(scale * mesh->points[2 * i + 0]);
+        meshOut.vertices.push_back(scale * mesh->points[2 * i + 1]);
         meshOut.vertices.push_back(0.0f);
       } else {
         // Zup -> Yup
-        meshOut.vertices.push_back(scale * mesh->points[3*i+0]);
-        meshOut.vertices.push_back(0.125f * scale * mesh->points[3*i+2]); // @fixme
-        meshOut.vertices.push_back(scale * mesh->points[3*i+1]);
+        meshOut.vertices.push_back(scale * mesh->points[3 * i + 0]);
+        meshOut.vertices.push_back(0.125f * scale *
+                                   mesh->points[3 * i + 2]); // @fixme
+        meshOut.vertices.push_back(scale * mesh->points[3 * i + 1]);
       }
     }
 
     for (int i = 0; i < mesh->ntriangles; i++) {
-      if (mesh->triangles[3*i+0] > mesh->npoints) {
+      if (mesh->triangles[3 * i + 0] > mesh->npoints) {
         exit(-1);
       }
-      meshOut.faces.push_back(vtxoffset + mesh->triangles[3*i+0]);
-      meshOut.faces.push_back(vtxoffset + mesh->triangles[3*i+1]);
-      meshOut.faces.push_back(vtxoffset + mesh->triangles[3*i+2]);
+      meshOut.faces.push_back(vtxoffset + mesh->triangles[3 * i + 0]);
+      meshOut.faces.push_back(vtxoffset + mesh->triangles[3 * i + 1]);
+      meshOut.faces.push_back(vtxoffset + mesh->triangles[3 * i + 2]);
     }
 
     vtxoffset += mesh->npoints;
@@ -320,33 +322,34 @@ bool BuildMSQ(Mesh& meshOut, int& imgW, int& imgH, const char* filename)
   par_msquares_free(mlist);
 
   return true;
-
 }
 
-void OrthoBasis(float3 basis[3], const float3& n)
-{
-    basis[2] = n;
-    basis[1].x = 0.0; basis[1].y = 0.0; basis[1].z = 0.0;
+void OrthoBasis(float3 basis[3], const float3 &n) {
+  basis[2] = n;
+  basis[1].x = 0.0;
+  basis[1].y = 0.0;
+  basis[1].z = 0.0;
 
-    if ((n.x < 0.6) && (n.x > -0.6)) {
-        basis[1].x = 1.0;
-    } else if ((n.y < 0.6) && (n.y > -0.6)) {
-        basis[1].y = 1.0;
-    } else if ((n.z < 0.6) && (n.z > -0.6)) {
-        basis[1].z = 1.0;
-    } else {
-        basis[1].x = 1.0;
-    }
+  if ((n.x < 0.6) && (n.x > -0.6)) {
+    basis[1].x = 1.0;
+  } else if ((n.y < 0.6) && (n.y > -0.6)) {
+    basis[1].y = 1.0;
+  } else if ((n.z < 0.6) && (n.z > -0.6)) {
+    basis[1].z = 1.0;
+  } else {
+    basis[1].x = 1.0;
+  }
 
-    basis[0] = vcross(basis[1], basis[2]);
-    basis[0].normalize();
+  basis[0] = vcross(basis[1], basis[2]);
+  basis[0].normalize();
 
-    basis[1] = vcross(basis[2], basis[0]);
-    basis[1].normalize();
+  basis[1] = vcross(basis[2], basis[0]);
+  basis[1].normalize();
 }
 
-float3 ShadeAO(const float3& P, const float3& N, pcg32_state_t* rng, nanort::BVHAccel& accel, const float* vertices, const unsigned int* faces)
-{
+float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
+               nanort::BVHAccel &accel, const float *vertices,
+               const unsigned int *faces) {
   const int ntheta = 16;
   const int nphi = 32;
 
@@ -360,7 +363,7 @@ float3 ShadeAO(const float3& P, const float3& N, pcg32_state_t* rng, nanort::BVH
       float r0 = pcg32_random(rng);
       float r1 = pcg32_random(rng);
       double theta = sqrt(r0);
-      double phi   = 2.0f * M_PI * r1;
+      double phi = 2.0f * M_PI * r1;
 
       double x = cos(phi) * theta;
       double y = sin(phi) * theta;
@@ -381,7 +384,7 @@ float3 ShadeAO(const float3& P, const float3& N, pcg32_state_t* rng, nanort::BVH
       ray.dir[2] = rz;
 
       nanort::Intersection occIsect;
-      occIsect.t   = std::numeric_limits<float>::max();
+      occIsect.t = std::numeric_limits<float>::max();
       bool hit = accel.Traverse(occIsect, vertices, faces, ray);
       if (hit) {
         occlusion += 1.0f;
@@ -401,9 +404,7 @@ float3 ShadeAO(const float3& P, const float3& N, pcg32_state_t* rng, nanort::BVH
 
 } // namespace
 
-
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
   int width = 512;
   int height = 513;
 
@@ -418,7 +419,6 @@ int main(int argc, char** argv)
   bool ret = BuildMSQ(mesh, imgW, imgH, argv[1]);
   assert(ret);
 
-  
   nanort::BVHBuildOptions options; // Use default option
   options.cacheBBox = false;
 
@@ -430,12 +430,12 @@ int main(int argc, char** argv)
   t.start();
 
   nanort::BVHAccel accel;
-  ret = accel.Build(&mesh.vertices.at(0), &mesh.faces.at(0), mesh.faces.size() / 3, options);
+  ret = accel.Build(&mesh.vertices.at(0), &mesh.faces.at(0),
+                    mesh.faces.size() / 3, options);
   assert(ret);
 
   t.end();
   printf("  BVH build time: %f secs\n", t.msec() / 1000.0);
-
 
   nanort::BVHBuildStatistics stats = accel.GetStatistics();
 
@@ -448,7 +448,7 @@ int main(int argc, char** argv)
   accel.BoundingBox(bmin, bmax);
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
- 
+
   std::vector<float> rgb(width * height * 3, 0.0f);
 
   float3 eye, lookat, up;
@@ -470,7 +470,8 @@ int main(int argc, char** argv)
 
   const int numLines = 32;
   int numYBlocks = height / numLines;
-  if (numYBlocks < 1) numYBlocks = 1;
+  if (numYBlocks < 1)
+    numYBlocks = 1;
 
 #ifdef _OPENMP
   // Simple dynamic task processing.
@@ -479,7 +480,7 @@ int main(int argc, char** argv)
 
   printf("OMP # of trhreads = %d\n", nthreads);
 
-  #pragma omp parallel for
+#pragma omp parallel for
   for (int th = 0; th < nthreads; th++) {
 
     pcg32_state_t rng;
@@ -489,15 +490,16 @@ int main(int argc, char** argv)
 
       int yy = 0;
 
-      // @todo { replace with atomic if OMP 3.x is available }
-      #pragma omp critical
+// @todo { replace with atomic if OMP 3.x is available }
+#pragma omp critical
       {
         counter++;
         yy = counter;
       }
 
-      if ((yy * numLines) >= height) break;
-    
+      if ((yy * numLines) >= height)
+        break;
+
       int ybegin = yy * numLines;
       int yend = std::min(height, (yy + 1) * numLines);
       for (int y = ybegin; y < yend; y++) {
@@ -505,12 +507,15 @@ int main(int argc, char** argv)
 #else
   {
     {
+      pcg32_state_t rng;
+      pcg32_srandom(&rng, 0, 0);
+
       for (int y = 0; y < height; y++) {
 #endif
 
         for (int x = 0; x < width; x++) {
 
-          // Simple camera. change eye pos and direction fit to .obj model. 
+          // Simple camera. change eye pos and direction fit to .obj model.
 
           nanort::Ray ray;
           ray.org[0] = eye[0];
@@ -521,7 +526,7 @@ int main(int argc, char** argv)
           float pu = x + 0.5f;
           float pv = y + 0.5f;
 
-          dir = corner + pu * du + pv * dv - eye; 
+          dir = corner + pu * du + pv * dv - eye;
           dir.normalize();
           ray.dir[0] = dir[0];
           ray.dir[1] = dir[1];
@@ -530,33 +535,35 @@ int main(int argc, char** argv)
           nanort::Intersection isect;
           float tFar = 1.0e+30f;
           isect.t = tFar;
-          bool hit = accel.Traverse(isect, &mesh.vertices.at(0), &mesh.faces.at(0), ray);
+          bool hit = accel.Traverse(isect, &mesh.vertices.at(0),
+                                    &mesh.faces.at(0), ray);
           if (hit) {
             // Write your shader here.
             float3 P;
             float3 N;
             unsigned int fid = isect.faceID;
             unsigned int f0, f1, f2;
-            f0 = mesh.faces[3*fid+0];
-            f1 = mesh.faces[3*fid+1];
-            f2 = mesh.faces[3*fid+2];
+            f0 = mesh.faces[3 * fid + 0];
+            f1 = mesh.faces[3 * fid + 1];
+            f2 = mesh.faces[3 * fid + 2];
             float3 v0, v1, v2;
-            v0[0] = mesh.vertices[3*f0+0];
-            v0[1] = mesh.vertices[3*f0+1];
-            v0[2] = mesh.vertices[3*f0+2];
-            v1[0] = mesh.vertices[3*f1+0];
-            v1[1] = mesh.vertices[3*f1+1];
-            v1[2] = mesh.vertices[3*f1+2];
-            v2[0] = mesh.vertices[3*f2+0];
-            v2[1] = mesh.vertices[3*f2+1];
-            v2[2] = mesh.vertices[3*f2+2];
+            v0[0] = mesh.vertices[3 * f0 + 0];
+            v0[1] = mesh.vertices[3 * f0 + 1];
+            v0[2] = mesh.vertices[3 * f0 + 2];
+            v1[0] = mesh.vertices[3 * f1 + 0];
+            v1[1] = mesh.vertices[3 * f1 + 1];
+            v1[2] = mesh.vertices[3 * f1 + 2];
+            v2[0] = mesh.vertices[3 * f2 + 0];
+            v2[1] = mesh.vertices[3 * f2 + 1];
+            v2[2] = mesh.vertices[3 * f2 + 2];
             calcNormal(N, v0, v1, v2);
 
             P[0] = ray.org[0] + isect.t * ray.dir[0];
             P[1] = ray.org[1] + isect.t * ray.dir[1];
             P[2] = ray.org[2] + isect.t * ray.dir[2];
 
-            float3 aoCol = ShadeAO(P, N, &rng, accel, &mesh.vertices.at(0), &mesh.faces.at(0));
+            float3 aoCol = ShadeAO(P, N, &rng, accel, &mesh.vertices.at(0),
+                                   &mesh.faces.at(0));
             rgb[3 * (y * width + x) + 0] = aoCol[0];
             rgb[3 * (y * width + x) + 1] = aoCol[1];
             rgb[3 * (y * width + x) + 2] = aoCol[2];
