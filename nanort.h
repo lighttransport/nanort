@@ -71,9 +71,9 @@ namespace nanort {
 // be sure to reserve() in the container up to the stack buffer size. Otherwise
 // the container will allocate a small array which will "use up" the stack
 // buffer.
-template<typename T, size_t stack_capacity>
+template <typename T, size_t stack_capacity>
 class StackAllocator : public std::allocator<T> {
- public:
+public:
   typedef typename std::allocator<T>::pointer pointer;
   typedef typename std::allocator<T>::size_type size_type;
 
@@ -81,13 +81,12 @@ class StackAllocator : public std::allocator<T> {
   // maintaining this for as long as any containers using this allocator are
   // live.
   struct Source {
-    Source() : used_stack_buffer_(false) {
-    }
+    Source() : used_stack_buffer_(false) {}
 
     // Casts the buffer in its right type.
-    T* stack_buffer() { return reinterpret_cast<T*>(stack_buffer_); }
-    const T* stack_buffer() const {
-      return reinterpret_cast<const T*>(stack_buffer_);
+    T *stack_buffer() { return reinterpret_cast<T *>(stack_buffer_); }
+    const T *stack_buffer() const {
+      return reinterpret_cast<const T *>(stack_buffer_);
     }
 
     //
@@ -108,15 +107,13 @@ class StackAllocator : public std::allocator<T> {
   };
 
   // Used by containers when they want to refer to an allocator of type U.
-  template<typename U>
-  struct rebind {
+  template <typename U> struct rebind {
     typedef StackAllocator<U, stack_capacity> other;
   };
 
   // For the straight up copy c-tor, we can share storage.
-  StackAllocator(const StackAllocator<T, stack_capacity>& rhs)
-      : source_(rhs.source_) {
-  }
+  StackAllocator(const StackAllocator<T, stack_capacity> &rhs)
+      : source_(rhs.source_) {}
 
   // ISO C++ requires the following constructor to be defined,
   // and std::vector in VC++2008SP1 Release fails with an error
@@ -127,20 +124,18 @@ class StackAllocator : public std::allocator<T> {
   // for Us.
   // TODO: If we were fancy pants, perhaps we could share storage
   // iff sizeof(T) == sizeof(U).
-  template<typename U, size_t other_capacity>
-  StackAllocator(const StackAllocator<U, other_capacity>& other)
-      : source_(NULL) {
-  }
+  template <typename U, size_t other_capacity>
+  StackAllocator(const StackAllocator<U, other_capacity> &other)
+      : source_(NULL) {}
 
-  explicit StackAllocator(Source* source) : source_(source) {
-  }
+  explicit StackAllocator(Source *source) : source_(source) {}
 
   // Actually do the allocation. Use the stack buffer if nobody has used it yet
   // and the size requested fits. Otherwise, fall through to the standard
   // allocator.
-  pointer allocate(size_type n, void* hint = 0) {
-    if (source_ != NULL && !source_->used_stack_buffer_
-        && n <= stack_capacity) {
+  pointer allocate(size_type n, void *hint = 0) {
+    if (source_ != NULL && !source_->used_stack_buffer_ &&
+        n <= stack_capacity) {
       source_->used_stack_buffer_ = true;
       return source_->stack_buffer();
     } else {
@@ -157,8 +152,8 @@ class StackAllocator : public std::allocator<T> {
       std::allocator<T>::deallocate(p, n);
   }
 
- private:
-  Source* source_;
+private:
+  Source *source_;
 };
 
 // A wrapper around STL containers that maintains a stack-sized buffer that the
@@ -169,9 +164,8 @@ class StackAllocator : public std::allocator<T> {
 // WATCH OUT: the ContainerType MUST use the proper StackAllocator for this
 // type. This object is really intended to be used only internally. You'll want
 // to use the wrappers below for different types.
-template<typename TContainerType, int stack_capacity>
-class StackContainer {
- public:
+template <typename TContainerType, int stack_capacity> class StackContainer {
+public:
   typedef TContainerType ContainerType;
   typedef typename ContainerType::value_type ContainedType;
   typedef StackAllocator<ContainedType, stack_capacity> Allocator;
@@ -189,73 +183,68 @@ class StackContainer {
   // shorter lifetimes than the source. The copy will share the same allocator
   // and therefore the same stack buffer as the original. Use std::copy to
   // copy into a "real" container for longer-lived objects.
-  ContainerType& container() { return container_; }
-  const ContainerType& container() const { return container_; }
+  ContainerType &container() { return container_; }
+  const ContainerType &container() const { return container_; }
 
   // Support operator-> to get to the container. This allows nicer syntax like:
   //   StackContainer<...> foo;
   //   std::sort(foo->begin(), foo->end());
-  ContainerType* operator->() { return &container_; }
-  const ContainerType* operator->() const { return &container_; }
+  ContainerType *operator->() { return &container_; }
+  const ContainerType *operator->() const { return &container_; }
 
 #ifdef UNIT_TEST
   // Retrieves the stack source so that that unit tests can verify that the
   // buffer is being used properly.
-  const typename Allocator::Source& stack_data() const {
-    return stack_data_;
-  }
+  const typename Allocator::Source &stack_data() const { return stack_data_; }
 #endif
 
- protected:
+protected:
   typename Allocator::Source stack_data_;
   Allocator allocator_;
   ContainerType container_;
 
-  //DISALLOW_EVIL_CONSTRUCTORS(StackContainer);
-  StackContainer(const StackContainer&);
-  void operator=(const StackContainer&);
+  // DISALLOW_EVIL_CONSTRUCTORS(StackContainer);
+  StackContainer(const StackContainer &);
+  void operator=(const StackContainer &);
 };
 
 // StackString
-template<size_t stack_capacity>
-class StackString : public StackContainer<
-    std::basic_string<char,
-                      std::char_traits<char>,
-                      StackAllocator<char, stack_capacity> >,
-    stack_capacity> {
- public:
-  StackString() : StackContainer<
-      std::basic_string<char,
-                        std::char_traits<char>,
-                        StackAllocator<char, stack_capacity> >,
-      stack_capacity>() {
-  }
+template <size_t stack_capacity>
+class StackString
+    : public StackContainer<
+          std::basic_string<char, std::char_traits<char>,
+                            StackAllocator<char, stack_capacity> >,
+          stack_capacity> {
+public:
+  StackString()
+      : StackContainer<std::basic_string<char, std::char_traits<char>,
+                                         StackAllocator<char, stack_capacity> >,
+                       stack_capacity>() {}
 
- private:
-  //DISALLOW_EVIL_CONSTRUCTORS(StackString);
-  StackString(const StackString&);
-  void operator=(const StackString&);
+private:
+  // DISALLOW_EVIL_CONSTRUCTORS(StackString);
+  StackString(const StackString &);
+  void operator=(const StackString &);
 };
 
 // StackWString
-template<size_t stack_capacity>
-class StackWString : public StackContainer<
-    std::basic_string<wchar_t,
-                      std::char_traits<wchar_t>,
-                      StackAllocator<wchar_t, stack_capacity> >,
-    stack_capacity> {
- public:
-  StackWString() : StackContainer<
-      std::basic_string<wchar_t,
-                        std::char_traits<wchar_t>,
-                        StackAllocator<wchar_t, stack_capacity> >,
-      stack_capacity>() {
-  }
+template <size_t stack_capacity>
+class StackWString
+    : public StackContainer<
+          std::basic_string<wchar_t, std::char_traits<wchar_t>,
+                            StackAllocator<wchar_t, stack_capacity> >,
+          stack_capacity> {
+public:
+  StackWString()
+      : StackContainer<
+            std::basic_string<wchar_t, std::char_traits<wchar_t>,
+                              StackAllocator<wchar_t, stack_capacity> >,
+            stack_capacity>() {}
 
- private:
-  //DISALLOW_EVIL_CONSTRUCTORS(StackWString);
-  StackWString(const StackWString&);
-  void operator=(const StackWString&);
+private:
+  // DISALLOW_EVIL_CONSTRUCTORS(StackWString);
+  StackWString(const StackWString &);
+  void operator=(const StackWString &);
 };
 
 // StackVector
@@ -264,37 +253,35 @@ class StackWString : public StackContainer<
 //   StackVector<int, 16> foo;
 //   foo->push_back(22);  // we have overloaded operator->
 //   foo[0] = 10;         // as well as operator[]
-template<typename T, size_t stack_capacity>
-class StackVector : public StackContainer<
-    std::vector<T, StackAllocator<T, stack_capacity> >,
-    stack_capacity> {
- public:
-  StackVector() : StackContainer<
-      std::vector<T, StackAllocator<T, stack_capacity> >,
-      stack_capacity>() {
-  }
+template <typename T, size_t stack_capacity>
+class StackVector
+    : public StackContainer<std::vector<T, StackAllocator<T, stack_capacity> >,
+                            stack_capacity> {
+public:
+  StackVector()
+      : StackContainer<std::vector<T, StackAllocator<T, stack_capacity> >,
+                       stack_capacity>() {}
 
   // We need to put this in STL containers sometimes, which requires a copy
   // constructor. We can't call the regular copy constructor because that will
   // take the stack buffer from the original. Here, we create an empty object
   // and make a stack buffer of its own.
-  StackVector(const StackVector<T, stack_capacity>& other)
-      : StackContainer<
-            std::vector<T, StackAllocator<T, stack_capacity> >,
-            stack_capacity>() {
+  StackVector(const StackVector<T, stack_capacity> &other)
+      : StackContainer<std::vector<T, StackAllocator<T, stack_capacity> >,
+                       stack_capacity>() {
     this->container().assign(other->begin(), other->end());
   }
 
-  StackVector<T, stack_capacity>& operator=(
-      const StackVector<T, stack_capacity>& other) {
+  StackVector<T, stack_capacity> &
+  operator=(const StackVector<T, stack_capacity> &other) {
     this->container().assign(other->begin(), other->end());
     return *this;
   }
 
   // Vectors are commonly indexed, which isn't very convenient even with
   // operator-> (using "->at()" does exception stuff we don't want).
-  T& operator[](size_t i) { return this->container().operator[](i); }
-  const T& operator[](size_t i) const {
+  T &operator[](size_t i) { return this->container().operator[](i); }
+  const T &operator[](size_t i) const {
     return this->container().operator[](i);
   }
 };
@@ -409,24 +396,19 @@ public:
 
 namespace {
 
-class IsectComparator
-{
+class IsectComparator {
 public:
-  bool operator()(const Intersection& a, const Intersection& b) const
-  {
+  bool operator()(const Intersection &a, const Intersection &b) const {
     return a.t < b.t;
   }
 };
 
 // Stores furthest intersection at top
-typedef std::priority_queue<Intersection, std::vector<Intersection>, IsectComparator> IsectVector;
+typedef std::priority_queue<Intersection, std::vector<Intersection>,
+                            IsectComparator> IsectVector;
 
-
-template<typename T>
-class Matrix
-{
+template <typename T> class Matrix {
 public:
-
   void Print(T m[4][4]) {
     for (int i = 0; i < 4; i++) {
       printf("m[%d] = %f, %f, %f, %f\n", i, m[i][0], m[i][1], m[i][2], m[i][3]);
@@ -596,9 +578,7 @@ public:
     dst[1] = tmp[1];
     dst[2] = tmp[2];
   }
-  
 };
-
 }
 
 ///< BVH build option.
@@ -671,8 +651,9 @@ public:
 
   ///< Multi-hit ray tracversal
   ///< Returns `maxIntersections` frontmost intersections
-  bool MultiHitTraverse(StackVector<Intersection, 128> &isects, int maxIntersections, const float *vertices,
-                const unsigned int *faces, Ray &ray);
+  bool MultiHitTraverse(StackVector<Intersection, 128> &isects,
+                        int maxIntersections, const float *vertices,
+                        const unsigned int *faces, Ray &ray);
 
   const std::vector<BVHNode> &GetNodes() const { return nodes_; }
   const std::vector<unsigned int> &GetIndices() const { return indices_; }
@@ -1775,9 +1756,10 @@ inline bool TriangleIsect(float &tInOut, float &uOut, float &vOut,
 }
 
 inline bool TestLeafNode(Intersection &isect, // [inout]
-                  const BVHNode &node, const std::vector<unsigned int> &indices,
-                  const float *vertices, const unsigned int *faces,
-                  const Ray &ray, float epsScale) {
+                         const BVHNode &node,
+                         const std::vector<unsigned int> &indices,
+                         const float *vertices, const unsigned int *faces,
+                         const Ray &ray, float epsScale) {
   bool hit = false;
 
   unsigned int numTriangles = node.data[0];
@@ -1830,10 +1812,11 @@ inline bool TestLeafNode(Intersection &isect, // [inout]
 }
 
 inline bool MultiHitTestLeafNode(IsectVector &isects, // [inout]
-                  int maxIntersections,
-                  const BVHNode &node, const std::vector<unsigned int> &indices,
-                  const float *vertices, const unsigned int *faces,
-                  const Ray &ray, float epsScale) {
+                                 int maxIntersections, const BVHNode &node,
+                                 const std::vector<unsigned int> &indices,
+                                 const float *vertices,
+                                 const unsigned int *faces, const Ray &ray,
+                                 float epsScale) {
   bool hit = false;
 
   unsigned int numTriangles = node.data[0];
@@ -1986,9 +1969,9 @@ bool BVHAccel::Traverse(Intersection &isect, const float *vertices,
   return false;
 }
 
-
-bool BVHAccel::MultiHitTraverse(StackVector<Intersection, 128> &isects, int maxIntersections, const float *vertices,
-                        const unsigned int *faces, Ray &ray) {
+bool BVHAccel::MultiHitTraverse(StackVector<Intersection, 128> &isects,
+                                int maxIntersections, const float *vertices,
+                                const unsigned int *faces, Ray &ray) {
   float hitT = std::numeric_limits<float>::max(); // far = no hit.
 
   int nodeStackIndex = 0;
@@ -2039,8 +2022,8 @@ bool BVHAccel::MultiHitTraverse(StackVector<Intersection, 128> &isects, int maxI
 
     } else { // leaf node
       if (hit) {
-        if (MultiHitTestLeafNode(isectPQ, maxIntersections, node, indices_, vertices, faces, ray,
-                         epsScale_)) {
+        if (MultiHitTestLeafNode(isectPQ, maxIntersections, node, indices_,
+                                 vertices, faces, ray, epsScale_)) {
           // Only update `hitT` when queue is full.
           if (isectPQ.size() >= (size_t)maxIntersections) {
             hitT = isectPQ.top().t;
@@ -2055,14 +2038,14 @@ bool BVHAccel::MultiHitTraverse(StackVector<Intersection, 128> &isects, int maxI
   if (!isectPQ.empty()) {
 
     // Store intesection in reverse order(make it frontmost order)
-    size_t n = isectPQ.size(); 
+    size_t n = isectPQ.size();
     isects->resize(n);
     for (size_t i = 0; i < n; i++) {
-      const Intersection& isect = isectPQ.top();
-      isects[n-i-1] = isect;
+      const Intersection &isect = isectPQ.top();
+      isects[n - i - 1] = isect;
       isectPQ.pop();
     }
-    
+
     return true;
   }
 
