@@ -254,6 +254,7 @@ void BuildCameraFrame(float3 &corner, float3 &du, float3 &dv, const float3 &eye,
 typedef struct {
   std::vector<float> vertices;
   std::vector<unsigned int> faces;
+  std::vector<int> facegroups;
 } Mesh;
 
 bool BuildMSQ(Mesh &meshOut, int &imgW, int &imgH, const char *filename) {
@@ -286,8 +287,11 @@ bool BuildMSQ(Mesh &meshOut, int &imgW, int &imgH, const char *filename) {
 
   assert(numMeshes > 0);
   size_t vtxoffset = 0;
+  int ntriangles = 0;
   for (int m = 0; m < numMeshes; m++) {
     par_msquares_mesh const *mesh = par_msquares_get_mesh(mlist, m);
+    meshOut.facegroups.push_back(ntriangles);
+    ntriangles += mesh->ntriangles;
     printf("numTriangles = %d\n", mesh->ntriangles);
     printf("numVerts = %d\n", mesh->npoints);
     printf("dim = %d\n", mesh->dim);
@@ -564,6 +568,13 @@ int main(int argc, char **argv) {
 
             float3 aoCol = ShadeAO(P, N, &rng, accel, &mesh.vertices.at(0),
                                    &mesh.faces.at(0));
+            if (fid < mesh.facegroups[1]) {
+                // Ocean
+                aoCol = aoCol.x * float3(0,0.25,0.5);
+            } else {
+                // Land
+                aoCol = aoCol.x * float3(0,0.9,0.5);
+            }
             rgb[3 * (y * width + x) + 0] = aoCol[0];
             rgb[3 * (y * width + x) + 1] = aoCol[1];
             rgb[3 * (y * width + x) + 2] = aoCol[2];
