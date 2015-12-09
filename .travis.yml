@@ -3,4 +3,4 @@ language: cpp
 compiler: gcc
 
 script:
-  - (cd example; make)
+  - (cd examples/objrender; make)
