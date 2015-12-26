@@ -616,6 +616,19 @@ public:
         buildSecs(0.0) {}
 };
 
+///< BVH trace option.
+class BVHTraceOptions {
+public:
+  // Hit only for face IDs in indexRange.
+  // This feature is good to mimic something like glDrawArrays()
+  unsigned int faceIdsRange[2];
+
+  BVHTraceOptions() {
+    faceIdsRange[0] = 0;
+    faceIdsRange[1] = 0x7FFFFFFF; // Up to 2G face IDs.
+  }
+};
+
 class BBox {
 public:
   float bmin[3];
@@ -647,7 +660,7 @@ public:
 
   ///< Traverse into BVH along ray and find closest hit point if found
   bool Traverse(Intersection &isect, const float *vertices,
-                const unsigned int *faces, Ray &ray);
+                const unsigned int *faces, const Ray &ray, const BVHTraceOptions& options);
 
   ///< Multi-hit ray tracversal
   ///< Returns `maxIntersections` frontmost intersections
@@ -1759,7 +1772,7 @@ inline bool TestLeafNode(Intersection &isect, // [inout]
                          const BVHNode &node,
                          const std::vector<unsigned int> &indices,
                          const float *vertices, const unsigned int *faces,
-                         const Ray &ray, float epsScale) {
+                         const Ray &ray, float epsScale, const BVHTraceOptions& traceOptions) {
   bool hit = false;
 
   unsigned int numTriangles = node.data[0];
@@ -1779,6 +1792,10 @@ inline bool TestLeafNode(Intersection &isect, // [inout]
 
   for (unsigned int i = 0; i < numTriangles; i++) {
     int faceIdx = indices[i + offset];
+
+    if ((faceIdx < traceOptions.faceIdsRange[0]) || (faceIdx >= traceOptions.faceIdsRange[1])) {
+      continue;
+    }
 
     int f0 = faces[3 * faceIdx + 0];
     int f1 = faces[3 * faceIdx + 1];
@@ -1899,7 +1916,7 @@ inline bool MultiHitTestLeafNode(IsectVector &isects, // [inout]
 } // namespace
 
 bool BVHAccel::Traverse(Intersection &isect, const float *vertices,
-                        const unsigned int *faces, Ray &ray) {
+                        const unsigned int *faces, const Ray &ray, const BVHTraceOptions& options) {
   float hitT = std::numeric_limits<float>::max(); // far = no hit.
 
   int nodeStackIndex = 0;
@@ -1953,7 +1970,7 @@ bool BVHAccel::Traverse(Intersection &isect, const float *vertices,
     } else { // leaf node
       if (hit) {
         if (TestLeafNode(isect, node, indices_, vertices, faces, ray,
-                         epsScale_)) {
+                         epsScale_, options)) {
           hitT = isect.t;
         }
       }

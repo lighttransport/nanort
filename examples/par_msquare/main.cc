@@ -389,7 +389,8 @@ float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
 
       nanort::Intersection occIsect;
       occIsect.t = std::numeric_limits<float>::max();
-      bool hit = accel.Traverse(occIsect, vertices, faces, ray);
+      nanort::BVHTraceOptions traceOptions;
+      bool hit = accel.Traverse(occIsect, vertices, faces, ray, traceOptions);
       if (hit) {
         occlusion += 1.0f;
       }
@@ -539,8 +540,9 @@ int main(int argc, char **argv) {
           nanort::Intersection isect;
           float tFar = 1.0e+30f;
           isect.t = tFar;
+          nanort::BVHTraceOptions traceOptions;
           bool hit = accel.Traverse(isect, &mesh.vertices.at(0),
-                                    &mesh.faces.at(0), ray);
+                                    &mesh.faces.at(0), ray, traceOptions);
           if (hit) {
             // Write your shader here.
             float3 P;

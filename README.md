@@ -19,12 +19,13 @@
 * Cross platform
   * MacOSX, Linux, Windows, ARM, x86, MIPS, etc.
 * GPU effient data structure
-  * Built BVH tree is a linear array and does not have pointers, thus it is suited for GPU raytracing(GPU ray traversal).
+  * Built BVH tree from `NanoRT` is a linear array and does not have pointers, thus it is suited for GPU raytracing(GPU ray traversal).
 
 ## Applications
 
 * Test renderer for your light trasport algorithm development.
 * Test renderer for your shader language development.
+* Collision detection(ray casting).
 * BVH builder for GPU/Accelerator ray traversal.
 * Add 2D/3D rendering feature for non-GPU system.
   * [ ] ImGui backend?
@@ -35,6 +36,7 @@
 `nanort::Ray` represents ray.
 `nanort::Intersection` stores intersection information. `.t` must be set to max distance(e.g. 1.0e+30f) before ray traversal.
 `nanort::BVHAccel` builds BVH data structure from geometry, and provides the function to find intersection point for a given ray.
+`nanort::BVHTraceOptions` specifies ray traverse/intersection options.
 
 ```
 typedef struct {
@@ -51,6 +53,12 @@ typedef struct {
   int dirSign[3]; // filled internally
 } Ray;
 
+class BVHTraceOptions {
+  // Trace rays only in face ids range. faceIdsRange[0] < faceIdsRange[1]
+  // default: 0 to 0x3FFFFFFF(2G faces)
+  unsigned int faceIdsRange[2]; 
+};
+
 nanort::BVHBuildOptions options; // BVH build option
 nanort::BVHAccel accel;
 accel.Build(vertices, faces, numFaces, options);
@@ -62,7 +70,8 @@ nanort::Ray ray;
 // fill ray org and ray dir.
 
 // Returns nearest hit point(if exists)
-bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray);
+BVHTraceOptions traceOptions;
+bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray, traceOptions);
 
 // Multi-hit ray traversal
 nanort::StackVector<nanort::Intersection, 128> isects;

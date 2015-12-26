@@ -590,7 +590,8 @@ int main(int argc, char** argv)
       nanort::Intersection isect;
       float tFar = 1.0e+30f;
       isect.t = tFar;
-      bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray);
+      nanort::BVHTraceOptions traceOptions;
+      bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray, traceOptions);
       if (hit) {
         // Write your shader here.
         float3 normal(0.0f, 0.0f, 0.0f);
