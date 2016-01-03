@@ -125,6 +125,8 @@ Application must prepare geometric information and store it in linear array.
         nanort::Intersection isect;
         isect.t = tFar;
 
+        BVHTraceOptions traceOptions;
+
         // Simple camera. change eye pos and direction fit to .obj model. 
 
         nanort::Ray ray;
@@ -141,7 +143,7 @@ Application must prepare geometric information and store it in linear array.
         ray.dir[1] = dir[1];
         ray.dir[2] = dir[2];
 
-        bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray);
+        bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray, traceOptions);
         if (hit) {
           // Write your shader here.
           float3 normal;
