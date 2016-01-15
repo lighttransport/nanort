@@ -221,7 +221,7 @@ void SaveImagePNG(const char *filename, const float *rgb, int width,
                   int height) {
 
   std::vector<unsigned char> ldr(width * height * 3);
-  for (size_t i = 0; i < width * height * 3; i++) {
+  for (size_t i = 0; i < (size_t)(width * height * 3); i++) {
     ldr[i] = fclamp(rgb[i]);
   }
 
@@ -272,7 +272,7 @@ bool BuildMSQ(Mesh &meshOut, int &imgW, int &imgH, const char *filename) {
 
   // Convert to float image
   std::vector<float> graydata(imgW * imgH);
-  for (size_t i = 0; i < imgW * imgH; i++) {
+  for (size_t i = 0; i < (size_t)(imgW * imgH); i++) {
     graydata[i] = data[i] / 255.0f;
   }
 
@@ -570,7 +570,7 @@ int main(int argc, char **argv) {
 
             float3 aoCol = ShadeAO(P, N, &rng, accel, &mesh.vertices.at(0),
                                    &mesh.faces.at(0));
-            if (fid < mesh.facegroups[1]) {
+            if (fid < (unsigned int)mesh.facegroups[1]) {
                 // Ocean
                 aoCol = aoCol.x * float3(0,0.25,0.5);
             } else {
