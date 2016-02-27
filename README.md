@@ -83,7 +83,7 @@ bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray, traceOptions);
 // Multi-hit ray traversal
 nanort::StackVector<nanort::Intersection, 128> isects;
 int maxIsects = 8;
-bool hit = accel.MultiHitTraverse(isects, maxIsects, mesh.vertices, mesh.faces, ray);
+bool hit = accel.MultiHitTraverse(isects, maxIsects, mesh.vertices, mesh.faces, ray, traceOptions);
 ```
 
 Application must prepare geometric information and store it in linear array.
