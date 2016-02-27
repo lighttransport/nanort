@@ -150,9 +150,9 @@ struct float3 {
   // float pad;  // for alignment
 };
 
-inline float3 operator*(float f, const float3 &v) {
-  return float3(v.x * f, v.y * f, v.z * f);
-}
+//inline float3 operator*(float f, const float3 &v) {
+//  return float3(v.x * f, v.y * f, v.z * f);
+//}
 
 inline float3 vcross(float3 a, float3 b) {
   float3 c;
@@ -162,9 +162,9 @@ inline float3 vcross(float3 a, float3 b) {
   return c;
 }
 
-inline float vdot(float3 a, float3 b) {
-  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
+//inline float vdot(float3 a, float3 b) {
+//  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+//}
 
 
 typedef struct {
@@ -296,7 +296,7 @@ void SaveImage(const char* filename, const float* rgb, int width, int height) {
 
 }
 
-bool LoadObj(Mesh &mesh, const char *filename) {
+bool LoadObj(Mesh &mesh, const char *filename, float scale) {
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
 
@@ -365,11 +365,11 @@ bool LoadObj(Mesh &mesh, const char *filename) {
 
     for (size_t v = 0; v < shapes[i].mesh.positions.size() / 3; v++) {
       mesh.vertices[3 * (vertexIdxOffset + v) + 0] =
-          shapes[i].mesh.positions[3 * v + 0];
+          scale * shapes[i].mesh.positions[3 * v + 0];
       mesh.vertices[3 * (vertexIdxOffset + v) + 1] =
-          shapes[i].mesh.positions[3 * v + 1];
+          scale * shapes[i].mesh.positions[3 * v + 1];
       mesh.vertices[3 * (vertexIdxOffset + v) + 2] =
-          shapes[i].mesh.positions[3 * v + 2];
+          scale * shapes[i].mesh.positions[3 * v + 2];
     }
 
     if (shapes[i].mesh.normals.size() > 0) {
@@ -515,33 +515,39 @@ int main(int argc, char** argv)
   int width = 512;
   int height = 512;
 
+  float scale = 1.0f;
+
   std::string objFilename = "cornellbox_suzanne.obj";
 
   if (argc > 1) {
     objFilename = std::string(argv[1]);
   }
 
+  if (argc > 2) {
+    scale = atof(argv[2]);
+  }
+
   bool ret = false;
 
   Mesh mesh;
-  ret = LoadObj(mesh, objFilename.c_str());
+  ret = LoadObj(mesh, objFilename.c_str(), scale);
   if (!ret) {
     fprintf(stderr, "Failed to load [ %s ]\n", objFilename.c_str());
     return -1;
   }
 
-  nanort::BVHBuildOptions options; // Use default option
-  options.cacheBBox = false;
+  nanort::BVHBuildOptions buildOptions; // Use default option
+  buildOptions.cacheBBox = false;
 
   printf("  BVH build option:\n");
-  printf("    # of leaf primitives: %d\n", options.minLeafPrimitives);
-  printf("    SAH binsize         : %d\n", options.binSize);
+  printf("    # of leaf primitives: %d\n", buildOptions.minLeafPrimitives);
+  printf("    SAH binsize         : %d\n", buildOptions.binSize);
 
   timerutil t;
   t.start();
 
   nanort::BVHAccel accel;
-  ret = accel.Build(mesh.vertices, mesh.faces, mesh.numFaces, options);
+  ret = accel.Build(mesh.vertices, mesh.faces, mesh.numFaces, buildOptions);
   assert(ret);
 
   t.end();
@@ -554,7 +560,6 @@ int main(int argc, char** argv)
   printf("    # of leaf   nodes: %d\n", stats.numLeafNodes);
   printf("    # of branch nodes: %d\n", stats.numBranchNodes);
   printf("  Max tree depth     : %d\n", stats.maxTreeDepth);
-  printf("  Scene eps          : %f\n", stats.epsScale);
   float bmin[3], bmax[3];
   accel.BoundingBox(bmin, bmax);
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
@@ -586,10 +591,12 @@ int main(int argc, char** argv)
       ray.dir[1] = dir[1];
       ray.dir[2] = dir[2];
 
+      float tFar = 1.0e+30f;
+      ray.minT = 0.0f;
+      ray.maxT = tFar;
+
 #if !USE_MULTIHIT_RAY_TRAVERSAL 
       nanort::Intersection isect;
-      float tFar = 1.0e+30f;
-      isect.t = tFar;
       nanort::BVHTraceOptions traceOptions;
       bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray, traceOptions);
       if (hit) {
@@ -609,7 +616,8 @@ int main(int argc, char** argv)
 #else // multi-hit ray traversal.
       nanort::StackVector<nanort::Intersection, 128> isects;
       int maxIsects = 8;
-      bool hit = accel.MultiHitTraverse(isects, maxIsects, mesh.vertices, mesh.faces, ray);
+      nanort::BVHTraceOptions traceOptions;
+      bool hit = accel.MultiHitTraverse(isects, maxIsects, mesh.vertices, mesh.faces, ray, traceOptions);
       if (hit) {
         float col[3];
         IdToCol(col, isects->size()-1);

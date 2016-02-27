@@ -195,9 +195,9 @@ inline float3 vcross(float3 a, float3 b) {
   return c;
 }
 
-inline float vdot(float3 a, float3 b) {
-  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
+//inline float vdot(float3 a, float3 b) {
+//  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+//}
 
 void calcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
   float3 v10 = v1 - v0;
@@ -386,9 +386,10 @@ float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
       ray.dir[0] = rx;
       ray.dir[1] = ry;
       ray.dir[2] = rz;
+      ray.minT = 0.0f;
+      ray.maxT = std::numeric_limits<float>::max();
 
       nanort::Intersection occIsect;
-      occIsect.t = std::numeric_limits<float>::max();
       nanort::BVHTraceOptions traceOptions;
       bool hit = accel.Traverse(occIsect, vertices, faces, ray, traceOptions);
       if (hit) {
@@ -448,7 +449,6 @@ int main(int argc, char **argv) {
   printf("    # of leaf   nodes: %d\n", stats.numLeafNodes);
   printf("    # of branch nodes: %d\n", stats.numBranchNodes);
   printf("  Max tree depth     : %d\n", stats.maxTreeDepth);
-  printf("  Scene eps          : %f\n", stats.epsScale);
   float bmin[3], bmax[3];
   accel.BoundingBox(bmin, bmax);
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
@@ -539,7 +539,8 @@ int main(int argc, char **argv) {
 
           nanort::Intersection isect;
           float tFar = 1.0e+30f;
-          isect.t = tFar;
+          ray.minT = 0.0f;
+          ray.maxT = tFar;
           nanort::BVHTraceOptions traceOptions;
           bool hit = accel.Traverse(isect, &mesh.vertices.at(0),
                                     &mesh.faces.at(0), ray, traceOptions);

@@ -17,9 +17,13 @@
 * Triangle mesh only.
   * Facevarying attributes(tex coords, vertex colors, etc)
 * Cross platform
-  * MacOSX, Linux, Windows, ARM, x86, MIPS, etc.
+  * MacOSX, Linux, Windows, ARM, x86, SPARC, MIPS, etc.
 * GPU effient data structure
   * Built BVH tree from `NanoRT` is a linear array and does not have pointers, thus it is suited for GPU raytracing(GPU ray traversal).
+* OpenMP multithreaded BVH build.
+* Robust intersection calculation.
+  * Robust BVH Ray Traversal(using up to 4 ulp version): http://jcgt.org/published/0002/02/02/
+  * Watertight Ray/Triangle Intesection: http://jcgt.org/published/0002/01/05/
 
 ## Applications
 
@@ -28,8 +32,8 @@
 * Collision detection(ray casting).
 * BVH builder for GPU/Accelerator ray traversal.
 * Add 2D/3D rendering feature for non-GPU system.
-  * [ ] ImGui backend?
-  * [ ] Nano SVG backend? https://github.com/memononen/nanosvg
+  * [ ] ImGui backend? https://github.com/syoyo/imgui/tree/nanort
+  * [ ] Nano SVG backend? https://github.com/syoyo/nanovg-nanort
 
 ## API
 
@@ -49,6 +53,8 @@ typedef struct {
 typedef struct {
   float org[3];   // [in] must set
   float dir[3];   // [in] must set
+  float minT;     // [in] must set
+  float maxT;     // [in] must set
   float invDir[3];// filled internally
   int dirSign[3]; // filled internally
 } Ray;
@@ -57,6 +63,7 @@ class BVHTraceOptions {
   // Trace rays only in face ids range. faceIdsRange[0] < faceIdsRange[1]
   // default: 0 to 0x3FFFFFFF(2G faces)
   unsigned int faceIdsRange[2]; 
+  bool cullBackFace; // default: false
 };
 
 nanort::BVHBuildOptions options; // BVH build option
@@ -123,13 +130,14 @@ Application must prepare geometric information and store it in linear array.
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
         nanort::Intersection isect;
-        isect.t = tFar;
 
         BVHTraceOptions traceOptions;
 
         // Simple camera. change eye pos and direction fit to .obj model. 
 
         nanort::Ray ray;
+        ray.minT = 0.0f;
+        ray.maxT = tFar;
         ray.org[0] = 0.0f;
         ray.org[1] = 5.0f;
         ray.org[2] = 20.0f;
@@ -176,17 +184,14 @@ MIT license.
 
 ## TODO
 
-* [x] Set eplision value according to scene's bounding box size(BVHTraverse).
-* [x] OpenMP multithreaded BVH build.
-* [ ] Robust intersection calculation.
-  * http://jcgt.org/published/0002/02/02/
-  * http://jcgt.org/published/0002/01/05/
-  * http://people.csail.mit.edu/amy/papers/box-jgt.pdf
 * [ ] Scene graph support.
   * [ ] Instancing support.
 * [x] Multi-hit ray traversal.
   * [ ] Use stack for small-sized priority queue
 * [ ] Ray traversal option.
-  * [ ] Double sided on/off.
+  * [x] FaceID range.
+  * [x] Double sided on/off.
   * [ ] Ray offset.
   * [ ] Avoid self-intersection.
+  * [ ] Custom intersection filter.
+
