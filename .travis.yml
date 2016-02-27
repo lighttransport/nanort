@@ -1,6 +1,34 @@
 language: cpp
-
-compiler: gcc
+sudo: false
+matrix:
+  include:
+  - addons: &1
+      apt:
+        sources:
+        - george-edison55-precise-backports
+        - ubuntu-toolchain-r-test
+        - llvm-toolchain-precise-3.7
+        packages:
+        - g++-4.9
+        - clang-3.7
+    compiler: clang
+    env: COMPILER_VERSION=3.7 BUILD_TYPE=Debug
+  - addons: *1
+    compiler: clang
+    env: COMPILER_VERSION=3.7 BUILD_TYPE=Release
+  - addons: &2
+      apt:
+        sources:
+        - george-edison55-precise-backports
+        - ubuntu-toolchain-r-test
+        packages:
+        - g++-4.9
+    compiler: gcc
+    env: COMPILER_VERSION=4.9 BUILD_TYPE=Debug
+  - addons: *2
+    compiler: gcc
+    env: COMPILER_VERSION=4.9 BUILD_TYPE=Release
 
 script:
-  - (cd examples/objrender; make)
+  - export CXX="${CXX}-${COMPILER_VERSION}"
+  - $(CXX) -c nanort.cc
