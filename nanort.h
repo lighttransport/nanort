@@ -740,6 +740,7 @@ class Scene
 #include <cassert>
 #include <algorithm>
 #include <functional>
+#include <cstdio>
 
 namespace nanort {
 
