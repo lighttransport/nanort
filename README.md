@@ -24,6 +24,7 @@
 * Robust intersection calculation.
   * Robust BVH Ray Traversal(using up to 4 ulp version): http://jcgt.org/published/0002/02/02/
   * Watertight Ray/Triangle Intesection: http://jcgt.org/published/0002/01/05/
+* Multi-Hit ray traversal.
 
 ## Applications
 
@@ -184,14 +185,23 @@ MIT license.
 
 ## TODO
 
+PR are always welcome!
+
+* [ ] Optimize ray tracing kernel
+  * [ ] Efficient Ray Tracing Kernels for Modern CPU Architectures http://jcgt.org/published/0004/04/05/
 * [ ] Scene graph support.
   * [ ] Instancing support.
-* [x] Multi-hit ray traversal.
-  * [ ] Use stack for small-sized priority queue
+* [ ] Optimize Multi-hit ray traversal for BVH.
+  * [ ] http://jcgt.org/published/0004/04/04/ 
 * [ ] Ray traversal option.
   * [x] FaceID range.
   * [x] Double sided on/off.
   * [ ] Ray offset.
   * [ ] Avoid self-intersection.
   * [ ] Custom intersection filter.
-
+* [ ] Fast BVH build
+  * [ ] Bonsai: Rapid Bounding Volume Hierarchy Generation using Mini Trees http://jcgt.org/published/0004/03/02/
+* [ ] Support various primitive types
+  * [ ] Spheres(particles)
+  * [ ] Bezier Curves
+  * [ ] Cylinders
