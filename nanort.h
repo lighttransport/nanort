@@ -766,6 +766,7 @@ template <class T> const T &safemax(const T &a, const T &b) {
   return (a > b) ? a : b;
 }
 
+#if 0
 template <typename IN_T, typename OUT_T>
 inline OUT_T reinterpret_type(const IN_T in) {
   // Good compiler should optimize memcpy away.
@@ -779,6 +780,7 @@ inline float add_ulp_magnitude(float f, int ulps) {
   const unsigned bits = reinterpret_type<float, unsigned>(f);
   return reinterpret_type<unsigned, float>(bits + ulps);
 }
+#endif
 
 //
 // SAH functions
