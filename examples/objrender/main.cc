@@ -598,7 +598,7 @@ int main(int argc, char** argv)
 #if !USE_MULTIHIT_RAY_TRAVERSAL 
       nanort::Intersection isect;
       nanort::BVHTraceOptions traceOptions;
-      bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray, traceOptions);
+      bool hit = accel.Traverse(&isect, mesh.vertices, mesh.faces, ray, traceOptions);
       if (hit) {
         // Write your shader here.
         float3 normal(0.0f, 0.0f, 0.0f);
@@ -617,7 +617,7 @@ int main(int argc, char** argv)
       nanort::StackVector<nanort::Intersection, 128> isects;
       int maxIsects = 8;
       nanort::BVHTraceOptions traceOptions;
-      bool hit = accel.MultiHitTraverse(isects, maxIsects, mesh.vertices, mesh.faces, ray, traceOptions);
+      bool hit = accel.MultiHitTraverse(&isects, maxIsects, mesh.vertices, mesh.faces, ray, traceOptions);
       if (hit) {
         float col[3];
         IdToCol(col, isects->size()-1);

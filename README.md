@@ -11,7 +11,7 @@
 ## Features
 
 * Portable C++
-  * Does not require C++11 compiler.
+  * Only use C++-03 features.
 * BVH spatial data structure for efficient ray intersection finding.
   * Should be able to handle ~10M triangles scene efficiently with moderate memory consumption
 * Triangle mesh only.
@@ -80,12 +80,12 @@ nanort::Ray ray;
 
 // Returns nearest hit point(if exists)
 BVHTraceOptions traceOptions;
-bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray, traceOptions);
+bool hit = accel.Traverse(&isect, mesh.vertices, mesh.faces, ray, traceOptions);
 
 // Multi-hit ray traversal
 nanort::StackVector<nanort::Intersection, 128> isects;
 int maxIsects = 8;
-bool hit = accel.MultiHitTraverse(isects, maxIsects, mesh.vertices, mesh.faces, ray, traceOptions);
+bool hit = accel.MultiHitTraverse(&isects, maxIsects, mesh.vertices, mesh.faces, ray, traceOptions);
 ```
 
 Application must prepare geometric information and store it in linear array.
@@ -153,7 +153,7 @@ Application must prepare geometric information and store it in linear array.
         ray.dir[1] = dir[1];
         ray.dir[2] = dir[2];
 
-        bool hit = accel.Traverse(isect, mesh.vertices, mesh.faces, ray, traceOptions);
+        bool hit = accel.Traverse(&isect, mesh.vertices, mesh.faces, ray, traceOptions);
         if (hit) {
           // Write your shader here.
           float3 normal;

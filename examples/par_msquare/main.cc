@@ -391,7 +391,7 @@ float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
 
       nanort::Intersection occIsect;
       nanort::BVHTraceOptions traceOptions;
-      bool hit = accel.Traverse(occIsect, vertices, faces, ray, traceOptions);
+      bool hit = accel.Traverse(&occIsect, vertices, faces, ray, traceOptions);
       if (hit) {
         occlusion += 1.0f;
       }
@@ -542,7 +542,7 @@ int main(int argc, char **argv) {
           ray.minT = 0.0f;
           ray.maxT = tFar;
           nanort::BVHTraceOptions traceOptions;
-          bool hit = accel.Traverse(isect, &mesh.vertices.at(0),
+          bool hit = accel.Traverse(&isect, &mesh.vertices.at(0),
                                     &mesh.faces.at(0), ray, traceOptions);
           if (hit) {
             // Write your shader here.
