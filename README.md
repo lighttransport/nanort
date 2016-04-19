@@ -36,6 +36,10 @@
   * [ ] ImGui backend? https://github.com/syoyo/imgui/tree/nanort
   * [ ] Nano SVG backend? https://github.com/syoyo/nanovg-nanort
 
+## Projects using NanoRT
+
+* lightmetrica https://github.com/hi2p-perim/lightmetrica-v2
+
 ## API
 
 `nanort::Ray` represents ray. The origin `org`, the direction `dir`(not necessarily normalized), the minimum hit distance `minT`(usually 0.0) and the maximum hit distance `maxT`(usually too far, e.g. 1.0e+30) must be filled before shooting ray.
