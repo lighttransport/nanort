@@ -751,18 +751,18 @@ class BVHAccel {
   unsigned int pad0_;
 };
 
-//class TriangleSAHPred : public std::unary_function<unsigned int, bool> {
 class TriangleSAHPred {
   public:
    TriangleSAHPred(const float *vertices, const unsigned int *faces)
        : axis_(0), pos_(0.0f), vertices_(vertices), faces_(faces) {}
 
    void Set(int axis, float pos) {
-      axis_ = axis;
-      pos_ = pos;
+    axis_ = axis;
+    pos_ = pos;
    }
-   
+
    bool operator()(unsigned int i) const {
+
      int axis = axis_;
      float pos = pos_;
 
@@ -1213,35 +1213,6 @@ inline bool FindCutFromBinBuffer(float *cut_pos,     // [out] xyz
 
   return true;
 }
-
-class SAHPred : public std::unary_function<unsigned int, bool> {
- public:
-  SAHPred(int axis, float pos, const float *vertices, const unsigned int *faces)
-      : axis_(axis), pos_(pos), vertices_(vertices), faces_(faces) {}
-
-  bool operator()(unsigned int i) const {
-    int axis = axis_;
-    float pos = pos_;
-
-    unsigned int i0 = faces_[3 * i + 0];
-    unsigned int i1 = faces_[3 * i + 1];
-    unsigned int i2 = faces_[3 * i + 2];
-
-    float3 p0(&vertices_[3 * i0]);
-    float3 p1(&vertices_[3 * i1]);
-    float3 p2(&vertices_[3 * i2]);
-
-    float center = p0[axis] + p1[axis] + p2[axis];
-
-    return (center < pos * 3.0f);
-  }
-
- private:
-  int axis_;
-  float pos_;
-  const float *vertices_;
-  const unsigned int *faces_;
-};
 
 #ifdef _OPENMP
 void ComputeBoundingBoxOMP(float3 *bmin, float3 *bmax, const float *vertices,
