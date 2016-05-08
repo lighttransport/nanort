@@ -288,7 +288,7 @@ int main(int argc, char **argv) {
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
 
-      // Simple camera. change eye pos and direction fit to .obj model. 
+      // Simple camera. change eye pos and direction fit to your scene. 
 
       nanort::Ray ray;
       ray.org[0] = 0.0f;
