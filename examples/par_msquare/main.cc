@@ -130,81 +130,12 @@ private:
 #endif
 };
 
-struct float3 {
-  float3() {}
-  float3(float xx, float yy, float zz) {
-    x = xx;
-    y = yy;
-    z = zz;
-  }
-  float3(const float *p) {
-    x = p[0];
-    y = p[1];
-    z = p[2];
-  }
-
-  float3 operator*(float f) const { return float3(x * f, y * f, z * f); }
-  float3 operator-(const float3 &f2) const {
-    return float3(x - f2.x, y - f2.y, z - f2.z);
-  }
-  float3 operator*(const float3 &f2) const {
-    return float3(x * f2.x, y * f2.y, z * f2.z);
-  }
-  float3 operator+(const float3 &f2) const {
-    return float3(x + f2.x, y + f2.y, z + f2.z);
-  }
-  float3 &operator+=(const float3 &f2) {
-    x += f2.x;
-    y += f2.y;
-    z += f2.z;
-    return (*this);
-  }
-  float3 operator/(const float3 &f2) const {
-    return float3(x / f2.x, y / f2.y, z / f2.z);
-  }
-  float operator[](int i) const { return (&x)[i]; }
-  float &operator[](int i) { return (&x)[i]; }
-
-  float3 neg() { return float3(-x, -y, -z); }
-
-  float length() { return sqrtf(x * x + y * y + z * z); }
-
-  void normalize() {
-    float len = length();
-    if (fabs(len) > 1.0e-6) {
-      float inv_len = 1.0 / len;
-      x *= inv_len;
-      y *= inv_len;
-      z *= inv_len;
-    }
-  }
-
-  float x, y, z;
-  // float pad;  // for alignment
-};
-
-inline float3 operator*(float f, const float3 &v) {
-  return float3(v.x * f, v.y * f, v.z * f);
-}
-
-inline float3 vcross(float3 a, float3 b) {
-  float3 c;
-  c[0] = a[1] * b[2] - a[2] * b[1];
-  c[1] = a[2] * b[0] - a[0] * b[2];
-  c[2] = a[0] * b[1] - a[1] * b[0];
-  return c;
-}
-
-//inline float vdot(float3 a, float3 b) {
-//  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-//}
-
-void calcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
-  float3 v10 = v1 - v0;
-  float3 v20 = v2 - v0;
+void calcNormal(nanort::float3 &N, nanort::float3 v0, nanort::float3 v1, nanort::float3 v2) {
+  nanort::float3 v10 = v1 - v0;
+  nanort::float3 v20 = v2 - v0;
 
   N = vcross(v20, v10);
-  N.normalize();
+  N = vnormalize(N);
 }
 
 unsigned char fclamp(float x) {
@@ -232,20 +163,20 @@ void SaveImagePNG(const char *filename, const float *rgb, int width,
   }
 }
 
-void BuildCameraFrame(float3 &corner, float3 &du, float3 &dv, const float3 &eye,
-                      const float3 &lookat, const float3 &up, int width,
+void BuildCameraFrame(nanort::float3 &corner, nanort::float3 &du, nanort::float3 &dv, const nanort::float3 &eye,
+                      const nanort::float3 &lookat, const nanort::float3 &up, int width,
                       int height, float fov) {
   float flen =
       (0.5f * (double)height / tanf(0.5f * (double)(fov * M_PI / 180.0f)));
-  float3 look;
+  nanort::float3 look;
   look = lookat - eye;
   du = vcross(look, up);
-  du.normalize();
+  du = vnormalize(du);
 
   dv = vcross(look, du);
-  dv.normalize();
+  dv = vnormalize(dv);
 
-  look.normalize();
+  look = vnormalize(look);
   look = flen * look + eye;
 
   corner = look - 0.5f * (width * du + height * dv);
@@ -328,36 +259,36 @@ bool BuildMSQ(Mesh &meshOut, int &imgW, int &imgH, const char *filename) {
   return true;
 }
 
-void OrthoBasis(float3 basis[3], const float3 &n) {
+void OrthoBasis(nanort::float3 basis[3], const nanort::float3 &n) {
   basis[2] = n;
-  basis[1].x = 0.0;
-  basis[1].y = 0.0;
-  basis[1].z = 0.0;
+  basis[1][0] = 0.0;
+  basis[1][1] = 0.0;
+  basis[1][2] = 0.0;
 
-  if ((n.x < 0.6) && (n.x > -0.6)) {
-    basis[1].x = 1.0;
-  } else if ((n.y < 0.6) && (n.y > -0.6)) {
-    basis[1].y = 1.0;
-  } else if ((n.z < 0.6) && (n.z > -0.6)) {
-    basis[1].z = 1.0;
+  if ((n.x() < 0.6) && (n.x() > -0.6)) {
+    basis[1][0] = 1.0;
+  } else if ((n.y() < 0.6) && (n.y() > -0.6)) {
+    basis[1][1] = 1.0;
+  } else if ((n.z() < 0.6) && (n.z() > -0.6)) {
+    basis[1][2] = 1.0;
   } else {
-    basis[1].x = 1.0;
+    basis[1][0]= 1.0;
   }
 
   basis[0] = vcross(basis[1], basis[2]);
-  basis[0].normalize();
+  basis[0] = vnormalize(basis[0]);
 
   basis[1] = vcross(basis[2], basis[0]);
-  basis[1].normalize();
+  basis[1] = vnormalize(basis[1]);
 }
 
-float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
-               nanort::BVHAccel &accel, const float *vertices,
-               const unsigned int *faces) {
+nanort::float3 ShadeAO(const nanort::float3 &P, const nanort::float3 &N, pcg32_state_t *rng,
+               nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred> &accel, const nanort::TriangleMesh& triangleMesh)
+{
   const int ntheta = 16;
   const int nphi = 32;
 
-  float3 basis[3];
+  nanort::float3 basis[3];
   OrthoBasis(basis, N);
 
   float occlusion = 0.0f;
@@ -374,9 +305,9 @@ float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
       double z = sqrt(1.0 - theta * theta);
 
       // local -> global
-      double rx = x * basis[0].x + y * basis[1].x + z * basis[2].x;
-      double ry = x * basis[0].y + y * basis[1].y + z * basis[2].y;
-      double rz = x * basis[0].z + y * basis[1].z + z * basis[2].z;
+      double rx = x * basis[0].x() + y * basis[1].x() + z * basis[2].x();
+      double ry = x * basis[0].y() + y * basis[1].y() + z * basis[2].y();
+      double rz = x * basis[0].z() + y * basis[1].z() + z * basis[2].z();
 
       nanort::Ray ray;
 
@@ -386,12 +317,12 @@ float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
       ray.dir[0] = rx;
       ray.dir[1] = ry;
       ray.dir[2] = rz;
-      ray.minT = 0.0f;
-      ray.maxT = std::numeric_limits<float>::max();
+      ray.min_t = 0.0f;
+      ray.max_t = std::numeric_limits<float>::max();
 
       nanort::Intersection occIsect;
       nanort::BVHTraceOptions traceOptions;
-      bool hit = accel.Traverse(&occIsect, vertices, faces, ray, traceOptions);
+      bool hit = accel.Traverse(&occIsect, ray, traceOptions, triangleMesh);
       if (hit) {
         occlusion += 1.0f;
       }
@@ -400,7 +331,7 @@ float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
 
   occlusion = (ntheta * nphi - occlusion) / (float)(ntheta * nphi);
 
-  float3 col;
+  nanort::float3 col;
   col[0] = occlusion;
   col[1] = occlusion;
   col[2] = occlusion;
@@ -426,18 +357,19 @@ int main(int argc, char **argv) {
   assert(ret);
 
   nanort::BVHBuildOptions options; // Use default option
-  options.cacheBBox = false;
+  options.cache_bbox = false;
 
   printf("  BVH build option:\n");
-  printf("    # of leaf primitives: %d\n", options.minLeafPrimitives);
-  printf("    SAH binsize         : %d\n", options.binSize);
+  printf("    # of leaf primitives: %d\n", options.min_leaf_primitives);
+  printf("    SAH binsize         : %d\n", options.bin_size);
 
   timerutil t;
   t.start();
 
-  nanort::BVHAccel accel;
-  ret = accel.Build(&mesh.vertices.at(0), &mesh.faces.at(0),
-                    mesh.faces.size() / 3, options);
+  nanort::TriangleMesh triangleMesh(&mesh.vertices.at(0), &mesh.faces.at(0));
+  nanort::TriangleSAHPred trianglePred(&mesh.vertices.at(0), &mesh.faces.at(0));
+  nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred> accel;
+  ret = accel.Build(mesh.faces.size() / 3, options, triangleMesh, trianglePred);
   assert(ret);
 
   t.end();
@@ -446,9 +378,9 @@ int main(int argc, char **argv) {
   nanort::BVHBuildStatistics stats = accel.GetStatistics();
 
   printf("  BVH statistics:\n");
-  printf("    # of leaf   nodes: %d\n", stats.numLeafNodes);
-  printf("    # of branch nodes: %d\n", stats.numBranchNodes);
-  printf("  Max tree depth     : %d\n", stats.maxTreeDepth);
+  printf("    # of leaf   nodes: %d\n", stats.num_leaf_nodes);
+  printf("    # of branch nodes: %d\n", stats.num_branch_nodes);
+  printf("  Max tree depth     : %d\n", stats.max_tree_depth);
   float bmin[3], bmax[3];
   accel.BoundingBox(bmin, bmax);
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
@@ -456,7 +388,7 @@ int main(int argc, char **argv) {
 
   std::vector<float> rgb(width * height * 3, 0.0f);
 
-  float3 eye, lookat, up;
+  nanort::float3 eye, lookat, up;
   eye[0] = 5.0f;
   eye[1] = 12.5f;
   eye[2] = 20.0f;
@@ -469,7 +401,7 @@ int main(int argc, char **argv) {
   up[1] = 1.0f;
   up[2] = 0.0f;
 
-  float3 corner, du, dv;
+  nanort::float3 corner, du, dv;
   BuildCameraFrame(corner, du, dv, eye, lookat, up, width, height, 45.0f);
   printf("corner = %f, %f, %f\n", corner[0], corner[1], corner[2]);
 
@@ -527,33 +459,32 @@ int main(int argc, char **argv) {
           ray.org[1] = eye[1];
           ray.org[2] = eye[2];
 
-          float3 dir;
+          nanort::float3 dir;
           float pu = x + 0.5f;
           float pv = y + 0.5f;
 
           dir = corner + pu * du + pv * dv - eye;
-          dir.normalize();
+          dir = vnormalize(dir);
           ray.dir[0] = dir[0];
           ray.dir[1] = dir[1];
           ray.dir[2] = dir[2];
 
           nanort::Intersection isect;
           float tFar = 1.0e+30f;
-          ray.minT = 0.0f;
-          ray.maxT = tFar;
+          ray.min_t = 0.0f;
+          ray.max_t = tFar;
           nanort::BVHTraceOptions traceOptions;
-          bool hit = accel.Traverse(&isect, &mesh.vertices.at(0),
-                                    &mesh.faces.at(0), ray, traceOptions);
+          bool hit = accel.Traverse(&isect, ray, traceOptions, triangleMesh);
           if (hit) {
             // Write your shader here.
-            float3 P;
-            float3 N;
-            unsigned int fid = isect.faceID;
+            nanort::float3 P;
+            nanort::float3 N;
+            unsigned int fid = isect.prim_id;
             unsigned int f0, f1, f2;
             f0 = mesh.faces[3 * fid + 0];
             f1 = mesh.faces[3 * fid + 1];
             f2 = mesh.faces[3 * fid + 2];
-            float3 v0, v1, v2;
+            nanort::float3 v0, v1, v2;
             v0[0] = mesh.vertices[3 * f0 + 0];
             v0[1] = mesh.vertices[3 * f0 + 1];
             v0[2] = mesh.vertices[3 * f0 + 2];
@@ -569,14 +500,13 @@ int main(int argc, char **argv) {
             P[1] = ray.org[1] + isect.t * ray.dir[1];
             P[2] = ray.org[2] + isect.t * ray.dir[2];
 
-            float3 aoCol = ShadeAO(P, N, &rng, accel, &mesh.vertices.at(0),
-                                   &mesh.faces.at(0));
+            nanort::float3 aoCol = ShadeAO(P, N, &rng, accel, triangleMesh);
             if (fid < (unsigned int)mesh.facegroups[1]) {
                 // Ocean
-                aoCol = aoCol.x * float3(0,0.25,0.5);
+                aoCol = aoCol.x() * nanort::float3(0,0.25,0.5);
             } else {
                 // Land
-                aoCol = aoCol.x * float3(0,0.9,0.5);
+                aoCol = aoCol.x() * nanort::float3(0,0.9,0.5);
             }
             rgb[3 * (y * width + x) + 0] = aoCol[0];
             rgb[3 * (y * width + x) + 1] = aoCol[1];

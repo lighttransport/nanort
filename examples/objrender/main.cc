@@ -3,7 +3,6 @@
 #define TINYEXR_IMPLEMENTATION
 #include "tinyexr.h"
 
-#define NANORT_IMPLEMENTATION
 #include "nanort.h"
 
 #include <iostream>
@@ -621,9 +620,9 @@ int main(int argc, char** argv)
       }
 #else // multi-hit ray traversal.
       nanort::StackVector<nanort::Intersection, 128> isects;
-      int maxIsects = 8;
-      nanort::BVHTraceOptions traceOptions;
-      bool hit = accel.MultiHitTraverse(&isects, maxIsects, mesh.vertices, mesh.faces, ray, traceOptions);
+      int max_isects = 8;
+      nanort::BVHTraceOptions trace_options;
+      bool hit = accel.MultiHitTraverse(&isects, max_isects, ray, trace_options, triangle_mesh);
       if (hit) {
         float col[3];
         IdToCol(col, isects->size()-1);

@@ -55,45 +55,50 @@
 ```
 typedef struct {
   float t;             // [inout] hit distance.
-  float u;             // [out] varycentric u of hit triangle.
-  float v;	       // [out] varicentric v of hit triangle.
-  unsigned int faceID; // [out] face ID of hit triangle.
+  float u;             // [out] varycentric u of hit primitive.
+  float v;	       // [out] varicentric v of hit primitive.
+  unsigned int prim_id; // [out] primitive ID of hit primitive.
 } Intersection;
 
 typedef struct {
-  float org[3];   // [in] must set
-  float dir[3];   // [in] must set
-  float minT;     // [in] must set
-  float maxT;     // [in] must set
-  float invDir[3];// filled internally
-  int dirSign[3]; // filled internally
+  float org[3];    // [in] must set
+  float dir[3];    // [in] must set
+  float min_t;     // [in] must set
+  float max_t;     // [in] must set
+  float inv_dir[3];// filled internally
+  int dir_sign[3]; // filled internally
 } Ray;
 
 class BVHTraceOptions {
   // Trace rays only in face ids range. faceIdsRange[0] < faceIdsRange[1]
   // default: 0 to 0x3FFFFFFF(2G faces)
-  unsigned int faceIdsRange[2]; 
-  bool cullBackFace; // default: false
+  unsigned int prim_ids_range[2]; 
+  bool cull_back_face; // default: false
 };
 
 nanort::BVHBuildOptions options; // BVH build option
-nanort::BVHAccel accel;
-accel.Build(vertices, faces, numFaces, options);
+
+nanort::TriangleMesh triangle_mesh(...);
+nanort::TriangleSAHPred triangle_pred(...);
+
+nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred> accel;
+ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
 
 nanort::Intersection isect;
-isect.t = 1.0e+30f;
+isect.min_t = 0.0f;
+isect.max_t = 1.0e+30f;
 
 nanort::Ray ray;
 // fill ray org and ray dir.
 
 // Returns nearest hit point(if exists)
-BVHTraceOptions traceOptions;
-bool hit = accel.Traverse(&isect, mesh.vertices, mesh.faces, ray, traceOptions);
+BVHTraceOptions trace_options;
+bool hit = accel.Traverse(&isect, mesh.vertices, mesh.faces, ray, trace_options, triangle_mesh);
 
 // Multi-hit ray traversal
 nanort::StackVector<nanort::Intersection, 128> isects;
-int maxIsects = 8;
-bool hit = accel.MultiHitTraverse(&isects, maxIsects, mesh.vertices, mesh.faces, ray, traceOptions);
+int max_isects = 8;
+bool hit = accel.MultiHitTraverse(&isects, max_isects, ray, trace_options, triangle_mesh);
 ```
 
 Application must prepare geometric information and store it in linear array.
@@ -105,8 +110,7 @@ Application must prepare geometric information and store it in linear array.
 
 ## Usage
 
-    // Do this only for *one* .cc file.
-    #define NANORT_IMPLEMENTATION
+    // NanoRT defines template based class, so no NANORT_IMPLEMENTATION anymore.
     #include "nanort.h"
 
     Mesh mesh;
@@ -114,12 +118,11 @@ Application must prepare geometric information and store it in linear array.
 
     nanort::BVHBuildOptions options; // Use default option
 
-    printf("  BVH build option:\n");
-    printf("    # of leaf primitives: %d\n", options.minLeafPrimitives);
-    printf("    SAH binsize         : %d\n", options.binSize);
+    nanort::TriangleMesh triangle_mesh(mesh.vertices, mesh.faces);
+    nanort::TriangleSAHPred triangle_pred(mesh.vertices, mesh.faces);
 
-    nanort::BVHAccel accel;
-    ret = accel.Build(mesh.vertices, mesh.faces, mesh.numFaces, options);
+    nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred> accel;
+    ret = accel.Build(mesh.vertices, mesh.faces, mesh.num_faces, options);
     assert(ret);
 
     nanort::BVHBuildStatistics stats = accel.GetStatistics();
@@ -141,13 +144,13 @@ Application must prepare geometric information and store it in linear array.
       for (int x = 0; x < width; x++) {
         nanort::Intersection isect;
 
-        BVHTraceOptions traceOptions;
+        BVHTraceOptions trace_options;
 
         // Simple camera. change eye pos and direction fit to .obj model. 
 
         nanort::Ray ray;
-        ray.minT = 0.0f;
-        ray.maxT = tFar;
+        ray.min_t = 0.0f;
+        ray.max_t = tFar;
         ray.org[0] = 0.0f;
         ray.org[1] = 5.0f;
         ray.org[2] = 20.0f;
@@ -161,11 +164,11 @@ Application must prepare geometric information and store it in linear array.
         ray.dir[1] = dir[1];
         ray.dir[2] = dir[2];
 
-        bool hit = accel.Traverse(&isect, mesh.vertices, mesh.faces, ray, traceOptions);
+        bool hit = accel.Traverse(&isect, mesh.vertices, mesh.faces, ray, trace_options, triangle_mesh);
         if (hit) {
           // Write your shader here.
           float3 normal;
-          unsigned int fid = isect.faceID;
+          unsigned int fid = isect.prim_id;
           normal[0] = mesh.facevarying_normals[3*3*fid+0]; // @todo { interpolate normal }
           normal[1] = mesh.facevarying_normals[3*3*fid+1];
           normal[2] = mesh.facevarying_normals[3*3*fid+2];
@@ -180,7 +183,11 @@ Application must prepare geometric information and store it in linear array.
 
 ## More example
 
-See `example` directory for example renderer using `NanoRT`.
+See `examples` directory for example renderer using `NanoRT`.
+
+## Custom geometry
+
+See API wiki: https://github.com/lighttransport/nanort/wiki/API
 
 ## License
 
@@ -207,10 +214,10 @@ PR are always welcome!
   * [x] Double sided on/off.
   * [ ] Ray offset.
   * [ ] Avoid self-intersection.
-  * [ ] Custom intersection filter.
+  * [x] Custom intersection filter.
 * [ ] Fast BVH build
   * [ ] Bonsai: Rapid Bounding Volume Hierarchy Generation using Mini Trees http://jcgt.org/published/0004/03/02/
 * [ ] Support various primitive types
-  * [ ] Spheres(particles)
+  * [x] Spheres(particles) `examples/particle_primitive/`
   * [ ] Bezier Curves
   * [ ] Cylinders
