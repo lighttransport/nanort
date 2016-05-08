@@ -824,6 +824,17 @@ class TriangleMesh {
       (*bmax)[0] = vertices_[3 * faces_[3 * prim_index + 0] + 0];
       (*bmax)[1] = vertices_[3 * faces_[3 * prim_index + 0] + 1];
       (*bmax)[2] = vertices_[3 * faces_[3 * prim_index + 0] + 2];
+
+      for (int i = 1; i < 3; i++) {
+        for (int k = 0; k < 3; k++) {
+          if ((*bmin)[k] > vertices_[3 * faces_[3 * prim_index + i] + k]) {
+            (*bmin)[k] = vertices_[3 * faces_[3 * prim_index + i] + k];
+          }
+          if ((*bmax)[k] < vertices_[3 * faces_[3 * prim_index + i] + k]) {
+            (*bmax)[k] = vertices_[3 * faces_[3 * prim_index + i] + k];
+          }
+        }
+      }
     }
 
     /// Do ray interesection stuff for `prim_index` th primitive and return hit distance `t`,
@@ -1306,8 +1317,7 @@ inline void ComputeBoundingBox(float3 *bmin, float3 *bmax,
                                const unsigned int *indices, unsigned int left_index,
                                unsigned int right_index, P& p) {
   {
-    unsigned int i = left_index;
-    unsigned int idx = indices[i];
+    unsigned int idx = indices[left_index];
     p.BoundingBox(bmin, bmax, idx);
   }
 
