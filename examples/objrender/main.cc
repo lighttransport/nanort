@@ -168,16 +168,16 @@ inline float3 vcross(float3 a, float3 b) {
 
 
 typedef struct {
-  size_t numVertices;
-  size_t numFaces;
-  float *vertices;              /// [xyz] * numVertices
-  float *facevarying_normals;   /// [xyz] * 3(triangle) * numFaces
-  float *facevarying_tangents;  /// [xyz] * 3(triangle) * numFaces
-  float *facevarying_binormals; /// [xyz] * 3(triangle) * numFaces
-  float *facevarying_uvs;       /// [xyz] * 3(triangle) * numFaces
-  float *facevarying_vertex_colors;   /// [xyz] * 3(triangle) * numFaces
-  unsigned int *faces;         /// triangle x numFaces
-  unsigned int *materialIDs;   /// index x numFaces
+  size_t num_vertices;
+  size_t num_faces;
+  float *vertices;              /// [xyz] * num_vertices
+  float *facevarying_normals;   /// [xyz] * 3(triangle) * num_faces
+  float *facevarying_tangents;  /// [xyz] * 3(triangle) * num_faces
+  float *facevarying_binormals; /// [xyz] * 3(triangle) * num_faces
+  float *facevarying_uvs;       /// [xyz] * 3(triangle) * num_faces
+  float *facevarying_vertex_colors;   /// [xyz] * 3(triangle) * num_faces
+  unsigned int *faces;         /// triangle x num_faces
+  unsigned int *material_ids;   /// index x num_faces
 } Mesh;
 
 struct Material {
@@ -310,8 +310,8 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
   std::cout << "[LoadOBJ] # of shapes in .obj : " << shapes.size() << std::endl;
   std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size() << std::endl;
 
-  size_t numVertices = 0;
-  size_t numFaces = 0;
+  size_t num_vertices = 0;
+  size_t num_faces = 0;
   for (size_t i = 0; i < shapes.size(); i++) {
     printf("  shape[%ld].name = %s\n", i, shapes[i].name.c_str());
     printf("  shape[%ld].indices: %ld\n", i, shapes[i].mesh.indices.size());
@@ -321,24 +321,24 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
     printf("  shape[%ld].normals: %ld\n", i, shapes[i].mesh.normals.size());
     assert((shapes[i].mesh.normals.size() % 3) == 0);
 
-    numVertices += shapes[i].mesh.positions.size() / 3;
-    numFaces += shapes[i].mesh.indices.size() / 3;
+    num_vertices += shapes[i].mesh.positions.size() / 3;
+    num_faces += shapes[i].mesh.indices.size() / 3;
   }
-  std::cout << "[LoadOBJ] # of faces: " << numFaces << std::endl;
-  std::cout << "[LoadOBJ] # of vertices: " << numVertices << std::endl;
+  std::cout << "[LoadOBJ] # of faces: " << num_faces << std::endl;
+  std::cout << "[LoadOBJ] # of vertices: " << num_vertices << std::endl;
 
   // @todo { material and texture. }
 
   // Shape -> Mesh
-  mesh.numFaces = numFaces;
-  mesh.numVertices = numVertices;
-  mesh.vertices = new float[numVertices * 3];
-  mesh.faces = new unsigned int[numFaces * 3];
-  mesh.materialIDs = new unsigned int[numFaces];
-  memset(mesh.materialIDs, 0, sizeof(int) * numFaces);
-  mesh.facevarying_normals = new float[numFaces * 3 * 3];
-  mesh.facevarying_uvs = new float[numFaces * 3 * 2];
-  memset(mesh.facevarying_uvs, 0, sizeof(float) * 2 * 3 * numFaces);
+  mesh.num_faces = num_faces;
+  mesh.num_vertices = num_vertices;
+  mesh.vertices = new float[num_vertices * 3];
+  mesh.faces = new unsigned int[num_faces * 3];
+  mesh.material_ids = new unsigned int[num_faces];
+  memset(mesh.material_ids, 0, sizeof(int) * num_faces);
+  mesh.facevarying_normals = new float[num_faces * 3 * 3];
+  mesh.facevarying_uvs = new float[num_faces * 3 * 2];
+  memset(mesh.facevarying_uvs, 0, sizeof(float) * 2 * 3 * num_faces);
 
   // @todo {}
   mesh.facevarying_tangents = NULL;
@@ -360,7 +360,7 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
       mesh.faces[3 * (faceIdxOffset + f) + 1] += vertexIdxOffset;
       mesh.faces[3 * (faceIdxOffset + f) + 2] += vertexIdxOffset;
 
-      mesh.materialIDs[faceIdxOffset + f] = shapes[i].mesh.material_ids[f];
+      mesh.material_ids[faceIdxOffset + f] = shapes[i].mesh.material_ids[f];
     }
 
     for (size_t v = 0; v < shapes[i].mesh.positions.size() / 3; v++) {
@@ -536,18 +536,28 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  nanort::BVHBuildOptions buildOptions; // Use default option
-  buildOptions.cacheBBox = false;
+  nanort::BVHBuildOptions build_options; // Use default option
+  build_options.cache_bbox = false;
 
   printf("  BVH build option:\n");
-  printf("    # of leaf primitives: %d\n", buildOptions.minLeafPrimitives);
-  printf("    SAH binsize         : %d\n", buildOptions.binSize);
+  printf("    # of leaf primitives: %d\n", build_options.min_leaf_primitives);
+  printf("    SAH binsize         : %d\n", build_options.bin_size);
 
   timerutil t;
   t.start();
 
-  nanort::BVHAccel accel;
-  ret = accel.Build(mesh.vertices, mesh.faces, mesh.numFaces, buildOptions);
+  nanort::TriangleMesh triangle_mesh;
+  nanort::TriangleMesh::TriangleMeshInput triangle_mesh_input;
+
+  triangle_mesh_input.vertices = mesh.vertices;
+  triangle_mesh_input.faces = mesh.faces;
+  nanort::TriangleSAHPred triangle_pred(mesh.vertices, mesh.faces);
+
+  printf("num_triangles = %lu\n", mesh.num_faces);
+  printf("faces = %p\n", mesh.faces);
+
+  nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred> accel;
+  ret = accel.Build(reinterpret_cast<void *>(&triangle_mesh_input), mesh.num_faces, build_options, triangle_mesh, triangle_pred);
   assert(ret);
 
   t.end();
@@ -557,9 +567,9 @@ int main(int argc, char** argv)
   nanort::BVHBuildStatistics stats = accel.GetStatistics();
 
   printf("  BVH statistics:\n");
-  printf("    # of leaf   nodes: %d\n", stats.numLeafNodes);
-  printf("    # of branch nodes: %d\n", stats.numBranchNodes);
-  printf("  Max tree depth     : %d\n", stats.maxTreeDepth);
+  printf("    # of leaf   nodes: %d\n", stats.num_leaf_nodes);
+  printf("    # of branch nodes: %d\n", stats.num_branch_nodes);
+  printf("  Max tree depth     : %d\n", stats.max_tree_depth);
   float bmin[3], bmax[3];
   accel.BoundingBox(bmin, bmax);
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
@@ -591,18 +601,18 @@ int main(int argc, char** argv)
       ray.dir[1] = dir[1];
       ray.dir[2] = dir[2];
 
-      float tFar = 1.0e+30f;
-      ray.minT = 0.0f;
-      ray.maxT = tFar;
+      float kFar = 1.0e+30f;
+      ray.min_t = 0.0f;
+      ray.max_t = kFar;
 
 #if !USE_MULTIHIT_RAY_TRAVERSAL 
       nanort::Intersection isect;
-      nanort::BVHTraceOptions traceOptions;
-      bool hit = accel.Traverse(&isect, mesh.vertices, mesh.faces, ray, traceOptions);
+      nanort::BVHTraceOptions trace_options;
+      bool hit = accel.Traverse(&isect, ray, trace_options, triangle_mesh);
       if (hit) {
         // Write your shader here.
         float3 normal(0.0f, 0.0f, 0.0f);
-        unsigned int fid = isect.faceID;
+        unsigned int fid = isect.prim_id;
         if (mesh.facevarying_normals) {
           normal[0] = mesh.facevarying_normals[9*fid+0];
           normal[1] = mesh.facevarying_normals[9*fid+1];
