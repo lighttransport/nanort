@@ -670,7 +670,7 @@ class BVHAccel {
   ~BVHAccel() {}
 
   /// Build BVH for input primitives.
-  bool Build(const void *primitive_data, const unsigned int num_primitives, const BVHBuildOptions &options, P& p, Pred& pred);
+  bool Build(const unsigned int num_primitives, const BVHBuildOptions &options, P& p, Pred& pred);
 
   /// Get statistics of built BVH tree. Valid after Build()
   BVHBuildStatistics GetStatistics() const { return stats_; }
@@ -789,6 +789,10 @@ class TriangleSAHPred {
 class TriangleMesh {
 
   public:
+    TriangleMesh(const float* vertices, const unsigned int *faces) :
+      vertices_(vertices), faces_(faces) {
+    }
+
     // For Watertight Ray/Triangle Intersection.
     typedef struct {
       float Sx;
@@ -798,21 +802,6 @@ class TriangleMesh {
       int ky;
       int kz;
     } RayCoeff;
-
-    typedef struct {
-      const float* vertices;
-      const unsigned int* faces;
-    } TriangleMeshInput;
-
-    
-    /// Do data preparation(e.g. prepare geometry buffer) before building BVH.
-    /// This function is called only once in BVH build.
-    void PrepareBuild(const void *arg) {
-      const TriangleMeshInput *data = reinterpret_cast<const TriangleMeshInput*>(arg);
-
-      vertices_ = data->vertices;
-      faces_ = data->faces;
-    }
 
     /// Compute bounding box for `prim_index`th triangle.
     /// This function is called for each primitive in BVH build.
@@ -825,13 +814,13 @@ class TriangleMesh {
       (*bmax)[1] = vertices_[3 * faces_[3 * prim_index + 0] + 1];
       (*bmax)[2] = vertices_[3 * faces_[3 * prim_index + 0] + 2];
 
-      for (int i = 1; i < 3; i++) {
-        for (int k = 0; k < 3; k++) {
-          if ((*bmin)[k] > vertices_[3 * faces_[3 * prim_index + i] + k]) {
-            (*bmin)[k] = vertices_[3 * faces_[3 * prim_index + i] + k];
+      for (unsigned int i = 1; i < 3; i++) {
+        for (unsigned int k = 0; k < 3; k++) {
+          if ((*bmin)[static_cast<int>(k)] > vertices_[3 * faces_[3 * prim_index + i] + k]) {
+            (*bmin)[static_cast<int>(k)] = vertices_[3 * faces_[3 * prim_index + i] + k];
           }
-          if ((*bmax)[k] < vertices_[3 * faces_[3 * prim_index + i] + k]) {
-            (*bmax)[k] = vertices_[3 * faces_[3 * prim_index + i] + k];
+          if ((*bmax)[static_cast<int>(k)] < vertices_[3 * faces_[3 * prim_index + i] + k]) {
+            (*bmax)[static_cast<int>(k)] = vertices_[3 * faces_[3 * prim_index + i] + k];
           }
         }
       }
@@ -1652,11 +1641,11 @@ unsigned int BVHAccel<P, Pred>::BuildTree(BVHBuildStatistics *out_stat,
 }
 
 template<class P, class Pred>
-bool BVHAccel<P, Pred>::Build(const void *primitive_data, unsigned int num_primitives, const BVHBuildOptions &options, P& p, Pred& pred) {
+bool BVHAccel<P, Pred>::Build(unsigned int num_primitives, const BVHBuildOptions &options, P& p, Pred& pred) {
   options_ = options;
   stats_ = BVHBuildStatistics();
 
-  p.PrepareBuild(primitive_data);
+  //p.PrepareBuild(primitive_data);
 
   assert(options_.bin_size > 1);
 

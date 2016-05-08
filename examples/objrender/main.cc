@@ -546,18 +546,14 @@ int main(int argc, char** argv)
   timerutil t;
   t.start();
 
-  nanort::TriangleMesh triangle_mesh;
-  nanort::TriangleMesh::TriangleMeshInput triangle_mesh_input;
-
-  triangle_mesh_input.vertices = mesh.vertices;
-  triangle_mesh_input.faces = mesh.faces;
+  nanort::TriangleMesh triangle_mesh(mesh.vertices, mesh.faces);
   nanort::TriangleSAHPred triangle_pred(mesh.vertices, mesh.faces);
 
   printf("num_triangles = %lu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
 
   nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred> accel;
-  ret = accel.Build(reinterpret_cast<void *>(&triangle_mesh_input), mesh.num_faces, build_options, triangle_mesh, triangle_pred);
+  ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
   assert(ret);
 
   t.end();
