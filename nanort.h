@@ -217,44 +217,6 @@ class StackContainer {
   void operator=(const StackContainer &);
 };
 
-// StackString
-template <size_t stack_capacity>
-class StackString
-    : public StackContainer<
-          std::basic_string<char, std::char_traits<char>,
-                            StackAllocator<char, stack_capacity> >,
-          stack_capacity> {
- public:
-  StackString()
-      : StackContainer<std::basic_string<char, std::char_traits<char>,
-                                         StackAllocator<char, stack_capacity> >,
-                       stack_capacity>() {}
-
- private:
-  // DISALLOW_EVIL_CONSTRUCTORS(StackString);
-  StackString(const StackString &);
-  void operator=(const StackString &);
-};
-
-// StackWString
-template <size_t stack_capacity>
-class StackWString
-    : public StackContainer<
-          std::basic_string<wchar_t, std::char_traits<wchar_t>,
-                            StackAllocator<wchar_t, stack_capacity> >,
-          stack_capacity> {
- public:
-  StackWString()
-      : StackContainer<
-            std::basic_string<wchar_t, std::char_traits<wchar_t>,
-                              StackAllocator<wchar_t, stack_capacity> >,
-            stack_capacity>() {}
-
- private:
-  // DISALLOW_EVIL_CONSTRUCTORS(StackWString);
-  StackWString(const StackWString &);
-  void operator=(const StackWString &);
-};
 
 // StackVector
 //
@@ -786,6 +748,7 @@ class TriangleIntersector
     if (hit) {
       // Do something when there is a hit.
     } 
+		(void)ray;
   }
 
   const float *vertices_;
