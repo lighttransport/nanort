@@ -771,11 +771,11 @@ class TriangleIntersector
 
 // NaN-safe min and max function.
 template <class T>
-const T &safemin(const T &a, const T &b) {
+inline const T &safemin(const T &a, const T &b) {
   return (a < b) ? a : b;
 }
 template <class T>
-const T &safemax(const T &a, const T &b) {
+inline const T &safemax(const T &a, const T &b) {
   return (a > b) ? a : b;
 }
 
