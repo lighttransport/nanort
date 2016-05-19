@@ -283,7 +283,7 @@ void OrthoBasis(nanort::float3 basis[3], const nanort::float3 &n) {
 }
 
 nanort::float3 ShadeAO(const nanort::float3 &P, const nanort::float3 &N, pcg32_state_t *rng,
-               nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred> &accel, const nanort::TriangleMesh& triangleMesh)
+               nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector> &accel, const nanort::TriangleMesh& triangleMesh)
 {
   const int ntheta = 16;
   const int nphi = 32;
@@ -320,9 +320,9 @@ nanort::float3 ShadeAO(const nanort::float3 &P, const nanort::float3 &N, pcg32_s
       ray.min_t = 0.0f;
       ray.max_t = std::numeric_limits<float>::max();
 
-      nanort::Intersection occIsect;
+      nanort::TriangleIntersector isect(triangleMesh.vertices_, triangleMesh.faces_);
       nanort::BVHTraceOptions traceOptions;
-      bool hit = accel.Traverse(&occIsect, ray, traceOptions, triangleMesh);
+      bool hit = accel.Traverse(ray, traceOptions, isect);
       if (hit) {
         occlusion += 1.0f;
       }
@@ -368,7 +368,7 @@ int main(int argc, char **argv) {
 
   nanort::TriangleMesh triangleMesh(&mesh.vertices.at(0), &mesh.faces.at(0));
   nanort::TriangleSAHPred trianglePred(&mesh.vertices.at(0), &mesh.faces.at(0));
-  nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred> accel;
+  nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector> accel;
   ret = accel.Build(mesh.faces.size() / 3, options, triangleMesh, trianglePred);
   assert(ret);
 
@@ -469,12 +469,12 @@ int main(int argc, char **argv) {
           ray.dir[1] = dir[1];
           ray.dir[2] = dir[2];
 
-          nanort::Intersection isect;
+          nanort::TriangleIntersector isect(triangleMesh.vertices_, triangleMesh.faces_);
           float tFar = 1.0e+30f;
           ray.min_t = 0.0f;
           ray.max_t = tFar;
           nanort::BVHTraceOptions traceOptions;
-          bool hit = accel.Traverse(&isect, ray, traceOptions, triangleMesh);
+          bool hit = accel.Traverse(ray, traceOptions, isect);
           if (hit) {
             // Write your shader here.
             nanort::float3 P;

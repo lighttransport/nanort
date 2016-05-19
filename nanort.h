@@ -1015,21 +1015,14 @@ inline bool FindCutFromBinBuffer(float *cut_pos,    // [out] xyz
 }
 
 #ifdef _OPENMP
-void ComputeBoundingBoxOMP(float3 *bmin, float3 *bmax, const float *vertices,
-                           const unsigned int *faces,
+template<class P>
+void ComputeBoundingBoxOMP(float3 *bmin, float3 *bmax,
                            const unsigned int *indices, unsigned int left_index,
-                           unsigned int right_index) {
+                           unsigned int right_index, const P& p) {
   const float kEPS = 0.0f;  // std::numeric_limits<float>::epsilon() * epsScale;
 
   {
-    unsigned int i = left_index;
-    unsigned int idx = indices[i];
-    (*bmin)[0] = vertices[3 * faces[3 * idx + 0] + 0] - kEPS;
-    (*bmin)[1] = vertices[3 * faces[3 * idx + 0] + 1] - kEPS;
-    (*bmin)[2] = vertices[3 * faces[3 * idx + 0] + 2] - kEPS;
-    (*bmax)[0] = vertices[3 * faces[3 * idx + 0] + 0] + kEPS;
-    (*bmax)[1] = vertices[3 * faces[3 * idx + 0] + 1] + kEPS;
-    (*bmax)[2] = vertices[3 * faces[3 * idx + 0] + 2] + kEPS;
+		p.BoundingBox(bmin, bmax, indices[left_index]);
   }
 
   float local_bmin[3] = {(*bmin)[0], (*bmin)[1], (*bmin)[2]};
@@ -1042,14 +1035,12 @@ void ComputeBoundingBoxOMP(float3 *bmin, float3 *bmax, const float *vertices,
 #pragma omp for
     for (int i = left_index; i < right_index; i++) {  // for each faces
       unsigned int idx = indices[i];
-      for (int j = 0; j < 3; j++) {  // for each face vertex
-        size_t fid = faces[3 * idx + j];
-        for (int k = 0; k < 3; k++) {  // xyz
-          float minval = vertices[3 * fid + k] - kEPS;
-          float maxval = vertices[3 * fid + k] + kEPS;
-          if (local_bmin[k] > minval) local_bmin[k] = minval;
-          if (local_bmax[k] < maxval) local_bmax[k] = maxval;
-        }
+
+      float3 bbox_min, bbox_max;
+      p.BoundingBox(&bbox_min, &bbox_max, idx);
+      for (int k = 0; k < 3; k++) {  // xyz
+        if ((*bmin)[k] > bbox_min[k]) (*bmin)[k] = bbox_min[k];
+        if ((*bmax)[k] < bbox_max[k]) (*bmax)[k] = bbox_max[k];
       }
     }
 
@@ -1470,7 +1461,7 @@ bool BVHAccel<P, Pred, I>::Build(unsigned int num_primitives,
 
   } else {
 #ifdef _OPENMP
-    ComputeBoundingBoxOMP(&bmin, &bmax, &indices_.at(0), 0, n);
+    ComputeBoundingBoxOMP(&bmin, &bmax, &indices_.at(0), 0, n, p);
 #else
     ComputeBoundingBox(&bmin, &bmax, &indices_.at(0), 0, n, p);
 #endif
@@ -1485,7 +1476,7 @@ bool BVHAccel<P, Pred, I>::Build(unsigned int num_primitives,
   // Do parallel build for enoughly large dataset.
   if (n > options.min_primitives_for_parallel_build) {
     BuildShallowTree(&nodes_, 0, n, /* root depth */ 0,
-                     options.shallow_depth);  // [0, n)
+                     options.shallow_depth, p, pred);  // [0, n)
 
     assert(shallow_node_infos_.size() > 0);
 
@@ -1498,7 +1489,7 @@ bool BVHAccel<P, Pred, I>::Build(unsigned int num_primitives,
       unsigned int left_idx = shallow_node_infos_[i].left_idx;
       unsigned int right_idx = shallow_node_infos_[i].right_idx;
       BuildTree(&(local_stats[i]), &(local_nodes[i]), left_idx, right_idx,
-                options.shallow_depth);
+                options.shallow_depth, p, pred);
     }
 
     // Join local nodes
@@ -1532,13 +1523,13 @@ bool BVHAccel<P, Pred, I>::Build(unsigned int num_primitives,
 
   } else {
     BuildTree(&stats_, &nodes_, 0, n,
-              /* root depth */ 0);  // [0, n)
+              /* root depth */ 0, p, pred);  // [0, n)
   }
 
 #else  // !NANORT_ENABLE_PARALLEL_BUILD
   {
     BuildTree(&stats_, &nodes_, 0, n,
-              /* root depth */ 0);  // [0, n)
+              /* root depth */ 0, p, pred);  // [0, n)
   }
 #endif
 #else  // !_OPENMP
