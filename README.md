@@ -78,22 +78,25 @@ class BVHTraceOptions {
 
 nanort::BVHBuildOptions options; // BVH build option
 
-nanort::TriangleMesh triangle_mesh(...);
-nanort::TriangleSAHPred triangle_pred(...);
+const float *vertices = ...;
+const unsigned int *faces = ...;
 
-nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred> accel;
+nanort::TriangleMesh triangle_mesh(vertices, faces);
+nanort::TriangleSAHPred triangle_pred(vertices, faces);
+
+nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector> accel;
 ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
 
-nanort::Intersection isect;
-isect.min_t = 0.0f;
-isect.max_t = 1.0e+30f;
+nanort::TriangleIntersector triangle_intersecter(vertices, faces);
+ray.min_t = 0.0f;
+ray.max_t = 1.0e+30f;
 
 nanort::Ray ray;
 // fill ray org and ray dir.
 
 // Returns nearest hit point(if exists)
 BVHTraceOptions trace_options;
-bool hit = accel.Traverse(&isect, mesh.vertices, mesh.faces, ray, trace_options, triangle_mesh);
+bool hit = accel.Traverse(ray, trace_options, triangle_intersecter);
 
 // Multi-hit ray traversal
 nanort::StackVector<nanort::Intersection, 128> isects;

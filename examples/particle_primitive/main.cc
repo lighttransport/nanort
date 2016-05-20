@@ -114,6 +114,20 @@ class SphereGeometry {
   mutable nanort::BVHTraceOptions trace_options_;
 };
 
+class SphereIntersection
+{
+ public:
+  SphereIntersection() {}
+
+	float u;
+	float v;
+
+  // Required member variables.
+	float t;
+	unsigned int prim_id;
+};
+
+template<class I>
 class SphereIntersector
 {
  public:
@@ -194,6 +208,17 @@ class SphereIntersector
     return true;
   }
 
+	/// Returns the nearest hit distance.
+	float GetT() const {
+		return intersection.t;
+	}
+
+	/// Update is called when a nearest hit is found.
+	void Update(float t, unsigned int prim_idx) const {
+    intersection.t = t;
+    intersection.prim_id = prim_idx;
+	}
+
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
   /// This function is called only once in BVH traversal.
   void PrepareTraversal(const nanort::Ray &ray,
@@ -215,11 +240,11 @@ class SphereIntersector
   /// `hit` = true if there is something hit.
   void PostTraversal(const nanort::Ray &ray, bool hit) const {
     if (hit) {
-      nanort::float3 hitP = ray_org_ + t * ray_dir_;
-      nanort::float3 center = nanort::float3(&vertices_[3*prim_id]);
+      nanort::float3 hitP = ray_org_ + intersection.t * ray_dir_;
+      nanort::float3 center = nanort::float3(&vertices_[3*intersection.prim_id]);
       nanort::float3 n = vnormalize(hitP - center);
-      u_ = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
-      v_ = acos(n[1]) / M_PI;
+      intersection.u = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
+      intersection.v = acos(n[1]) / M_PI;
     } 
   }
 
@@ -229,12 +254,7 @@ class SphereIntersector
   mutable nanort::float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 
-	mutable float u_;
-	mutable float v_;
-
-  // Required member variables.
-	mutable float t;
-	mutable unsigned int prim_id;
+  mutable I intersection;
 };
 
 // -----------------------------------------------------
@@ -297,7 +317,7 @@ int main(int argc, char **argv) {
   SphereGeometry sphere_geom(&vertices.at(0), &radiuss.at(0));
   SpherePred sphere_pred(&vertices.at(0));
 
-  nanort::BVHAccel<SphereGeometry, SpherePred, SphereIntersector> accel;
+  nanort::BVHAccel<SphereGeometry, SpherePred, SphereIntersector<SphereIntersection> > accel;
   bool ret = accel.Build(radiuss.size(), options, sphere_geom, sphere_pred);
   assert(ret);
 
@@ -339,15 +359,15 @@ int main(int argc, char **argv) {
       ray.max_t = kFar;
 
       nanort::BVHTraceOptions trace_options;
-      SphereIntersector isect(&vertices.at(0), &radiuss.at(0));
-      bool hit = accel.Traverse(ray, trace_options, isect);
+      SphereIntersector<SphereIntersection> isecter(&vertices.at(0), &radiuss.at(0));
+      bool hit = accel.Traverse(ray, trace_options, isecter);
       if (hit) {
         // Write your shader here.
         nanort::float3 P;
-        P[0] = ray.org[0] + isect.t * ray.dir[0]; 
-        P[1] = ray.org[1] + isect.t * ray.dir[1]; 
-        P[2] = ray.org[2] + isect.t * ray.dir[2]; 
-        unsigned int pid = isect.prim_id;
+        P[0] = ray.org[0] + isecter.intersection.t * ray.dir[0]; 
+        P[1] = ray.org[1] + isecter.intersection.t * ray.dir[1]; 
+        P[2] = ray.org[2] + isecter.intersection.t * ray.dir[2]; 
+        unsigned int pid = isecter.intersection.prim_id;
         nanort::float3 sphere_center(&vertices[3*pid]);
         nanort::float3 normal = vnormalize(P - sphere_center);
 

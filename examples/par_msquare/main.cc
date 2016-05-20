@@ -283,7 +283,7 @@ void OrthoBasis(nanort::float3 basis[3], const nanort::float3 &n) {
 }
 
 nanort::float3 ShadeAO(const nanort::float3 &P, const nanort::float3 &N, pcg32_state_t *rng,
-               nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector> &accel, const nanort::TriangleMesh& triangleMesh)
+               nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<nanort::TriangleIntersection> > &accel, const nanort::TriangleMesh& triangleMesh)
 {
   const int ntheta = 16;
   const int nphi = 32;
@@ -320,9 +320,9 @@ nanort::float3 ShadeAO(const nanort::float3 &P, const nanort::float3 &N, pcg32_s
       ray.min_t = 0.0f;
       ray.max_t = std::numeric_limits<float>::max();
 
-      nanort::TriangleIntersector isect(triangleMesh.vertices_, triangleMesh.faces_);
+      nanort::TriangleIntersector<nanort::TriangleIntersection> isecter(triangleMesh.vertices_, triangleMesh.faces_);
       nanort::BVHTraceOptions traceOptions;
-      bool hit = accel.Traverse(ray, traceOptions, isect);
+      bool hit = accel.Traverse(ray, traceOptions, isecter);
       if (hit) {
         occlusion += 1.0f;
       }
@@ -368,7 +368,7 @@ int main(int argc, char **argv) {
 
   nanort::TriangleMesh triangleMesh(&mesh.vertices.at(0), &mesh.faces.at(0));
   nanort::TriangleSAHPred trianglePred(&mesh.vertices.at(0), &mesh.faces.at(0));
-  nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector> accel;
+  nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<nanort::TriangleIntersection> > accel;
   ret = accel.Build(mesh.faces.size() / 3, options, triangleMesh, trianglePred);
   assert(ret);
 
@@ -469,17 +469,17 @@ int main(int argc, char **argv) {
           ray.dir[1] = dir[1];
           ray.dir[2] = dir[2];
 
-          nanort::TriangleIntersector isect(triangleMesh.vertices_, triangleMesh.faces_);
+          nanort::TriangleIntersector<nanort::TriangleIntersection> > isecter(triangleMesh.vertices_, triangleMesh.faces_);
           float tFar = 1.0e+30f;
           ray.min_t = 0.0f;
           ray.max_t = tFar;
           nanort::BVHTraceOptions traceOptions;
-          bool hit = accel.Traverse(ray, traceOptions, isect);
+          bool hit = accel.Traverse(ray, traceOptions, isecter);
           if (hit) {
             // Write your shader here.
             nanort::float3 P;
             nanort::float3 N;
-            unsigned int fid = isect.prim_id;
+            unsigned int fid = isecter.intersection.prim_id;
             unsigned int f0, f1, f2;
             f0 = mesh.faces[3 * fid + 0];
             f1 = mesh.faces[3 * fid + 1];
@@ -496,9 +496,9 @@ int main(int argc, char **argv) {
             v2[2] = mesh.vertices[3 * f2 + 2];
             calcNormal(N, v0, v1, v2);
 
-            P[0] = ray.org[0] + isect.t * ray.dir[0];
-            P[1] = ray.org[1] + isect.t * ray.dir[1];
-            P[2] = ray.org[2] + isect.t * ray.dir[2];
+            P[0] = ray.org[0] + isecter.GetT() * ray.dir[0];
+            P[1] = ray.org[1] + isecter.GetT() * ray.dir[1];
+            P[2] = ray.org[2] + isecter.GetT() * ray.dir[2];
 
             nanort::float3 aoCol = ShadeAO(P, N, &rng, accel, triangleMesh);
             if (fid < (unsigned int)mesh.facegroups[1]) {
