@@ -602,17 +602,15 @@ class TriangleMesh {
 
 struct TriangleIntersection
 {
- public:
 	float u;
 	float v;
 
   // Required member variables.
 	float t;
 	unsigned int prim_id;
-		
 };
 
-template<class I>
+template<class I = TriangleIntersection>
 class TriangleIntersector
 {
  public:
