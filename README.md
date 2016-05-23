@@ -14,8 +14,8 @@
   * Only use C++-03 features.
 * BVH spatial data structure for efficient ray intersection finding.
   * Should be able to handle ~10M triangles scene efficiently with moderate memory consumption
-* Triangle mesh only.
-  * Facevarying attributes(tex coords, vertex colors, etc)
+* Custom geometry & intersection
+  * Built-in triangle mesh gemetry & intersector is provided.
 * Cross platform
   * MacOSX, Linux, Windows, ARM, x86, SPARC, MIPS, etc.
 * GPU effient data structure
@@ -24,7 +24,6 @@
 * Robust intersection calculation.
   * Robust BVH Ray Traversal(using up to 4 ulp version): http://jcgt.org/published/0002/02/02/
   * Watertight Ray/Triangle Intesection: http://jcgt.org/published/0002/01/05/
-* Multi-Hit ray traversal.
 
 ## Applications
 
@@ -54,13 +53,6 @@
 
 ```
 typedef struct {
-  float t;             // [inout] hit distance.
-  float u;             // [out] varycentric u of hit primitive.
-  float v;	       // [out] varicentric v of hit primitive.
-  unsigned int prim_id; // [out] primitive ID of hit primitive.
-} Intersection;
-
-typedef struct {
   float org[3];    // [in] must set
   float dir[3];    // [in] must set
   float min_t;     // [in] must set
@@ -84,10 +76,10 @@ const unsigned int *faces = ...;
 nanort::TriangleMesh triangle_mesh(vertices, faces);
 nanort::TriangleSAHPred triangle_pred(vertices, faces);
 
-nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector> accel;
+nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<> > accel;
 ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
 
-nanort::TriangleIntersector triangle_intersecter(vertices, faces);
+nanort::TriangleIntersector<> triangle_intersecter(vertices, faces);
 ray.min_t = 0.0f;
 ray.max_t = 1.0e+30f;
 
@@ -97,11 +89,6 @@ nanort::Ray ray;
 // Returns nearest hit point(if exists)
 BVHTraceOptions trace_options;
 bool hit = accel.Traverse(ray, trace_options, triangle_intersecter);
-
-// Multi-hit ray traversal
-nanort::StackVector<nanort::Intersection, 128> isects;
-int max_isects = 8;
-bool hit = accel.MultiHitTraverse(&isects, max_isects, ray, trace_options, triangle_mesh);
 ```
 
 Application must prepare geometric information and store it in linear array.
@@ -145,7 +132,6 @@ Application must prepare geometric information and store it in linear array.
     #endif
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
-        nanort::Intersection isect;
 
         BVHTraceOptions trace_options;
 
@@ -167,11 +153,12 @@ Application must prepare geometric information and store it in linear array.
         ray.dir[1] = dir[1];
         ray.dir[2] = dir[2];
 
-        bool hit = accel.Traverse(&isect, mesh.vertices, mesh.faces, ray, trace_options, triangle_mesh);
+        nanort::TriangleIntersector<> triangle_intersecter(mesh.vertices, mesh.faces);
+        bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
         if (hit) {
           // Write your shader here.
           float3 normal;
-          unsigned int fid = isect.prim_id;
+          unsigned int fid = triangle_intersector.intersect.prim_id;
           normal[0] = mesh.facevarying_normals[3*3*fid+0]; // @todo { interpolate normal }
           normal[1] = mesh.facevarying_normals[3*3*fid+1];
           normal[2] = mesh.facevarying_normals[3*3*fid+2];
