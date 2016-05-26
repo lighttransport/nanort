@@ -123,6 +123,10 @@ int main(int argc, char** argv) {
 
   ImGui_ImplBtGui_Init(window);
 
+  ImGuiIO& io = ImGui::GetIO();
+  //io.Fonts->AddFontDefault();
+  io.Fonts->AddFontFromFileTTF("./DroidSans.ttf", 15.0f);
+
 
   while (!window->requestedExit()) {
     window->startRendering();
@@ -137,6 +141,7 @@ int main(int argc, char** argv) {
       ImGui::InputFloat("intensity", &f);
     }
 
+    glViewport(0, 0, window->getWidth(), window->getHeight());
     glClearColor(0, 0.1, 0.2f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT);
 

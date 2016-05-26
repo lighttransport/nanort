@@ -130,7 +130,6 @@ void ImGui_ImplBtGui_SetMouseButtonState(int button, bool pressed)
 void ImGui_ImplBtGui_SetKeyState(int key, bool pressed)
 {
     ImGuiIO& io = ImGui::GetIO();
-		printf("key %d state %d\n", key, pressed);
 
 		// Remap keycode manually here.
 		if (key == B3G_RETURN) {
@@ -147,6 +146,7 @@ void ImGui_ImplBtGui_SetKeyState(int key, bool pressed)
 
     io.KeysDown[key] = pressed;
 
+    // @todo
     //io.KeyCtrl = io.KeysDown[GLFW_KEY_LEFT_CONTROL] || io.KeysDown[GLFW_KEY_RIGHT_CONTROL];
     //io.KeyShift = io.KeysDown[GLFW_KEY_LEFT_SHIFT] || io.KeysDown[GLFW_KEY_RIGHT_SHIFT];
     //io.KeyAlt = io.KeysDown[GLFW_KEY_LEFT_ALT] || io.KeysDown[GLFW_KEY_RIGHT_ALT];
@@ -252,8 +252,8 @@ void ImGui_ImplBtGui_NewFrame(int mouse_x, int mouse_y)
     //glfwGetFramebufferSize(g_Window, &display_w, &display_h);
     w = g_Window->getWidth();
     h = g_Window->getHeight();
-		display_w = g_Window->getWidth(); // @todo { Renina scale }
-		display_h = g_Window->getHeight(); // @todo { Renina scale }
+	display_w = g_Window->getWidth(); // @todo { support retina scale. }
+	display_h = g_Window->getHeight();
     io.DisplaySize = ImVec2((float)w, (float)h);
     io.DisplayFramebufferScale = ImVec2(w > 0 ? ((float)display_w / w) : 0, h > 0 ? ((float)display_h / h) : 0);
 
