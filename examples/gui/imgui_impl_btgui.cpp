@@ -18,6 +18,10 @@
 
 #include <cstdio>
 
+#define IMGUI_B3G_CONTROL   (300)
+#define IMGUI_B3G_SHIFT     (301)
+#define IMGUI_B3G_ALT       (301)
+
 
 // Data
 static b3gDefaultOpenGLWindow*  g_Window = NULL;
@@ -131,26 +135,45 @@ void ImGui_ImplBtGui_SetKeyState(int key, bool pressed)
 {
     ImGuiIO& io = ImGui::GetIO();
 
-		// Remap keycode manually here.
-		if (key == B3G_RETURN) {
-			key = ImGuiKey_Enter;
-		} else if (key == B3G_BACKSPACE) {
-			key = ImGuiKey_Backspace;
-		} else if (key == B3G_END) {
-			key = ImGuiKey_End;
-		} else if (key == B3G_HOME) {
-			key = ImGuiKey_Home;
-		} else if (key == B3G_ESCAPE) {
-			key = ImGuiKey_Escape;
-		}
+    // Remap keycode manually here.
+    if (key == B3G_RETURN) {
+        key = ImGuiKey_Enter;
+    } else if ((key == B3G_BACKSPACE) || (key == 8)) {
+        key = ImGuiKey_Backspace;
+    } else if (key == 9) {
+        key = ImGuiKey_Tab;
+    } else if (key == B3G_DELETE) {
+        key = ImGuiKey_Delete;
+    } else if (key == B3G_END) {
+        key = ImGuiKey_End;
+    } else if (key == B3G_HOME) {
+        key = ImGuiKey_Home;
+    } else if (key == B3G_LEFT_ARROW) {
+        key = ImGuiKey_LeftArrow;
+    } else if (key == B3G_RIGHT_ARROW) {
+        key = ImGuiKey_RightArrow;
+    } else if (key == B3G_UP_ARROW) {
+        key = ImGuiKey_UpArrow;
+    } else if (key == B3G_DOWN_ARROW) {
+        key = ImGuiKey_DownArrow;
+    } else if (key == B3G_ESCAPE) {
+        key = ImGuiKey_Escape;
+    } else if (key == B3G_CONTROL) {
+        key = IMGUI_B3G_CONTROL;
+    } else if (key == B3G_ALT) {
+        key = IMGUI_B3G_ALT;
+    } else if (key == B3G_SHIFT) {
+        key = IMGUI_B3G_SHIFT;
+    }
 
-    io.KeysDown[key] = pressed;
+    if (key >= 0 && key < 512) {
+        io.KeysDown[key] = pressed;
+    }
 
-    // @todo
-    //io.KeyCtrl = io.KeysDown[GLFW_KEY_LEFT_CONTROL] || io.KeysDown[GLFW_KEY_RIGHT_CONTROL];
-    //io.KeyShift = io.KeysDown[GLFW_KEY_LEFT_SHIFT] || io.KeysDown[GLFW_KEY_RIGHT_SHIFT];
-    //io.KeyAlt = io.KeysDown[GLFW_KEY_LEFT_ALT] || io.KeysDown[GLFW_KEY_RIGHT_ALT];
-    //io.KeySuper = io.KeysDown[GLFW_KEY_LEFT_SUPER] || io.KeysDown[GLFW_KEY_RIGHT_SUPER];
+    io.KeyCtrl  = io.KeysDown[IMGUI_B3G_CONTROL];
+    io.KeyShift = io.KeysDown[IMGUI_B3G_SHIFT];
+    io.KeyAlt   = io.KeysDown[IMGUI_B3G_ALT];
+    //io.KeySuper = io.KeysDown[GLFW_KEY_LEFT_SUPER] || io.KeysDown[GLFW_KEY_RIGHT_SUPER]; // @todo
 }
 
 void ImGui_ImplBtGui_SetChar(int c)
@@ -210,6 +233,20 @@ bool    ImGui_ImplBtGui_Init(b3gDefaultOpenGLWindow* window)
     g_Window = window;
 
     ImGuiIO& io = ImGui::GetIO();
+
+    io.KeyMap[ImGuiKey_Tab] = ImGuiKey_Tab;
+    io.KeyMap[ImGuiKey_LeftArrow] = ImGuiKey_LeftArrow;
+    io.KeyMap[ImGuiKey_RightArrow] = ImGuiKey_RightArrow;
+    io.KeyMap[ImGuiKey_UpArrow] = ImGuiKey_UpArrow;
+    io.KeyMap[ImGuiKey_DownArrow] = ImGuiKey_DownArrow;
+    io.KeyMap[ImGuiKey_PageUp] = ImGuiKey_PageUp;
+    io.KeyMap[ImGuiKey_PageDown] = ImGuiKey_PageDown;
+    io.KeyMap[ImGuiKey_Home] = ImGuiKey_Home;
+    io.KeyMap[ImGuiKey_End] = ImGuiKey_End;
+    io.KeyMap[ImGuiKey_Delete] = ImGuiKey_Delete;
+    io.KeyMap[ImGuiKey_Backspace] = ImGuiKey_Backspace;
+    io.KeyMap[ImGuiKey_Enter] = ImGuiKey_Enter;
+    io.KeyMap[ImGuiKey_Escape] = ImGuiKey_Escape;
 
     io.RenderDrawListsFn = ImGui_ImplBtGui_RenderDrawLists;      // Alternatively you can set this to NULL and call ImGui::GetDrawData() after ImGui::Render() to get the same ImDrawData pointer.
     io.SetClipboardTextFn = ImGui_ImplBtGui_SetClipboardText;

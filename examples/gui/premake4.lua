@@ -1,5 +1,7 @@
 sources = {
    "main.cc",
+   "render.cc",
+   "trackball.cc",
    "imgui.cpp",
    "imgui_draw.cpp",
    "imgui_impl_btgui.cpp",
@@ -34,6 +36,7 @@ solution "ViewerSolution"
             }
       end
       if os.is("Linux") then
+         buildoptions { "-std=c++11" }
          files {
             "OpenGLWindow/X11OpenGLWindow.cpp",
             "OpenGLWindow/X11OpenGLWindows.h"
@@ -41,6 +44,7 @@ solution "ViewerSolution"
          links {"X11", "pthread", "dl"}
       end
       if os.is("MacOSX") then
+         buildoptions { "-std=c++11" }
          links {"Cocoa.framework"}
          files {
                 "OpenGLWindow/MacOpenGLWindow.h",
