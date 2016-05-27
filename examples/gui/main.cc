@@ -32,6 +32,7 @@
 #include <thread> // C++11
 #include <atomic> // C++11
 #include <chrono> // C++11
+#include <mutex> // C++11
 
 #include "imgui.h"
 #include "imgui_impl_btgui.h"
