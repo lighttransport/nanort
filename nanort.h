@@ -467,7 +467,7 @@ class BVHAccel {
   bool Traverse(const Ray &ray,
                 const BVHTraceOptions &options, const I &intersector) const;
 
-  /// Multi-hit ray tracversal
+  /// Multi-hit ray traversal
   /// Returns `max_intersections` frontmost intersections
   bool MultiHitTraverse(const Ray &ray,
                         const BVHTraceOptions &optins, int max_intersections, StackVector<I, 128> *intersector) const;
@@ -475,6 +475,7 @@ class BVHAccel {
   const std::vector<BVHNode> &GetNodes() const { return nodes_; }
   const std::vector<unsigned int> &GetIndices() const { return indices_; }
 
+  /// Returns bounding box of built BVH.
   void BoundingBox(float bmin[3], float bmax[3]) const {
     if (nodes_.empty()) {
       bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<float>::max();
@@ -488,6 +489,10 @@ class BVHAccel {
       bmax[2] = nodes_[0].bmax[2];
     }
   }
+
+ 	bool IsValid() const {
+		return nodes_.size() > 0;
+	}
 
  private:
 #if NANORT_ENABLE_PARALLEL_BUILD
@@ -1426,7 +1431,8 @@ bool BVHAccel<P, Pred, I>::Build(unsigned int num_primitives,
   options_ = options;
   stats_ = BVHBuildStatistics();
 
-  // p.PrepareBuild(primitive_data);
+  nodes_.clear();
+  bboxes_.clear();
 
   assert(options_.bin_size > 1);
 

@@ -1,5 +1,9 @@
 # Simple GUI example with bullet3's OpenGLWindow + ImGui.
 
+## Coordinates
+
+Right-handed coorinate, Y up, counter clock-wise normal definition.
+
 ## Requirements
 
 * premake5

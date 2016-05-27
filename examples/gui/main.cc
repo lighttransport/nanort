@@ -50,6 +50,8 @@ int gHeight = 512;
 int gMousePosX = -1, gMousePosY = -1;
 int gShowBufferMode = SHOW_BUFFER_COLOR;
 
+example::Renderer gRenderer;
+
 std::atomic<bool> gRenderQuit;
 std::atomic<bool> gRenderRefresh;
 std::atomic<bool> gRenderCancel;
@@ -96,7 +98,7 @@ void RenderThread()
     gRenderCancel = false;
     // gRenderCancel may be set to true in main loop.
     // Render() will repeatedly check this flag inside the rendering loop.
-    bool ret = example::Render(&gRGBA.at(0), &gAuxRGBA.at(0), gRenderConfig, gRenderCancel);
+    bool ret = gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), gRenderConfig, gRenderCancel);
 
     if (ret) {
       std::lock_guard<std::mutex> guard(gMutex);
@@ -118,6 +120,18 @@ void InitRenderConfig(example::RenderConfig* rc)
   rc->width = 512;
   rc->height = 512;
   rc->pass = 0;
+
+  rc->eye[0] = 0;
+  rc->eye[1] = 0;
+  rc->eye[2] = 5;
+
+  rc->up[0] = 0;
+  rc->up[1] = 1;
+  rc->up[2] = 0;
+
+  rc->look_at[0] = 0;
+  rc->look_at[1] = 0;
+  rc->look_at[2] = 0;
   
   rc->max_passes = 128;
 
@@ -214,6 +228,24 @@ void Display( int width, int height )
 }
 
 int main(int argc, char** argv) {
+
+  if (argc < 2) {
+    std::cerr << "Needs input.obj" << std::endl;
+    exit(-1);
+  }
+
+  float scene_scale = 1.0;
+  if (argc > 2) {
+    scene_scale = atof(argv[2]);
+  }
+
+  std::string obj_filename = argv[1];
+
+  bool ret = gRenderer.LoadObjMesh(obj_filename.c_str(), scene_scale);
+  if (!ret) {
+    fprintf(stderr, "Failed to load [ %s ]\n", obj_filename.c_str());
+    return -1;
+  }
 
   window = new b3gDefaultOpenGLWindow;
   b3gWindowConstructionInfo ci;
