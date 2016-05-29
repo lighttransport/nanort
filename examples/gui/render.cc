@@ -347,10 +347,66 @@ bool Renderer::Render(float* rgba, float *aux_rgba, const RenderConfig& config, 
         //std::this_thread::sleep_for( std::chrono::milliseconds( 5 ) );
 
         for (int x = 0; x < config.width; x++) {
-          rgba[4*(y*config.width+x)+0] = x / static_cast<float>(config.width);
-          rgba[4*(y*config.width+x)+1] = y / static_cast<float>(config.height);
-          rgba[4*(y*config.width+x)+2] = config.pass / static_cast<float>(config.max_passes);
-          rgba[4*(y*config.width+x)+3] = 1.0f;
+
+          nanort::Ray ray;
+          ray.org[0] = config.eye[0];
+          ray.org[1] = config.eye[1];
+          ray.org[2] = config.eye[2];
+
+          nanort::float3 dir;
+          dir[0] = (x / (float)config.width) - 0.5f;
+          dir[1] = (y / (float)config.height) - 0.5f;
+          dir[2] = -1.0f;
+          dir = vnormalize(dir);
+          ray.dir[0] = dir[0];
+          ray.dir[1] = dir[1];
+          ray.dir[2] = dir[2];
+
+          float kFar = 1.0e+30f;
+          ray.min_t = 0.0f;
+          ray.max_t = kFar;
+
+          nanort::TriangleIntersector<> triangle_intersector(gMesh.vertices.data(), gMesh.faces.data());
+          nanort::BVHTraceOptions trace_options;
+          bool hit = gAccel.Traverse(ray, trace_options, triangle_intersector);
+          if (hit) {
+            rgba[4*(y*config.width+x)+0] = x / static_cast<float>(config.width);
+            rgba[4*(y*config.width+x)+1] = y / static_cast<float>(config.height);
+            rgba[4*(y*config.width+x)+2] = config.pass / static_cast<float>(config.max_passes);
+            rgba[4*(y*config.width+x)+3] = 1.0f;
+
+            nanort::float3 p;
+            p[0] = ray.org[0] + triangle_intersector.intersection.t * ray.dir[0];
+            p[1] = ray.org[1] + triangle_intersector.intersection.t * ray.dir[1];
+            p[2] = ray.org[2] + triangle_intersector.intersection.t * ray.dir[2];
+
+            config.positionImage[4*(y*config.width+x)+0] = p.x();
+            config.positionImage[4*(y*config.width+x)+1] = p.y();
+            config.positionImage[4*(y*config.width+x)+2] = p.z();
+            config.positionImage[4*(y*config.width+x)+3] = 1.0f;
+
+            config.varycoordImage[4*(y*config.width+x)+0] = triangle_intersector.intersection.u;
+            config.varycoordImage[4*(y*config.width+x)+1] = triangle_intersector.intersection.v;
+            config.varycoordImage[4*(y*config.width+x)+2] = 0.0f;
+            config.varycoordImage[4*(y*config.width+x)+3] = 1.0f;
+
+            unsigned int prim_id = triangle_intersector.intersection.prim_id;
+
+            if (gMesh.facevarying_normals.size() > 0) {
+              // @fixme { interpolate. }
+              config.normalImage[4 * (y*config.width+x)+0] = 0.5 * gMesh.facevarying_normals[9 * prim_id + 0] + 0.5;
+              config.normalImage[4 * (y*config.width+x)+1] = 0.5 * gMesh.facevarying_normals[9 * prim_id + 1] + 0.5;
+              config.normalImage[4 * (y*config.width+x)+2] = 0.5 * gMesh.facevarying_normals[9 * prim_id + 2] + 0.5;
+              config.normalImage[4 * (y*config.width+x)+3] = 1.0f;
+            }
+
+            if (gMesh.facevarying_uvs.size() > 0) {
+              // @fixme { interpolate }
+              config.texcoordImage[4 * (y*config.width+x)+0] = gMesh.facevarying_uvs[6 * prim_id + 0];
+              config.texcoordImage[4 * (y*config.width+x)+1] = gMesh.facevarying_uvs[6 * prim_id + 1];
+
+            }
+          }
         }
 
         for (int x = 0; x < config.width; x++) {

@@ -44,12 +44,14 @@
 #define SHOW_BUFFER_NORMAL    (1)
 #define SHOW_BUFFER_POSITION  (2)
 #define SHOW_BUFFER_TEXCOORD  (3)
+#define SHOW_BUFFER_VARYCOORD  (4)
 
 b3gDefaultOpenGLWindow* window = 0;
 int gWidth = 512;
 int gHeight = 512;
 int gMousePosX = -1, gMousePosY = -1;
 int gShowBufferMode = SHOW_BUFFER_COLOR;
+float gShowPositionScale = 1.0f;
 
 example::Renderer gRenderer;
 
@@ -64,6 +66,7 @@ std::vector<float> gAuxRGBA;      // Auxiliary buffer
 std::vector<float> gNormalRGBA;   // For visualizing normal 
 std::vector<float> gPositionRGBA; // For visualizing position  
 std::vector<float> gTexCoordRGBA; // For visualizing texcoord
+std::vector<float> gVaryCoordRGBA; // For visualizing varycentric coord
 
 void RequestRender()
 {
@@ -110,30 +113,16 @@ void RenderThread()
 
     std::chrono::duration<double, std::milli> ms = endT - startT;
 
-    std::cout << ms.count() << " [ms]\n";
+    //std::cout << ms.count() << " [ms]\n";
 
   }
     
 }
 
-void InitRenderConfig(example::RenderConfig* rc)
+void InitRender(example::RenderConfig* rc)
 {
-  rc->width = 512;
-  rc->height = 512;
   rc->pass = 0;
 
-  rc->eye[0] = 0;
-  rc->eye[1] = 0;
-  rc->eye[2] = 5;
-
-  rc->up[0] = 0;
-  rc->up[1] = 1;
-  rc->up[2] = 0;
-
-  rc->look_at[0] = 0;
-  rc->look_at[1] = 0;
-  rc->look_at[2] = 0;
-  
   rc->max_passes = 128;
 
   gRGBA.resize(rc->width * rc->height * 4);
@@ -151,9 +140,13 @@ void InitRenderConfig(example::RenderConfig* rc)
   gTexCoordRGBA.resize(rc->width * rc->height * 4);
   std::fill(gTexCoordRGBA.begin(), gTexCoordRGBA.end(), 0.0);
 
+  gVaryCoordRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gVaryCoordRGBA.begin(), gVaryCoordRGBA.end(), 0.0);
+
   rc->normalImage = &gNormalRGBA.at(0);
   rc->positionImage = &gPositionRGBA.at(0);
   rc->texcoordImage = &gTexCoordRGBA.at(0);
+  rc->varycoordImage = &gVaryCoordRGBA.at(0);
 }
 
 void checkErrors(std::string desc) {
@@ -216,11 +209,15 @@ void Display( int width, int height )
     }
   } else if (gShowBufferMode == SHOW_BUFFER_POSITION) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gPositionRGBA[i];
+      buf[i] = gPositionRGBA[i] * gShowPositionScale;
     }
   } else if (gShowBufferMode == SHOW_BUFFER_TEXCOORD) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gTexCoordRGBA[i];
+    }
+  } else if (gShowBufferMode == SHOW_BUFFER_VARYCOORD) {
+    for (size_t i = 0; i < buf.size(); i++) {
+      buf[i] = gVaryCoordRGBA[i];
     }
   }
  
@@ -278,7 +275,7 @@ int main(int argc, char** argv) {
   }
 #endif
 
-  InitRenderConfig(&gRenderConfig);
+  InitRender(&gRenderConfig);
 
   checkErrors("init");
 
@@ -320,7 +317,11 @@ int main(int argc, char** argv) {
       ImGui::RadioButton("color", &gShowBufferMode, SHOW_BUFFER_COLOR); ImGui::SameLine();
       ImGui::RadioButton("normal", &gShowBufferMode, SHOW_BUFFER_NORMAL); ImGui::SameLine();
       ImGui::RadioButton("position", &gShowBufferMode, SHOW_BUFFER_POSITION); ImGui::SameLine();
-      ImGui::RadioButton("texcoord", &gShowBufferMode, SHOW_BUFFER_TEXCOORD);
+      ImGui::RadioButton("texcoord", &gShowBufferMode, SHOW_BUFFER_TEXCOORD); ImGui::SameLine();
+      ImGui::RadioButton("varyoord", &gShowBufferMode, SHOW_BUFFER_VARYCOORD);
+
+      ImGui::InputFloat("show pos scale", &gShowPositionScale);
+      
     }
     ImGui::End();
 
