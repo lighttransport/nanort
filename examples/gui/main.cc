@@ -38,6 +38,7 @@
 #include "imgui_impl_btgui.h"
 
 #include "render.h"
+#include "render-config.h"
 
 #define SHOW_BUFFER_COLOR     (0)
 #define SHOW_BUFFER_NORMAL    (1)
@@ -229,21 +230,24 @@ void Display( int width, int height )
 
 int main(int argc, char** argv) {
 
-  if (argc < 2) {
-    std::cerr << "Needs input.obj" << std::endl;
-    exit(-1);
+  std::string config_filename = "config.json";
+
+  if (argc > 1) {
+    config_filename = argv[1];
   }
 
-  float scene_scale = 1.0;
-  if (argc > 2) {
-    scene_scale = atof(argv[2]);
+  {
+    bool ret = example::LoadRenderConfig(&gRenderConfig, config_filename.c_str());
+    if (!ret) {
+      fprintf(stderr, "Failed to load [ %s ]\n", config_filename.c_str());
+      return -1;
+    }
   }
+      
 
-  std::string obj_filename = argv[1];
-
-  bool ret = gRenderer.LoadObjMesh(obj_filename.c_str(), scene_scale);
+  bool ret = gRenderer.LoadObjMesh(gRenderConfig.obj_filename.c_str(), gRenderConfig.scene_scale);
   if (!ret) {
-    fprintf(stderr, "Failed to load [ %s ]\n", obj_filename.c_str());
+    fprintf(stderr, "Failed to load [ %s ]\n", gRenderConfig.obj_filename.c_str());
     return -1;
   }
 

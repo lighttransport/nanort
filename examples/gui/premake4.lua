@@ -1,6 +1,7 @@
 sources = {
    "main.cc",
    "render.cc",
+   "render-config.cc",
    "trackball.cc",
    "tiny_obj_loader.cc",
    "imgui.cpp",
