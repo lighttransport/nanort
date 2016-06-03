@@ -9,6 +9,8 @@
 #include "../../nanort.h"
 
 #include "tiny_obj_loader.h"
+#include "matrix.h"
+#include "trackball.h"
 
 namespace example {
 
@@ -71,6 +73,128 @@ void CalcNormal(nanort::float3& N, nanort::float3 v0, nanort::float3 v1, nanort:
 
   N = vcross(v20, v10);
   N = vnormalize(N);
+}
+
+void BuildCameraFrame(nanort::float3 *origin, nanort::float3 *corner, nanort::float3 *u,
+                      nanort::float3 *v, float fov, const float quat[4],
+                              int width, int height) {
+  double e[4][4];
+
+  double eye[3], lookat[3], up[3];
+  Matrix::LookAt(e, eye, lookat, up);
+
+  float r0[4][4];
+  double r[4][4];
+  build_rotmatrix(r0, quat);
+  Matrix::FloatToDoubleMatrix(r, r0);
+
+  nanort::float3 lo;
+  lo[0] = lookat[0] - eye[0];
+  lo[1] = lookat[1] - eye[1];
+  lo[2] = lookat[2] - eye[2];
+  double dist = vlength(lo);
+
+  double dir[3];
+  dir[0] = 0.0;
+  dir[1] = 0.0;
+  dir[2] = dist;
+
+  Matrix::Inverse(r);
+
+  double rr[4][4];
+  double re[4][4];
+  double zero[3] = {0.0f, 0.0f, 0.0f};
+  double localUp[3] = {0.0f, 1.0f, 0.0f};
+  Matrix::LookAt(re, dir, zero, localUp);
+
+  // translate
+  re[3][0] += eye[0]; // 0.0; //lo[0];
+  re[3][1] += eye[1]; // 0.0; //lo[1];
+  re[3][2] += (eye[2] - dist);
+
+  // rot -> trans
+  Matrix::Mult(rr, r, re);
+
+  double m[4][4];
+  for (int j = 0; j < 4; j++) {
+    for (int i = 0; i < 4; i++) {
+      m[j][i] = rr[j][i];
+    }
+  }
+
+  double vzero[3] = {0.0f, 0.0f, 0.0f};
+  double eye1[3];
+  Matrix::MultV(eye1, m, vzero);
+
+  double lookat1d[3];
+  dir[2] = -dir[2];
+  Matrix::MultV(lookat1d, m, dir);
+  nanort::float3 lookat1(lookat1d[0], lookat1d[1], lookat1d[2]);
+
+  double up1d[3];
+  Matrix::MultV(up1d, m, up);
+
+  nanort::float3 up1(up1d[0], up1d[1], up1d[2]);
+
+  // absolute -> relative
+  up1[0] -= eye1[0];
+  up1[1] -= eye1[1];
+  up1[2] -= eye1[2];
+  // printf("up1(after) = %f, %f, %f\n", up1[0], up1[1], up1[2]);
+
+  // Use original up vector
+  up1[0] = up[0];
+  up1[1] = up[1];
+  up1[2] = up[2];
+
+  {
+    double flen =
+        (0.5f * (double)height / tanf(0.5f * (double)(fov * M_PI / 180.0f)));
+    nanort::float3 look1;
+    look1[0] = lookat1[0] - eye1[0];
+    look1[1] = lookat1[1] - eye1[1];
+    look1[2] = lookat1[2] - eye1[2];
+    // vcross(u, up1, look1);
+    // flip
+    (*u) = nanort::vcross(look1, up1);
+    (*u) = vnormalize((*u));
+
+    (*v) = vcross(look1, (*u));
+    (*v) = vnormalize((*v));
+
+    look1 = vnormalize(look1);
+    look1[0] = flen * look1[0] + eye1[0];
+    look1[1] = flen * look1[1] + eye1[1];
+    look1[2] = flen * look1[2] + eye1[2];
+    (*corner)[0] = look1[0] - 0.5f * (width * (*u)[0] + height * (*v)[0]);
+    (*corner)[1] = look1[1] - 0.5f * (width * (*u)[1] + height * (*v)[1]);
+    (*corner)[2] = look1[2] - 0.5f * (width * (*u)[2] + height * (*v)[2]);
+
+    (*origin)[0] = eye1[0];
+    (*origin)[1] = eye1[1];
+    (*origin)[2] = eye1[2];
+
+  }
+}
+
+nanort::Ray GenerateRay(const nanort::float3& origin, const nanort::float3& corner, const nanort::float3& du, const nanort::float3& dv, float u, float v) 
+{
+  nanort::float3 dir;
+
+  dir[0] = (corner[0] + u * du[0] + v * dv[0]) - origin[0];
+  dir[1] = (corner[1] + u * du[1] + v * dv[1]) - origin[1];
+  dir[2] = (corner[2] + u * du[2] + v * dv[2]) - origin[2];
+  dir = vnormalize(dir);
+
+  nanort::float3 org;
+
+  nanort::Ray ray;
+  ray.org[0] = origin[0];
+  ray.org[1] = origin[1];
+  ray.org[2] = origin[2];
+  ray.dir[0] = dir[0];
+
+  return ray;
 }
 
 

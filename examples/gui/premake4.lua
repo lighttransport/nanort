@@ -3,6 +3,7 @@ sources = {
    "render.cc",
    "render-config.cc",
    "trackball.cc",
+   "matrix.cc",
    "tiny_obj_loader.cc",
    "imgui.cpp",
    "imgui_draw.cpp",
