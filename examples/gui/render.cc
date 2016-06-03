@@ -76,35 +76,33 @@ void CalcNormal(nanort::float3& N, nanort::float3 v0, nanort::float3 v1, nanort:
 }
 
 void BuildCameraFrame(nanort::float3 *origin, nanort::float3 *corner, nanort::float3 *u,
-                      nanort::float3 *v, float fov, const float quat[4],
-                              int width, int height) {
-  double e[4][4];
+                      nanort::float3 *v, float quat[4],
+                      float eye[3], float lookat[3], float up[3], float fov,
+                      int width, int height) {
+  float e[4][4];
 
-  double eye[3], lookat[3], up[3];
   Matrix::LookAt(e, eye, lookat, up);
 
-  float r0[4][4];
-  double r[4][4];
-  build_rotmatrix(r0, quat);
-  Matrix::FloatToDoubleMatrix(r, r0);
+  float r[4][4];
+  build_rotmatrix(r, quat);
 
   nanort::float3 lo;
   lo[0] = lookat[0] - eye[0];
   lo[1] = lookat[1] - eye[1];
   lo[2] = lookat[2] - eye[2];
-  double dist = vlength(lo);
+  float dist = vlength(lo);
 
-  double dir[3];
+  float dir[3];
   dir[0] = 0.0;
   dir[1] = 0.0;
   dir[2] = dist;
 
   Matrix::Inverse(r);
 
-  double rr[4][4];
-  double re[4][4];
-  double zero[3] = {0.0f, 0.0f, 0.0f};
-  double localUp[3] = {0.0f, 1.0f, 0.0f};
+  float rr[4][4];
+  float re[4][4];
+  float zero[3] = {0.0f, 0.0f, 0.0f};
+  float localUp[3] = {0.0f, 1.0f, 0.0f};
   Matrix::LookAt(re, dir, zero, localUp);
 
   // translate
@@ -115,23 +113,23 @@ void BuildCameraFrame(nanort::float3 *origin, nanort::float3 *corner, nanort::fl
   // rot -> trans
   Matrix::Mult(rr, r, re);
 
-  double m[4][4];
+  float m[4][4];
   for (int j = 0; j < 4; j++) {
     for (int i = 0; i < 4; i++) {
       m[j][i] = rr[j][i];
     }
   }
 
-  double vzero[3] = {0.0f, 0.0f, 0.0f};
-  double eye1[3];
+  float vzero[3] = {0.0f, 0.0f, 0.0f};
+  float eye1[3];
   Matrix::MultV(eye1, m, vzero);
 
-  double lookat1d[3];
+  float lookat1d[3];
   dir[2] = -dir[2];
   Matrix::MultV(lookat1d, m, dir);
   nanort::float3 lookat1(lookat1d[0], lookat1d[1], lookat1d[2]);
 
-  double up1d[3];
+  float up1d[3];
   Matrix::MultV(up1d, m, up);
 
   nanort::float3 up1(up1d[0], up1d[1], up1d[2]);
@@ -148,8 +146,8 @@ void BuildCameraFrame(nanort::float3 *origin, nanort::float3 *corner, nanort::fl
   up1[2] = up[2];
 
   {
-    double flen =
-        (0.5f * (double)height / tanf(0.5f * (double)(fov * M_PI / 180.0f)));
+    float flen =
+        (0.5f * (float)height / tanf(0.5f * (float)(fov * M_PI / 180.0f)));
     nanort::float3 look1;
     look1[0] = lookat1[0] - eye1[0];
     look1[1] = lookat1[1] - eye1[1];
@@ -385,6 +383,7 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
   return true;
 }
 
+
 bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale)
 {
   bool ret =  LoadObj(gMesh, obj_filename, scene_scale);
@@ -428,11 +427,22 @@ bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale)
 
 }
 
-bool Renderer::Render(float* rgba, float *aux_rgba, const RenderConfig& config, std::atomic<bool>& cancelFlag)
+bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderConfig& config, std::atomic<bool>& cancelFlag)
 {
   if (!gAccel.IsValid()) {
     return false;
   }
+
+  int width = config.width;
+  int height = config.height;
+
+  // camera
+  float eye[3] = {config.eye[0], config.eye[1], config.eye[2]};
+  float look_at[3] = {config.look_at[0], config.look_at[1], config.look_at[2]};
+  float up[3] = {config.up[0], config.up[1], config.up[2]};
+  float fov = config.fov;
+  nanort::float3 origin, corner, u, v;
+  BuildCameraFrame(&origin, &corner, &u, &v, quat, eye, look_at, up, fov, width, height);
 
   auto kCancelFlagCheckMilliSeconds = 300;
 
@@ -473,14 +483,12 @@ bool Renderer::Render(float* rgba, float *aux_rgba, const RenderConfig& config, 
         for (int x = 0; x < config.width; x++) {
 
           nanort::Ray ray;
-          ray.org[0] = config.eye[0];
-          ray.org[1] = config.eye[1];
-          ray.org[2] = config.eye[2];
+          ray.org[0] = origin[0];
+          ray.org[1] = origin[1];
+          ray.org[2] = origin[2];
 
           nanort::float3 dir;
-          dir[0] = (x / (float)config.width) - 0.5f;
-          dir[1] = (y / (float)config.height) - 0.5f;
-          dir[2] = -1.0f;
+          dir = corner + float(x) * u + float(config.height - y - 1) * v;
           dir = vnormalize(dir);
           ray.dir[0] = dir[0];
           ray.dir[1] = dir[1];

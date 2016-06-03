@@ -86,6 +86,13 @@ bool LoadRenderConfig(example::RenderConfig *config, const char* filename)
     }
   }     
 
+  config->fov = 45.0f;
+  if (o.find("fov") != o.end()) {
+    if (o["width"].is<double>()) {
+      config->fov = static_cast<int>(o["fov"].get<double>());
+    }
+  }
+
   config->width = 512;
   if (o.find("width") != o.end()) {
     if (o["width"].is<double>()) {

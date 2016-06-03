@@ -5,45 +5,45 @@
 
 //using namespace mallie;
 
-static inline double vdot(double a[3], double b[3]) {
+static inline float vdot(float a[3], float b[3]) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
-static inline void vcross(double c[3], double a[3], double b[3]) {
+static inline void vcross(float c[3], float a[3], float b[3]) {
   c[0] = a[1] * b[2] - a[2] * b[1];
   c[1] = a[2] * b[0] - a[0] * b[2];
   c[2] = a[0] * b[1] - a[1] * b[0];
 }
 
-static inline double vlength(double v[3]) {
-  double len2 = vdot(v, v);
+static inline float vlength(float v[3]) {
+  float len2 = vdot(v, v);
   if (std::abs(len2) > 1.0e-30) {
     return sqrt(len2);
   }
   return 0.0f;
 }
 
-static void vnormalize(double v[3]) {
-  double len = vlength(v);
+static void vnormalize(float v[3]) {
+  float len = vlength(v);
   if (std::abs(len) > 1.0e-30) {
-    double inv_len = 1.0 / len;
+    float inv_len = 1.0 / len;
     v[0] *= inv_len;
     v[1] *= inv_len;
     v[2] *= inv_len;
   }
 }
 
-void Matrix::Print(double m[4][4]) {
+void Matrix::Print(float m[4][4]) {
   for (int i = 0; i < 4; i++) {
     printf("m[%d] = %f, %f, %f, %f\n", i, m[i][0], m[i][1], m[i][2], m[i][3]);
   }
 }
 
-void Matrix::LookAt(double m[4][4], double eye[3], double lookat[3],
-                    double up[3]) {
+void Matrix::LookAt(float m[4][4], float eye[3], float lookat[3],
+                    float up[3]) {
 
-  double u[3], v[3];
-  double look[3];
+  float u[3], v[3];
+  float look[3];
   look[0] = lookat[0] - eye[0];
   look[1] = lookat[1] - eye[1];
   look[2] = lookat[2] - eye[2];
@@ -99,15 +99,15 @@ void Matrix::LookAt(double m[4][4], double eye[3], double lookat[3],
 #endif
 }
 
-void Matrix::Inverse(double m[4][4]) {
+void Matrix::Inverse(float m[4][4]) {
   /*
    * codes from intel web
    * cramer's rule version
    */
   int i, j;
-  double tmp[12];  /* tmp array for pairs */
-  double tsrc[16]; /* array of transpose source matrix */
-  double det;      /* determinant */
+  float tmp[12];  /* tmp array for pairs */
+  float tsrc[16]; /* array of transpose source matrix */
+  float det;      /* determinant */
 
   /* transpose matrix */
   for (i = 0; i < 4; i++) {
@@ -195,7 +195,7 @@ void Matrix::Inverse(double m[4][4]) {
   }
 }
 
-void Matrix::Mult(double dst[4][4], double m0[4][4], double m1[4][4]) {
+void Matrix::Mult(float dst[4][4], float m0[4][4], float m1[4][4]) {
   for (int i = 0; i < 4; ++i) {
     for (int j = 0; j < 4; ++j) {
       dst[i][j] = 0;
@@ -206,7 +206,7 @@ void Matrix::Mult(double dst[4][4], double m0[4][4], double m1[4][4]) {
   }
 }
 
-void Matrix::MultV(double dst[3], double m[4][4], double v[3]) {
+void Matrix::MultV(float dst[3], float m[4][4], float v[3]) {
   // printf("v = %f, %f, %f\n", v[0], v[1], v[2]);
   dst[0] = m[0][0] * v[0] + m[1][0] * v[1] + m[2][0] * v[2] + m[3][0];
   dst[1] = m[0][1] * v[0] + m[1][1] * v[1] + m[2][1] * v[2] + m[3][1];

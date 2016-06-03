@@ -18,7 +18,7 @@ class Renderer
 	bool LoadObjMesh(const char* obj_filename, float scene_scale);
 
 	/// Returns false when the rendering was canceled.
-	bool Render(float *rgba, float *aux_rgba, const RenderConfig& config, std::atomic<bool>& cancel_flag);
+	bool Render(float *rgba, float *aux_rgba, float quat[4], const RenderConfig& config, std::atomic<bool>& cancel_flag);
 
 };
 

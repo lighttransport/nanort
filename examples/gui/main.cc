@@ -39,6 +39,7 @@
 
 #include "render.h"
 #include "render-config.h"
+#include "trackball.h"
 
 #define SHOW_BUFFER_COLOR     (0)
 #define SHOW_BUFFER_NORMAL    (1)
@@ -50,8 +51,10 @@ b3gDefaultOpenGLWindow* window = 0;
 int gWidth = 512;
 int gHeight = 512;
 int gMousePosX = -1, gMousePosY = -1;
+bool gMouseLeftDown = false;
 int gShowBufferMode = SHOW_BUFFER_COLOR;
 float gShowPositionScale = 1.0f;
+float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
 example::Renderer gRenderer;
 
@@ -102,7 +105,7 @@ void RenderThread()
     gRenderCancel = false;
     // gRenderCancel may be set to true in main loop.
     // Render() will repeatedly check this flag inside the rendering loop.
-    bool ret = gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), gRenderConfig, gRenderCancel);
+    bool ret = gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), gCurrQuat, gRenderConfig, gRenderCancel);
 
     if (ret) {
       std::lock_guard<std::mutex> guard(gMutex);
@@ -174,7 +177,22 @@ void keyboardCallback(int keycode, int state) {
 }
 
 void mouseMoveCallback(float x, float y) {
-  // printf("Mouse Move: %f, %f\n", x, y);
+//   printf("Mouse Move: %f, %f\n", x, y);
+
+  if (gMouseLeftDown) {
+    float w = gRenderConfig.width;
+    float h = gRenderConfig.height;
+
+    float y_offset = gHeight - h;
+    float prev_quat[4];
+    trackball(prev_quat,
+              (2.f * gMousePosX - w) / w,
+              (h - 2.f * (gMousePosY - y_offset)) / h,
+              (2.f * x - w) / w,
+              (h - 2.f * (y - y_offset)) / h);
+    add_quats(prev_quat, gCurrQuat, gCurrQuat);
+    RequestRender();
+  }
 
   gMousePosX = (int)x;
   gMousePosY = (int)y;
@@ -182,6 +200,12 @@ void mouseMoveCallback(float x, float y) {
 
 void mouseButtonCallback(int button, int state, float x, float y) {
   ImGui_ImplBtGui_SetMouseButtonState(button, (state == 1));
+
+  // left button
+  if (button == 0) {
+    if (state) gMouseLeftDown = true;
+    else gMouseLeftDown = false;
+  }
 }
 
 void resizeCallback(float width, float height) {
