@@ -55,6 +55,7 @@ bool gMouseLeftDown = false;
 int gShowBufferMode = SHOW_BUFFER_COLOR;
 float gShowPositionScale = 1.0f;
 float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
 example::Renderer gRenderer;
 
@@ -80,7 +81,6 @@ void RequestRender()
 
   gRenderRefresh = true;
   gRenderCancel = true;
-
 }
 
 void RenderThread()
@@ -150,6 +150,8 @@ void InitRender(example::RenderConfig* rc)
   rc->positionImage = &gPositionRGBA.at(0);
   rc->texcoordImage = &gTexCoordRGBA.at(0);
   rc->varycoordImage = &gVaryCoordRGBA.at(0);
+
+  trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 void checkErrors(std::string desc) {
@@ -165,6 +167,8 @@ void keyboardCallback(int keycode, int state) {
   //if (keycode == 'q' && window && window->isModifierKeyPressed(B3G_SHIFT)) {
   if (keycode == 27 ) {
     if (window) window->setRequestExit();
+  } else if (keycode == ' ') {
+    trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
   }
 
   ImGui_ImplBtGui_SetKeyState(keycode, (state == 1));
@@ -184,13 +188,12 @@ void mouseMoveCallback(float x, float y) {
     float h = gRenderConfig.height;
 
     float y_offset = gHeight - h;
-    float prev_quat[4];
-    trackball(prev_quat,
+    trackball(gPrevQuat,
               (2.f * gMousePosX - w) / w,
               (h - 2.f * (gMousePosY - y_offset)) / h,
               (2.f * x - w) / w,
               (h - 2.f * (y - y_offset)) / h);
-    add_quats(prev_quat, gCurrQuat, gCurrQuat);
+    add_quats(gPrevQuat, gCurrQuat, gCurrQuat);
     RequestRender();
   }
 
@@ -203,7 +206,10 @@ void mouseButtonCallback(int button, int state, float x, float y) {
 
   // left button
   if (button == 0) {
-    if (state) gMouseLeftDown = true;
+    if (state) {
+      gMouseLeftDown = true;
+      trackball(gPrevQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+    }
     else gMouseLeftDown = false;
   }
 }
@@ -342,7 +348,7 @@ int main(int argc, char** argv) {
       ImGui::RadioButton("normal", &gShowBufferMode, SHOW_BUFFER_NORMAL); ImGui::SameLine();
       ImGui::RadioButton("position", &gShowBufferMode, SHOW_BUFFER_POSITION); ImGui::SameLine();
       ImGui::RadioButton("texcoord", &gShowBufferMode, SHOW_BUFFER_TEXCOORD); ImGui::SameLine();
-      ImGui::RadioButton("varyoord", &gShowBufferMode, SHOW_BUFFER_VARYCOORD);
+      ImGui::RadioButton("varycoord", &gShowBufferMode, SHOW_BUFFER_VARYCOORD);
 
       ImGui::InputFloat("show pos scale", &gShowPositionScale);
       

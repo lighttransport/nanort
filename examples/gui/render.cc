@@ -436,6 +436,7 @@ bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderC
   int width = config.width;
   int height = config.height;
 
+
   // camera
   float eye[3] = {config.eye[0], config.eye[1], config.eye[2]};
   float look_at[3] = {config.look_at[0], config.look_at[1], config.look_at[2]};
@@ -481,6 +482,7 @@ bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderC
         //std::this_thread::sleep_for( std::chrono::milliseconds( 5 ) );
 
         for (int x = 0; x < config.width; x++) {
+
 
           nanort::Ray ray;
           ray.org[0] = origin[0];
@@ -538,6 +540,35 @@ bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderC
               config.texcoordImage[4 * (y*config.width+x)+1] = gMesh.facevarying_uvs[6 * prim_id + 1];
 
             }
+          } else {
+
+            if (config.pass == 0) {
+              // clear pixel
+              rgba[4*(y*config.width+x)+0] = 0.0f;
+              rgba[4*(y*config.width+x)+1] = 0.0f;
+              rgba[4*(y*config.width+x)+2] = 0.0f;
+              rgba[4*(y*config.width+x)+3] = 0.0f;
+              aux_rgba[4*(y*config.width+x)+0] = 0.0f;
+              aux_rgba[4*(y*config.width+x)+1] = 0.0f;
+              aux_rgba[4*(y*config.width+x)+2] = 0.0f;
+              aux_rgba[4*(y*config.width+x)+3] = 0.0f;
+              config.normalImage[4*(y*config.width+x)+0] = 0.0f;
+              config.normalImage[4*(y*config.width+x)+1] = 0.0f;
+              config.normalImage[4*(y*config.width+x)+2] = 0.0f;
+              config.normalImage[4*(y*config.width+x)+3] = 0.0f;
+              config.positionImage[4*(y*config.width+x)+0] = 0.0f;
+              config.positionImage[4*(y*config.width+x)+1] = 0.0f;
+              config.positionImage[4*(y*config.width+x)+2] = 0.0f;
+              config.positionImage[4*(y*config.width+x)+3] = 0.0f;
+              config.texcoordImage[4*(y*config.width+x)+0] = 0.0f;
+              config.texcoordImage[4*(y*config.width+x)+1] = 0.0f;
+              config.texcoordImage[4*(y*config.width+x)+2] = 0.0f;
+              config.texcoordImage[4*(y*config.width+x)+3] = 0.0f;
+              config.varycoordImage[4*(y*config.width+x)+0] = 0.0f;
+              config.varycoordImage[4*(y*config.width+x)+1] = 0.0f;
+              config.varycoordImage[4*(y*config.width+x)+2] = 0.0f;
+              config.varycoordImage[4*(y*config.width+x)+3] = 0.0f;
+            }
           }
         }
 
@@ -555,7 +586,7 @@ bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderC
     t.join();
   }
 
-  return true;
+  return (!cancelFlag);
   
 };
 
