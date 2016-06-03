@@ -138,12 +138,12 @@ void BuildCameraFrame(nanort::float3 *origin, nanort::float3 *corner, nanort::fl
   up1[0] -= eye1[0];
   up1[1] -= eye1[1];
   up1[2] -= eye1[2];
-  // printf("up1(after) = %f, %f, %f\n", up1[0], up1[1], up1[2]);
+  //printf("up1(after) = %f, %f, %f\n", up1[0], up1[1], up1[2]);
 
   // Use original up vector
-  up1[0] = up[0];
-  up1[1] = up[1];
-  up1[2] = up[2];
+  //up1[0] = up[0];
+  //up1[1] = up[1];
+  //up1[2] = up[2];
 
   {
     float flen =
