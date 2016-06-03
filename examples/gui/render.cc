@@ -66,7 +66,12 @@ struct Material {
 Mesh gMesh;
 nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<> > gAccel;
 
-void CalcNormal(nanort::float3& N, nanort::float3 v0, nanort::float3 v1, nanort::float3 v2)
+inline nanort::float3 Lerp3(nanort::float3 v0, nanort::float3 v1, nanort::float3 v2, float u, float v)
+{
+  return (1.0f - u - v) * v0 + u * v1 + v * v2;
+}
+
+inline void CalcNormal(nanort::float3& N, nanort::float3 v0, nanort::float3 v1, nanort::float3 v2)
 {
   nanort::float3 v10 = v1 - v0;
   nanort::float3 v20 = v2 - v0;
@@ -526,18 +531,58 @@ bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderC
 
             unsigned int prim_id = triangle_intersector.intersection.prim_id;
 
+            nanort::float3 N;
             if (gMesh.facevarying_normals.size() > 0) {
-              // @fixme { interpolate. }
-              config.normalImage[4 * (y*config.width+x)+0] = 0.5 * gMesh.facevarying_normals[9 * prim_id + 0] + 0.5;
-              config.normalImage[4 * (y*config.width+x)+1] = 0.5 * gMesh.facevarying_normals[9 * prim_id + 1] + 0.5;
-              config.normalImage[4 * (y*config.width+x)+2] = 0.5 * gMesh.facevarying_normals[9 * prim_id + 2] + 0.5;
-              config.normalImage[4 * (y*config.width+x)+3] = 1.0f;
+              nanort::float3 n0, n1, n2;
+              n0[0] = gMesh.facevarying_normals[9 * prim_id + 0];
+              n0[1] = gMesh.facevarying_normals[9 * prim_id + 1];
+              n0[2] = gMesh.facevarying_normals[9 * prim_id + 2];
+              n1[0] = gMesh.facevarying_normals[9 * prim_id + 3];
+              n1[1] = gMesh.facevarying_normals[9 * prim_id + 4];
+              n1[2] = gMesh.facevarying_normals[9 * prim_id + 5];
+              n2[0] = gMesh.facevarying_normals[9 * prim_id + 6];
+              n2[1] = gMesh.facevarying_normals[9 * prim_id + 7];
+              n2[2] = gMesh.facevarying_normals[9 * prim_id + 8];
+              N = Lerp3(n0, n1, n2, triangle_intersector.intersection.u, triangle_intersector.intersection.v);
+            } else {
+              unsigned int f0, f1, f2;
+              f0 = gMesh.faces[3 * prim_id + 0];
+              f1 = gMesh.faces[3 * prim_id + 1];
+              f2 = gMesh.faces[3 * prim_id + 2];
+
+              nanort::float3 v0, v1, v2;
+              v0[0] = gMesh.vertices[3 * f0 + 0];
+              v0[1] = gMesh.vertices[3 * f0 + 1];
+              v0[2] = gMesh.vertices[3 * f0 + 2];
+              v1[0] = gMesh.vertices[3 * f1 + 0];
+              v1[1] = gMesh.vertices[3 * f1 + 1];
+              v1[2] = gMesh.vertices[3 * f1 + 2];
+              v2[0] = gMesh.vertices[3 * f2 + 0];
+              v2[1] = gMesh.vertices[3 * f2 + 1];
+              v2[2] = gMesh.vertices[3 * f2 + 2];
+              CalcNormal(N, v0, v1, v2);
             }
 
+            config.normalImage[4 * (y*config.width+x)+0] = 0.5 * N[0] + 0.5;
+            config.normalImage[4 * (y*config.width+x)+1] = 0.5 * N[1] + 0.5;
+            config.normalImage[4 * (y*config.width+x)+2] = 0.5 * N[2] + 0.5;
+            config.normalImage[4 * (y*config.width+x)+3] = 1.0f;
+
+            nanort::float3 UV;
             if (gMesh.facevarying_uvs.size() > 0) {
-              // @fixme { interpolate }
-              config.texcoordImage[4 * (y*config.width+x)+0] = gMesh.facevarying_uvs[6 * prim_id + 0];
-              config.texcoordImage[4 * (y*config.width+x)+1] = gMesh.facevarying_uvs[6 * prim_id + 1];
+
+              nanort::float3 uv0, uv1, uv2;
+              uv0[0] = gMesh.facevarying_uvs[6 * prim_id + 0];
+              uv0[1] = gMesh.facevarying_uvs[6 * prim_id + 1];
+              uv1[0] = gMesh.facevarying_uvs[6 * prim_id + 2];
+              uv1[1] = gMesh.facevarying_uvs[6 * prim_id + 3];
+              uv2[0] = gMesh.facevarying_uvs[6 * prim_id + 4];
+              uv2[1] = gMesh.facevarying_uvs[6 * prim_id + 5];
+
+              UV = Lerp3(uv0, uv1, uv2, triangle_intersector.intersection.u, triangle_intersector.intersection.v);
+
+              config.texcoordImage[4 * (y*config.width+x)+0] = UV[0];
+              config.texcoordImage[4 * (y*config.width+x)+1] = UV[1];
 
             }
           } else {
