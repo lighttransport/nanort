@@ -21,31 +21,31 @@
 #include <sys/stat.h>
 #endif
 
+#include <cassert>
 #include <cstdio>
 #include <cstdlib>
-#include <string>
 #include <cstring>
-#include <cassert>
 #include <iostream>
+#include <string>
 #include <vector>
 
-#include <thread> // C++11
-#include <atomic> // C++11
-#include <chrono> // C++11
-#include <mutex> // C++11
+#include <atomic>  // C++11
+#include <chrono>  // C++11
+#include <mutex>   // C++11
+#include <thread>  // C++11
 
 #include "imgui.h"
 #include "imgui_impl_btgui.h"
 
-#include "render.h"
 #include "render-config.h"
+#include "render.h"
 #include "trackball.h"
 
-#define SHOW_BUFFER_COLOR     (0)
-#define SHOW_BUFFER_NORMAL    (1)
-#define SHOW_BUFFER_POSITION  (2)
-#define SHOW_BUFFER_TEXCOORD  (3)
-#define SHOW_BUFFER_VARYCOORD  (4)
+#define SHOW_BUFFER_COLOR (0)
+#define SHOW_BUFFER_NORMAL (1)
+#define SHOW_BUFFER_POSITION (2)
+#define SHOW_BUFFER_TEXCOORD (3)
+#define SHOW_BUFFER_VARYCOORD (4)
 
 b3gDefaultOpenGLWindow* window = 0;
 int gWidth = 512;
@@ -53,6 +53,8 @@ int gHeight = 512;
 int gMousePosX = -1, gMousePosY = -1;
 bool gMouseLeftDown = false;
 int gShowBufferMode = SHOW_BUFFER_COLOR;
+bool gTabPressed = false;
+bool gShiftPressed = false;
 float gShowPositionScale = 1.0f;
 float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
@@ -66,14 +68,13 @@ example::RenderConfig gRenderConfig;
 std::mutex gMutex;
 
 std::vector<float> gRGBA;
-std::vector<float> gAuxRGBA;      // Auxiliary buffer  
-std::vector<float> gNormalRGBA;   // For visualizing normal 
-std::vector<float> gPositionRGBA; // For visualizing position  
-std::vector<float> gTexCoordRGBA; // For visualizing texcoord
-std::vector<float> gVaryCoordRGBA; // For visualizing varycentric coord
+std::vector<float> gAuxRGBA;        // Auxiliary buffer
+std::vector<float> gNormalRGBA;     // For visualizing normal
+std::vector<float> gPositionRGBA;   // For visualizing position
+std::vector<float> gTexCoordRGBA;   // For visualizing texcoord
+std::vector<float> gVaryCoordRGBA;  // For visualizing varycentric coord
 
-void RequestRender()
-{
+void RequestRender() {
   {
     std::lock_guard<std::mutex> guard(gMutex);
     gRenderConfig.pass = 0;
@@ -83,8 +84,7 @@ void RequestRender()
   gRenderCancel = true;
 }
 
-void RenderThread()
-{
+void RenderThread() {
   {
     std::lock_guard<std::mutex> guard(gMutex);
     gRenderConfig.pass = 0;
@@ -93,11 +93,10 @@ void RenderThread()
   while (1) {
     if (gRenderQuit) return;
 
-    if( !gRenderRefresh || gRenderConfig.pass >= gRenderConfig.max_passes )
-    {
-        // Give some cycles to this thread.
-        std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
-        continue;
+    if (!gRenderRefresh || gRenderConfig.pass >= gRenderConfig.max_passes) {
+      // Give some cycles to this thread.
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      continue;
     }
 
     auto startT = std::chrono::system_clock::now();
@@ -105,7 +104,8 @@ void RenderThread()
     gRenderCancel = false;
     // gRenderCancel may be set to true in main loop.
     // Render() will repeatedly check this flag inside the rendering loop.
-    bool ret = gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), gCurrQuat, gRenderConfig, gRenderCancel);
+    bool ret = gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), gCurrQuat,
+                                gRenderConfig, gRenderCancel);
 
     if (ret) {
       std::lock_guard<std::mutex> guard(gMutex);
@@ -116,14 +116,11 @@ void RenderThread()
 
     std::chrono::duration<double, std::milli> ms = endT - startT;
 
-    //std::cout << ms.count() << " [ms]\n";
-
+    // std::cout << ms.count() << " [ms]\n";
   }
-    
 }
 
-void InitRender(example::RenderConfig* rc)
-{
+void InitRender(example::RenderConfig* rc) {
   rc->pass = 0;
 
   rc->max_passes = 128;
@@ -163,37 +160,54 @@ void checkErrors(std::string desc) {
 }
 
 void keyboardCallback(int keycode, int state) {
-  printf("hello key %d, state %d(ctrl %d)\n", keycode, state, window->isModifierKeyPressed(B3G_CONTROL));
-  //if (keycode == 'q' && window && window->isModifierKeyPressed(B3G_SHIFT)) {
-  if (keycode == 27 ) {
+  printf("hello key %d, state %d(ctrl %d)\n", keycode, state,
+         window->isModifierKeyPressed(B3G_CONTROL));
+  // if (keycode == 'q' && window && window->isModifierKeyPressed(B3G_SHIFT)) {
+  if (keycode == 27) {
     if (window) window->setRequestExit();
   } else if (keycode == ' ') {
     trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+  } else if (keycode == 9) {
+    gTabPressed = (state == 1);
+  } else if (keycode == B3G_SHIFT) {
+    gShiftPressed = (state == 1);
   }
 
   ImGui_ImplBtGui_SetKeyState(keycode, (state == 1));
 
   if (keycode >= 32 && keycode <= 126) {
-      if (state == 1) {
-        ImGui_ImplBtGui_SetChar(keycode);
-      }
+    if (state == 1) {
+      ImGui_ImplBtGui_SetChar(keycode);
+    }
   }
 }
 
 void mouseMoveCallback(float x, float y) {
-//   printf("Mouse Move: %f, %f\n", x, y);
+  //   printf("Mouse Move: %f, %f\n", x, y);
 
   if (gMouseLeftDown) {
     float w = gRenderConfig.width;
     float h = gRenderConfig.height;
 
     float y_offset = gHeight - h;
-    trackball(gPrevQuat,
-              (2.f * gMousePosX - w) / w,
-              (h - 2.f * (gMousePosY - y_offset)) / h,
-              (2.f * x - w) / w,
-              (h - 2.f * (y - y_offset)) / h);
-    add_quats(gPrevQuat, gCurrQuat, gCurrQuat);
+
+    if (gTabPressed) {
+      const float dolly_scale = 0.1;
+      gRenderConfig.eye[2] += dolly_scale * (gMousePosY - y);
+      gRenderConfig.look_at[2] += dolly_scale * (gMousePosY - y);
+    } else if (gShiftPressed) {
+      const float trans_scale = 0.1;
+      gRenderConfig.eye[0] += trans_scale * (gMousePosX - x);
+      gRenderConfig.eye[1] -= trans_scale * (gMousePosY - y);
+      gRenderConfig.look_at[0] += trans_scale * (gMousePosX - x);
+      gRenderConfig.look_at[1] -= trans_scale * (gMousePosY - y);
+
+    } else {
+      trackball(gPrevQuat, (2.f * gMousePosX - w) / w,
+                (h - 2.f * (gMousePosY - y_offset)) / h, (2.f * x - w) / w,
+                (h - 2.f * (y - y_offset)) / h);
+      add_quats(gPrevQuat, gCurrQuat, gCurrQuat);
+    }
     RequestRender();
   }
 
@@ -204,13 +218,18 @@ void mouseMoveCallback(float x, float y) {
 void mouseButtonCallback(int button, int state, float x, float y) {
   ImGui_ImplBtGui_SetMouseButtonState(button, (state == 1));
 
+  ImGuiIO& io = ImGui::GetIO();
+  if (io.WantCaptureMouse || io.WantCaptureKeyboard) {
+    return;
+  }
+
   // left button
   if (button == 0) {
     if (state) {
       gMouseLeftDown = true;
       trackball(gPrevQuat, 0.0f, 0.0f, 0.0f, 0.0f);
-    }
-    else gMouseLeftDown = false;
+    } else
+      gMouseLeftDown = false;
   }
 }
 
@@ -226,8 +245,7 @@ void resizeCallback(float width, float height) {
   gHeight = height;
 }
 
-void Display( int width, int height )
-{
+void Display(int width, int height) {
   std::vector<float> buf(width * height * 4);
   if (gShowBufferMode == SHOW_BUFFER_COLOR) {
     for (size_t i = 0; i < buf.size(); i++) {
@@ -250,13 +268,13 @@ void Display( int width, int height )
       buf[i] = gVaryCoordRGBA[i];
     }
   }
- 
-  glRasterPos2i( -1, -1 );
-  glDrawPixels( width, height, GL_RGBA, GL_FLOAT, static_cast<const GLvoid*>( &buf.at(0) ) );
+
+  glRasterPos2i(-1, -1);
+  glDrawPixels(width, height, GL_RGBA, GL_FLOAT,
+               static_cast<const GLvoid*>(&buf.at(0)));
 }
 
 int main(int argc, char** argv) {
-
   std::string config_filename = "config.json";
 
   if (argc > 1) {
@@ -264,17 +282,19 @@ int main(int argc, char** argv) {
   }
 
   {
-    bool ret = example::LoadRenderConfig(&gRenderConfig, config_filename.c_str());
+    bool ret =
+        example::LoadRenderConfig(&gRenderConfig, config_filename.c_str());
     if (!ret) {
       fprintf(stderr, "Failed to load [ %s ]\n", config_filename.c_str());
       return -1;
     }
   }
-      
 
-  bool ret = gRenderer.LoadObjMesh(gRenderConfig.obj_filename.c_str(), gRenderConfig.scene_scale);
+  bool ret = gRenderer.LoadObjMesh(gRenderConfig.obj_filename.c_str(),
+                                   gRenderConfig.scene_scale);
   if (!ret) {
-    fprintf(stderr, "Failed to load [ %s ]\n", gRenderConfig.obj_filename.c_str());
+    fprintf(stderr, "Failed to load [ %s ]\n",
+            gRenderConfig.obj_filename.c_str());
     return -1;
   }
 
@@ -291,17 +311,17 @@ int main(int argc, char** argv) {
 
 #ifndef __APPLE__
 #ifndef _WIN32
-  //some Linux implementations need the 'glewExperimental' to be true
+  // some Linux implementations need the 'glewExperimental' to be true
   glewExperimental = GL_TRUE;
 #endif
   if (glewInit() != GLEW_OK) {
-	  fprintf(stderr, "Failed to initialize GLEW\n");
-	  exit(-1);
+    fprintf(stderr, "Failed to initialize GLEW\n");
+    exit(-1);
   }
 
   if (!GLEW_VERSION_2_1) {
-	  fprintf(stderr, "OpenGL 2.1 is not available\n");
-	  exit(-1);
+    fprintf(stderr, "OpenGL 2.1 is not available\n");
+    exit(-1);
   }
 #endif
 
@@ -320,9 +340,8 @@ int main(int argc, char** argv) {
   ImGui_ImplBtGui_Init(window);
 
   ImGuiIO& io = ImGui::GetIO();
-  //io.Fonts->AddFontDefault();
+  // io.Fonts->AddFontDefault();
   io.Fonts->AddFontFromFileTTF("./DroidSans.ttf", 15.0f);
-
 
   std::thread renderThread(RenderThread);
 
@@ -337,27 +356,39 @@ int main(int argc, char** argv) {
     ImGui_ImplBtGui_NewFrame(gMousePosX, gMousePosY);
     ImGui::Begin("UI");
     {
-      static float col[3] = {0,0,0};
+      static float col[3] = {0, 0, 0};
       static float f = 0.0f;
-      if (ImGui::ColorEdit3("color", col)) {
+      // if (ImGui::ColorEdit3("color", col)) {
+      //  RequestRender();
+      //}
+      // ImGui::InputFloat("intensity", &f);
+      if (ImGui::InputFloat3("eye", gRenderConfig.eye)) {
         RequestRender();
       }
-      ImGui::InputFloat("intensity", &f);
+      if (ImGui::InputFloat3("up", gRenderConfig.up)) {
+        RequestRender();
+      }
+      if (ImGui::InputFloat3("look_at", gRenderConfig.look_at)) {
+        RequestRender();
+      }
 
-      ImGui::RadioButton("color", &gShowBufferMode, SHOW_BUFFER_COLOR); ImGui::SameLine();
-      ImGui::RadioButton("normal", &gShowBufferMode, SHOW_BUFFER_NORMAL); ImGui::SameLine();
-      ImGui::RadioButton("position", &gShowBufferMode, SHOW_BUFFER_POSITION); ImGui::SameLine();
-      ImGui::RadioButton("texcoord", &gShowBufferMode, SHOW_BUFFER_TEXCOORD); ImGui::SameLine();
+      ImGui::RadioButton("color", &gShowBufferMode, SHOW_BUFFER_COLOR);
+      ImGui::SameLine();
+      ImGui::RadioButton("normal", &gShowBufferMode, SHOW_BUFFER_NORMAL);
+      ImGui::SameLine();
+      ImGui::RadioButton("position", &gShowBufferMode, SHOW_BUFFER_POSITION);
+      ImGui::SameLine();
+      ImGui::RadioButton("texcoord", &gShowBufferMode, SHOW_BUFFER_TEXCOORD);
+      ImGui::SameLine();
       ImGui::RadioButton("varycoord", &gShowBufferMode, SHOW_BUFFER_VARYCOORD);
 
       ImGui::InputFloat("show pos scale", &gShowPositionScale);
-      
     }
     ImGui::End();
 
     glViewport(0, 0, window->getWidth(), window->getHeight());
     glClearColor(0, 0.1, 0.2f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
     checkErrors("clear");
 
@@ -370,10 +401,10 @@ int main(int argc, char** argv) {
     window->endRendering();
 
     // Give some cycles to this thread.
-    std::this_thread::sleep_for( std::chrono::milliseconds( 16 ) );
+    std::this_thread::sleep_for(std::chrono::milliseconds(16));
   }
 
-  printf("quit\n");  
+  printf("quit\n");
   {
     gRenderCancel = true;
     gRenderQuit = true;

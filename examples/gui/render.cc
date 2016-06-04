@@ -2,14 +2,14 @@
 
 #include <chrono>  // C++11
 #include <thread>  // C++11
-#include <vector> 
+#include <vector>
 
 #include <iostream>
 
 #include "../../nanort.h"
 
-#include "tiny_obj_loader.h"
 #include "matrix.h"
+#include "tiny_obj_loader.h"
 #include "trackball.h"
 
 namespace example {
@@ -17,14 +17,15 @@ namespace example {
 typedef struct {
   size_t num_vertices;
   size_t num_faces;
-  std::vector<float> vertices;              /// [xyz] * num_vertices
-  std::vector<float> facevarying_normals;   /// [xyz] * 3(triangle) * num_faces
-  std::vector<float> facevarying_tangents;  /// [xyz] * 3(triangle) * num_faces
-  std::vector<float> facevarying_binormals; /// [xyz] * 3(triangle) * num_faces
-  std::vector<float> facevarying_uvs;       /// [xy]  * 3(triangle) * num_faces
-  std::vector<float> facevarying_vertex_colors;   /// [xyz] * 3(triangle) * num_faces
+  std::vector<float> vertices;               /// [xyz] * num_vertices
+  std::vector<float> facevarying_normals;    /// [xyz] * 3(triangle) * num_faces
+  std::vector<float> facevarying_tangents;   /// [xyz] * 3(triangle) * num_faces
+  std::vector<float> facevarying_binormals;  /// [xyz] * 3(triangle) * num_faces
+  std::vector<float> facevarying_uvs;        /// [xy]  * 3(triangle) * num_faces
+  std::vector<float>
+      facevarying_vertex_colors;           /// [xyz] * 3(triangle) * num_faces
   std::vector<unsigned int> faces;         /// triangle x num_faces
-  std::vector<unsigned int> material_ids;   /// index x num_faces
+  std::vector<unsigned int> material_ids;  /// index x num_faces
 } Mesh;
 
 struct Material {
@@ -37,23 +38,23 @@ struct Material {
   int reflection_texid;
   int transparency_texid;
   int bump_texid;
-  int normal_texid;     // normal map
-  int alpha_texid;      // alpha map
+  int normal_texid;  // normal map
+  int alpha_texid;   // alpha map
 
   Material() {
-	  ambient[0] = 0.0;
-	  ambient[1] = 0.0;
-	  ambient[2] = 0.0;
-	  diffuse[0] = 0.5;
-	  diffuse[1] = 0.5;
-	  diffuse[2] = 0.5;
-	  reflection[0] = 0.0;
-	  reflection[1] = 0.0;
-	  reflection[2] = 0.0;
-	  refraction[0] = 0.0;
-	  refraction[1] = 0.0;
-	  refraction[2] = 0.0;
-	  id = -1;
+    ambient[0] = 0.0;
+    ambient[1] = 0.0;
+    ambient[2] = 0.0;
+    diffuse[0] = 0.5;
+    diffuse[1] = 0.5;
+    diffuse[2] = 0.5;
+    reflection[0] = 0.0;
+    reflection[1] = 0.0;
+    reflection[2] = 0.0;
+    refraction[0] = 0.0;
+    refraction[1] = 0.0;
+    refraction[2] = 0.0;
+    id = -1;
     diffuse_texid = -1;
     reflection_texid = -1;
     transparency_texid = -1;
@@ -64,15 +65,17 @@ struct Material {
 };
 
 Mesh gMesh;
-nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<> > gAccel;
+nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred,
+                 nanort::TriangleIntersector<> >
+    gAccel;
 
-inline nanort::float3 Lerp3(nanort::float3 v0, nanort::float3 v1, nanort::float3 v2, float u, float v)
-{
+inline nanort::float3 Lerp3(nanort::float3 v0, nanort::float3 v1,
+                            nanort::float3 v2, float u, float v) {
   return (1.0f - u - v) * v0 + u * v1 + v * v2;
 }
 
-inline void CalcNormal(nanort::float3& N, nanort::float3 v0, nanort::float3 v1, nanort::float3 v2)
-{
+inline void CalcNormal(nanort::float3& N, nanort::float3 v0, nanort::float3 v1,
+                       nanort::float3 v2) {
   nanort::float3 v10 = v1 - v0;
   nanort::float3 v20 = v2 - v0;
 
@@ -80,8 +83,8 @@ inline void CalcNormal(nanort::float3& N, nanort::float3 v0, nanort::float3 v1, 
   N = vnormalize(N);
 }
 
-void BuildCameraFrame(nanort::float3 *origin, nanort::float3 *corner, nanort::float3 *u,
-                      nanort::float3 *v, float quat[4],
+void BuildCameraFrame(nanort::float3* origin, nanort::float3* corner,
+                      nanort::float3* u, nanort::float3* v, float quat[4],
                       float eye[3], float lookat[3], float up[3], float fov,
                       int width, int height) {
   float e[4][4];
@@ -111,8 +114,8 @@ void BuildCameraFrame(nanort::float3 *origin, nanort::float3 *corner, nanort::fl
   Matrix::LookAt(re, dir, zero, localUp);
 
   // translate
-  re[3][0] += eye[0]; // 0.0; //lo[0];
-  re[3][1] += eye[1]; // 0.0; //lo[1];
+  re[3][0] += eye[0];  // 0.0; //lo[0];
+  re[3][1] += eye[1];  // 0.0; //lo[1];
   re[3][2] += (eye[2] - dist);
 
   // rot -> trans
@@ -143,12 +146,12 @@ void BuildCameraFrame(nanort::float3 *origin, nanort::float3 *corner, nanort::fl
   up1[0] -= eye1[0];
   up1[1] -= eye1[1];
   up1[2] -= eye1[2];
-  //printf("up1(after) = %f, %f, %f\n", up1[0], up1[1], up1[2]);
+  // printf("up1(after) = %f, %f, %f\n", up1[0], up1[1], up1[2]);
 
   // Use original up vector
-  //up1[0] = up[0];
-  //up1[1] = up[1];
-  //up1[2] = up[2];
+  // up1[0] = up[0];
+  // up1[1] = up[1];
+  // up1[2] = up[2];
 
   {
     float flen =
@@ -176,12 +179,12 @@ void BuildCameraFrame(nanort::float3 *origin, nanort::float3 *corner, nanort::fl
     (*origin)[0] = eye1[0];
     (*origin)[1] = eye1[1];
     (*origin)[2] = eye1[2];
-
   }
 }
 
-nanort::Ray GenerateRay(const nanort::float3& origin, const nanort::float3& corner, const nanort::float3& du, const nanort::float3& dv, float u, float v) 
-{
+nanort::Ray GenerateRay(const nanort::float3& origin,
+                        const nanort::float3& corner, const nanort::float3& du,
+                        const nanort::float3& dv, float u, float v) {
   nanort::float3 dir;
 
   dir[0] = (corner[0] + u * du[0] + v * dv[0]) - origin[0];
@@ -200,8 +203,7 @@ nanort::Ray GenerateRay(const nanort::float3& origin, const nanort::float3& corn
   return ray;
 }
 
-
-bool LoadObj(Mesh &mesh, const char *filename, float scale) {
+bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
 
@@ -213,7 +215,8 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
   }
 
   std::cout << "[LoadOBJ] # of shapes in .obj : " << shapes.size() << std::endl;
-  std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size() << std::endl;
+  std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size()
+            << std::endl;
 
   size_t num_vertices = 0;
   size_t num_faces = 0;
@@ -244,13 +247,12 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
   mesh.facevarying_uvs.resize(num_faces * 3 * 2, 0.0f);
 
   // @todo {}
-  //mesh.facevarying_tangents = NULL;
-  //mesh.facevarying_binormals = NULL;
+  // mesh.facevarying_tangents = NULL;
+  // mesh.facevarying_binormals = NULL;
 
   size_t vertexIdxOffset = 0;
   size_t faceIdxOffset = 0;
   for (size_t i = 0; i < shapes.size(); i++) {
-
     for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
       mesh.faces[3 * (faceIdxOffset + f) + 0] =
           shapes[i].mesh.indices[3 * f + 0];
@@ -279,9 +281,9 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
       for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
         int f0, f1, f2;
 
-        f0 = shapes[i].mesh.indices[3*f+0];
-        f1 = shapes[i].mesh.indices[3*f+1];
-        f2 = shapes[i].mesh.indices[3*f+2];
+        f0 = shapes[i].mesh.indices[3 * f + 0];
+        f1 = shapes[i].mesh.indices[3 * f + 1];
+        f2 = shapes[i].mesh.indices[3 * f + 2];
 
         nanort::float3 n0, n1, n2;
 
@@ -314,9 +316,9 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
       for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
         int f0, f1, f2;
 
-        f0 = shapes[i].mesh.indices[3*f+0];
-        f1 = shapes[i].mesh.indices[3*f+1];
-        f2 = shapes[i].mesh.indices[3*f+2];
+        f0 = shapes[i].mesh.indices[3 * f + 0];
+        f1 = shapes[i].mesh.indices[3 * f + 1];
+        f2 = shapes[i].mesh.indices[3 * f + 2];
 
         nanort::float3 v0, v1, v2;
 
@@ -346,18 +348,16 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] = N[0];
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] = N[1];
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] = N[2];
-
       }
-
     }
 
     if (shapes[i].mesh.texcoords.size() > 0) {
       for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
         int f0, f1, f2;
 
-        f0 = shapes[i].mesh.indices[3*f+0];
-        f1 = shapes[i].mesh.indices[3*f+1];
-        f2 = shapes[i].mesh.indices[3*f+2];
+        f0 = shapes[i].mesh.indices[3 * f + 0];
+        f1 = shapes[i].mesh.indices[3 * f + 1];
+        f2 = shapes[i].mesh.indices[3 * f + 2];
 
         nanort::float3 n0, n1, n2;
 
@@ -388,13 +388,11 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
   return true;
 }
 
-
-bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale)
-{
-  bool ret =  LoadObj(gMesh, obj_filename, scene_scale);
+bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale) {
+  bool ret = LoadObj(gMesh, obj_filename, scene_scale);
   if (!ret) return false;
 
-  nanort::BVHBuildOptions build_options; // Use default option
+  nanort::BVHBuildOptions build_options;  // Use default option
   build_options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -404,11 +402,13 @@ bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale)
   auto t_start = std::chrono::system_clock::now();
 
   nanort::TriangleMesh triangle_mesh(gMesh.vertices.data(), gMesh.faces.data());
-  nanort::TriangleSAHPred triangle_pred(gMesh.vertices.data(), gMesh.faces.data());
+  nanort::TriangleSAHPred triangle_pred(gMesh.vertices.data(),
+                                        gMesh.faces.data());
 
   printf("num_triangles = %lu\n", gMesh.num_faces);
 
-  ret = gAccel.Build(gMesh.num_faces, build_options, triangle_mesh, triangle_pred);
+  ret = gAccel.Build(gMesh.num_faces, build_options, triangle_mesh,
+                     triangle_pred);
   assert(ret);
 
   auto t_end = std::chrono::system_clock::now();
@@ -427,13 +427,12 @@ bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale)
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
 
-
   return true;
-
 }
 
-bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderConfig& config, std::atomic<bool>& cancelFlag)
-{
+bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
+                      const RenderConfig& config,
+                      std::atomic<bool>& cancelFlag) {
   if (!gAccel.IsValid()) {
     return false;
   }
@@ -441,27 +440,26 @@ bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderC
   int width = config.width;
   int height = config.height;
 
-
   // camera
   float eye[3] = {config.eye[0], config.eye[1], config.eye[2]};
   float look_at[3] = {config.look_at[0], config.look_at[1], config.look_at[2]};
   float up[3] = {config.up[0], config.up[1], config.up[2]};
   float fov = config.fov;
   nanort::float3 origin, corner, u, v;
-  BuildCameraFrame(&origin, &corner, &u, &v, quat, eye, look_at, up, fov, width, height);
+  BuildCameraFrame(&origin, &corner, &u, &v, quat, eye, look_at, up, fov, width,
+                   height);
 
   auto kCancelFlagCheckMilliSeconds = 300;
 
   std::vector<std::thread> workers;
-  std::atomic<int> i( 0 );
+  std::atomic<int> i(0);
 
-  uint32_t num_threads = std::max( 1U, std::thread::hardware_concurrency() );
+  uint32_t num_threads = std::max(1U, std::thread::hardware_concurrency());
 
   auto startT = std::chrono::system_clock::now();
 
-  for( auto t = 0; t < num_threads; t++ )
-  {
-    workers.push_back( std::thread( [&, t]() {
+  for (auto t = 0; t < num_threads; t++) {
+    workers.push_back(std::thread([&, t]() {
 
       int y = 0;
       while ((y = i++) < config.height) {
@@ -476,19 +474,15 @@ bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderC
         }
 
         // draw dash line to aux buffer for progress.
-        for (int x = 0; x < config.width; x++) {
-          float c = (x / 8) % 2;
-          aux_rgba[4*(y*config.width+x)+0] = c;
-          aux_rgba[4*(y*config.width+x)+1] = c;
-          aux_rgba[4*(y*config.width+x)+2] = c;
-          aux_rgba[4*(y*config.width+x)+3] = 0.0f;
-        }
-
-        //std::this_thread::sleep_for( std::chrono::milliseconds( 5 ) );
+        // for (int x = 0; x < config.width; x++) {
+        //  float c = (x / 8) % 2;
+        //  aux_rgba[4*(y*config.width+x)+0] = c;
+        //  aux_rgba[4*(y*config.width+x)+1] = c;
+        //  aux_rgba[4*(y*config.width+x)+2] = c;
+        //  aux_rgba[4*(y*config.width+x)+3] = 0.0f;
+        //}
 
         for (int x = 0; x < config.width; x++) {
-
-
           nanort::Ray ray;
           ray.org[0] = origin[0];
           ray.org[1] = origin[1];
@@ -505,29 +499,30 @@ bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderC
           ray.min_t = 0.0f;
           ray.max_t = kFar;
 
-          nanort::TriangleIntersector<> triangle_intersector(gMesh.vertices.data(), gMesh.faces.data());
+          nanort::TriangleIntersector<> triangle_intersector(
+              gMesh.vertices.data(), gMesh.faces.data());
           nanort::BVHTraceOptions trace_options;
           bool hit = gAccel.Traverse(ray, trace_options, triangle_intersector);
           if (hit) {
-            rgba[4*(y*config.width+x)+0] = x / static_cast<float>(config.width);
-            rgba[4*(y*config.width+x)+1] = y / static_cast<float>(config.height);
-            rgba[4*(y*config.width+x)+2] = config.pass / static_cast<float>(config.max_passes);
-            rgba[4*(y*config.width+x)+3] = 1.0f;
-
             nanort::float3 p;
-            p[0] = ray.org[0] + triangle_intersector.intersection.t * ray.dir[0];
-            p[1] = ray.org[1] + triangle_intersector.intersection.t * ray.dir[1];
-            p[2] = ray.org[2] + triangle_intersector.intersection.t * ray.dir[2];
+            p[0] =
+                ray.org[0] + triangle_intersector.intersection.t * ray.dir[0];
+            p[1] =
+                ray.org[1] + triangle_intersector.intersection.t * ray.dir[1];
+            p[2] =
+                ray.org[2] + triangle_intersector.intersection.t * ray.dir[2];
 
-            config.positionImage[4*(y*config.width+x)+0] = p.x();
-            config.positionImage[4*(y*config.width+x)+1] = p.y();
-            config.positionImage[4*(y*config.width+x)+2] = p.z();
-            config.positionImage[4*(y*config.width+x)+3] = 1.0f;
+            config.positionImage[4 * (y * config.width + x) + 0] = p.x();
+            config.positionImage[4 * (y * config.width + x) + 1] = p.y();
+            config.positionImage[4 * (y * config.width + x) + 2] = p.z();
+            config.positionImage[4 * (y * config.width + x) + 3] = 1.0f;
 
-            config.varycoordImage[4*(y*config.width+x)+0] = triangle_intersector.intersection.u;
-            config.varycoordImage[4*(y*config.width+x)+1] = triangle_intersector.intersection.v;
-            config.varycoordImage[4*(y*config.width+x)+2] = 0.0f;
-            config.varycoordImage[4*(y*config.width+x)+3] = 1.0f;
+            config.varycoordImage[4 * (y * config.width + x) + 0] =
+                triangle_intersector.intersection.u;
+            config.varycoordImage[4 * (y * config.width + x) + 1] =
+                triangle_intersector.intersection.v;
+            config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
+            config.varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             unsigned int prim_id = triangle_intersector.intersection.prim_id;
 
@@ -543,7 +538,8 @@ bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderC
               n2[0] = gMesh.facevarying_normals[9 * prim_id + 6];
               n2[1] = gMesh.facevarying_normals[9 * prim_id + 7];
               n2[2] = gMesh.facevarying_normals[9 * prim_id + 8];
-              N = Lerp3(n0, n1, n2, triangle_intersector.intersection.u, triangle_intersector.intersection.v);
+              N = Lerp3(n0, n1, n2, triangle_intersector.intersection.u,
+                        triangle_intersector.intersection.v);
             } else {
               unsigned int f0, f1, f2;
               f0 = gMesh.faces[3 * prim_id + 0];
@@ -563,14 +559,16 @@ bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderC
               CalcNormal(N, v0, v1, v2);
             }
 
-            config.normalImage[4 * (y*config.width+x)+0] = 0.5 * N[0] + 0.5;
-            config.normalImage[4 * (y*config.width+x)+1] = 0.5 * N[1] + 0.5;
-            config.normalImage[4 * (y*config.width+x)+2] = 0.5 * N[2] + 0.5;
-            config.normalImage[4 * (y*config.width+x)+3] = 1.0f;
+            config.normalImage[4 * (y * config.width + x) + 0] =
+                0.5 * N[0] + 0.5;
+            config.normalImage[4 * (y * config.width + x) + 1] =
+                0.5 * N[1] + 0.5;
+            config.normalImage[4 * (y * config.width + x) + 2] =
+                0.5 * N[2] + 0.5;
+            config.normalImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             nanort::float3 UV;
             if (gMesh.facevarying_uvs.size() > 0) {
-
               nanort::float3 uv0, uv1, uv2;
               uv0[0] = gMesh.facevarying_uvs[6 * prim_id + 0];
               uv0[1] = gMesh.facevarying_uvs[6 * prim_id + 1];
@@ -579,60 +577,66 @@ bool Renderer::Render(float* rgba, float *aux_rgba, float quat[4], const RenderC
               uv2[0] = gMesh.facevarying_uvs[6 * prim_id + 4];
               uv2[1] = gMesh.facevarying_uvs[6 * prim_id + 5];
 
-              UV = Lerp3(uv0, uv1, uv2, triangle_intersector.intersection.u, triangle_intersector.intersection.v);
+              UV = Lerp3(uv0, uv1, uv2, triangle_intersector.intersection.u,
+                         triangle_intersector.intersection.v);
 
-              config.texcoordImage[4 * (y*config.width+x)+0] = UV[0];
-              config.texcoordImage[4 * (y*config.width+x)+1] = UV[1];
-
+              config.texcoordImage[4 * (y * config.width + x) + 0] = UV[0];
+              config.texcoordImage[4 * (y * config.width + x) + 1] = UV[1];
             }
-          } else {
 
+            // Simple shading
+            float NdotV = fabsf(vdot(N, dir));
+            rgba[4 * (y * config.width + x) + 0] = NdotV;
+            rgba[4 * (y * config.width + x) + 1] = NdotV;
+            rgba[4 * (y * config.width + x) + 2] = NdotV;
+            rgba[4 * (y * config.width + x) + 3] = 1.0f;
+
+          } else {
             if (config.pass == 0) {
               // clear pixel
-              rgba[4*(y*config.width+x)+0] = 0.0f;
-              rgba[4*(y*config.width+x)+1] = 0.0f;
-              rgba[4*(y*config.width+x)+2] = 0.0f;
-              rgba[4*(y*config.width+x)+3] = 0.0f;
-              aux_rgba[4*(y*config.width+x)+0] = 0.0f;
-              aux_rgba[4*(y*config.width+x)+1] = 0.0f;
-              aux_rgba[4*(y*config.width+x)+2] = 0.0f;
-              aux_rgba[4*(y*config.width+x)+3] = 0.0f;
-              config.normalImage[4*(y*config.width+x)+0] = 0.0f;
-              config.normalImage[4*(y*config.width+x)+1] = 0.0f;
-              config.normalImage[4*(y*config.width+x)+2] = 0.0f;
-              config.normalImage[4*(y*config.width+x)+3] = 0.0f;
-              config.positionImage[4*(y*config.width+x)+0] = 0.0f;
-              config.positionImage[4*(y*config.width+x)+1] = 0.0f;
-              config.positionImage[4*(y*config.width+x)+2] = 0.0f;
-              config.positionImage[4*(y*config.width+x)+3] = 0.0f;
-              config.texcoordImage[4*(y*config.width+x)+0] = 0.0f;
-              config.texcoordImage[4*(y*config.width+x)+1] = 0.0f;
-              config.texcoordImage[4*(y*config.width+x)+2] = 0.0f;
-              config.texcoordImage[4*(y*config.width+x)+3] = 0.0f;
-              config.varycoordImage[4*(y*config.width+x)+0] = 0.0f;
-              config.varycoordImage[4*(y*config.width+x)+1] = 0.0f;
-              config.varycoordImage[4*(y*config.width+x)+2] = 0.0f;
-              config.varycoordImage[4*(y*config.width+x)+3] = 0.0f;
+              rgba[4 * (y * config.width + x) + 0] = 0.0f;
+              rgba[4 * (y * config.width + x) + 1] = 0.0f;
+              rgba[4 * (y * config.width + x) + 2] = 0.0f;
+              rgba[4 * (y * config.width + x) + 3] = 0.0f;
+              aux_rgba[4 * (y * config.width + x) + 0] = 0.0f;
+              aux_rgba[4 * (y * config.width + x) + 1] = 0.0f;
+              aux_rgba[4 * (y * config.width + x) + 2] = 0.0f;
+              aux_rgba[4 * (y * config.width + x) + 3] = 0.0f;
+              config.normalImage[4 * (y * config.width + x) + 0] = 0.0f;
+              config.normalImage[4 * (y * config.width + x) + 1] = 0.0f;
+              config.normalImage[4 * (y * config.width + x) + 2] = 0.0f;
+              config.normalImage[4 * (y * config.width + x) + 3] = 0.0f;
+              config.positionImage[4 * (y * config.width + x) + 0] = 0.0f;
+              config.positionImage[4 * (y * config.width + x) + 1] = 0.0f;
+              config.positionImage[4 * (y * config.width + x) + 2] = 0.0f;
+              config.positionImage[4 * (y * config.width + x) + 3] = 0.0f;
+              config.texcoordImage[4 * (y * config.width + x) + 0] = 0.0f;
+              config.texcoordImage[4 * (y * config.width + x) + 1] = 0.0f;
+              config.texcoordImage[4 * (y * config.width + x) + 2] = 0.0f;
+              config.texcoordImage[4 * (y * config.width + x) + 3] = 0.0f;
+              config.varycoordImage[4 * (y * config.width + x) + 0] = 0.0f;
+              config.varycoordImage[4 * (y * config.width + x) + 1] = 0.0f;
+              config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
+              config.varycoordImage[4 * (y * config.width + x) + 3] = 0.0f;
             }
           }
         }
 
         for (int x = 0; x < config.width; x++) {
-          aux_rgba[4*(y*config.width+x)+0] = 0.0f;
-          aux_rgba[4*(y*config.width+x)+1] = 0.0f;
-          aux_rgba[4*(y*config.width+x)+2] = 0.0f;
-          aux_rgba[4*(y*config.width+x)+3] = 0.0f;
+          aux_rgba[4 * (y * config.width + x) + 0] = 0.0f;
+          aux_rgba[4 * (y * config.width + x) + 1] = 0.0f;
+          aux_rgba[4 * (y * config.width + x) + 2] = 0.0f;
+          aux_rgba[4 * (y * config.width + x) + 3] = 0.0f;
         }
       }
     }));
   }
 
-  for (auto &t : workers) {
+  for (auto& t : workers) {
     t.join();
   }
 
   return (!cancelFlag);
-  
 };
 
 }  // namespace example
