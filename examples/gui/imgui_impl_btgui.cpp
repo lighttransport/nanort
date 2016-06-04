@@ -1,7 +1,6 @@
 // ImGui BtGui binding with OpenGL based on Imgui Glfw binding.
 
 #include "imgui_impl_btgui.h"
-#include <imgui.h>
 
 #define USE_OPENGL2
 #include "OpenGLWindow/OpenGLInclude.h"

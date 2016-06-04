@@ -1,5 +1,7 @@
 // ImGui BtGui binding with OpenGL
 
+#include <imgui.h>
+
 class b3gDefaultOpenGLWindow;
 
 IMGUI_API bool ImGui_ImplBtGui_Init(b3gDefaultOpenGLWindow* window);
