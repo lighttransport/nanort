@@ -1,5 +1,7 @@
 # Simple GUI example with bullet3's OpenGLWindow + ImGui.
 
+![](screenshot/nanort_gui.png)
+
 ## Coordinates
 
 Right-handed coorinate, Y up, counter clock-wise normal definition.
@@ -19,7 +21,19 @@ Right-handed coorinate, Y up, counter clock-wise normal definition.
     $ premake5 gmake
     $ make
 
-## Build on Windows(Experimental)
+## Build on Windows(Experimental. May not work)
 
     $ premake5 vs2015
+
+## Usage
+
+Edit `config.json`, then
+
+    $ ./bin/native/Release/view
+
+### Mouse operation
+
+* left mouse = rotate
+* shift + left mouse = translate
+* tab + left mouse = dolly(Z axis)
 
