@@ -706,8 +706,12 @@ class TriangleIntersector
     }
 
     (*t_inout) = tt;
-    intersection.u = U * rcpDet;
-    intersection.v = V * rcpDet;
+		// Use Thomas-Mueller style barycentric coord.
+		// U + V + W = 1.0 and interp(p) = U * p0 + V * p1 + W * p2
+		// We want interp(p) = (1 - u - v) * p0 + u * v1 + v * p2;
+		// => u = V, v = W.
+    intersection.u = V * rcpDet;
+    intersection.v = W * rcpDet;
 
     return true;
   }
