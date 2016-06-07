@@ -1,5 +1,5 @@
 { "obj_filename" : "cornellbox_suzanne.obj",
-  "eson_filename" : "cornellbox_suzanne.obj",
+  "eson_filename" : "cornellbox_suzanne.eson",
   "scene_scale" : 1.0,
   "width" : 512,
   "height" : 512,
