@@ -7,9 +7,7 @@
 
 namespace example {
 
-bool LoadRenderConfig(example::RenderConfig *config, const char* filename)
-{
-  
+bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
   std::ifstream is(filename);
   if (is.fail()) {
     std::cerr << "Cannot open " << filename << std::endl;
@@ -20,7 +18,7 @@ bool LoadRenderConfig(example::RenderConfig *config, const char* filename)
   std::string err;
   picojson::value v;
   input = picojson::parse(v, input, std::istream_iterator<char>(), &err);
-  if (! err.empty()) {
+  if (!err.empty()) {
     std::cerr << err << std::endl;
   }
 
@@ -56,7 +54,7 @@ bool LoadRenderConfig(example::RenderConfig *config, const char* filename)
         config->eye[2] = arr[2].get<double>();
       }
     }
-  }     
+  }
 
   config->up[0] = 0.0f;
   config->up[1] = 1.0f;
@@ -70,7 +68,7 @@ bool LoadRenderConfig(example::RenderConfig *config, const char* filename)
         config->up[2] = arr[2].get<double>();
       }
     }
-  }     
+  }
 
   config->look_at[0] = 0.0f;
   config->look_at[1] = 0.0f;
@@ -84,7 +82,7 @@ bool LoadRenderConfig(example::RenderConfig *config, const char* filename)
         config->look_at[2] = arr[2].get<double>();
       }
     }
-  }     
+  }
 
   config->fov = 45.0f;
   if (o.find("fov") != o.end()) {
@@ -109,5 +107,4 @@ bool LoadRenderConfig(example::RenderConfig *config, const char* filename)
 
   return true;
 }
-
 }

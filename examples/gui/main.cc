@@ -50,6 +50,7 @@ THE SOFTWARE.
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -68,8 +69,9 @@ THE SOFTWARE.
 #define SHOW_BUFFER_COLOR (0)
 #define SHOW_BUFFER_NORMAL (1)
 #define SHOW_BUFFER_POSITION (2)
-#define SHOW_BUFFER_TEXCOORD (3)
-#define SHOW_BUFFER_VARYCOORD (4)
+#define SHOW_BUFFER_DEPTH (3)
+#define SHOW_BUFFER_TEXCOORD (4)
+#define SHOW_BUFFER_VARYCOORD (5)
 
 b3gDefaultOpenGLWindow* window = 0;
 int gWidth = 512;
@@ -80,6 +82,8 @@ int gShowBufferMode = SHOW_BUFFER_COLOR;
 bool gTabPressed = false;
 bool gShiftPressed = false;
 float gShowPositionScale = 1.0f;
+float gShowDepthRange[2] = {10.0f, 20.f};
+bool gShowDepthPeseudoColor = true;
 float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
@@ -95,6 +99,7 @@ std::vector<float> gRGBA;
 std::vector<float> gAuxRGBA;        // Auxiliary buffer
 std::vector<float> gNormalRGBA;     // For visualizing normal
 std::vector<float> gPositionRGBA;   // For visualizing position
+std::vector<float> gDepthRGBA;      // For visualizing depth
 std::vector<float> gTexCoordRGBA;   // For visualizing texcoord
 std::vector<float> gVaryCoordRGBA;  // For visualizing varycentric coord
 
@@ -161,6 +166,9 @@ void InitRender(example::RenderConfig* rc) {
   gPositionRGBA.resize(rc->width * rc->height * 4);
   std::fill(gPositionRGBA.begin(), gPositionRGBA.end(), 0.0);
 
+  gDepthRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gDepthRGBA.begin(), gDepthRGBA.end(), 0.0);
+
   gTexCoordRGBA.resize(rc->width * rc->height * 4);
   std::fill(gTexCoordRGBA.begin(), gTexCoordRGBA.end(), 0.0);
 
@@ -169,6 +177,7 @@ void InitRender(example::RenderConfig* rc) {
 
   rc->normalImage = &gNormalRGBA.at(0);
   rc->positionImage = &gPositionRGBA.at(0);
+  rc->depthImage = &gDepthRGBA.at(0);
   rc->texcoordImage = &gTexCoordRGBA.at(0);
   rc->varycoordImage = &gVaryCoordRGBA.at(0);
 
@@ -269,6 +278,33 @@ void resizeCallback(float width, float height) {
   gHeight = height;
 }
 
+inline float pesudoColor(float v, int ch) {
+  if (ch == 0) {  // red
+    if (v <= 0.5f)
+      return 0.f;
+    else if (v < 0.75f)
+      return (v - 0.5f) / 0.25f;
+    else
+      return 1.f;
+  } else if (ch == 1) {  // green
+    if (v <= 0.25f)
+      return v / 0.25f;
+    else if (v < 0.75f)
+      return 1.f;
+    else
+      return 1.f - (v - 0.75f) / 0.25f;
+  } else if (ch == 2) {  // blue
+    if (v <= 0.25f)
+      return 1.f;
+    else if (v < 0.5f)
+      return 1.f - (v - 0.25f) / 0.25f;
+    else
+      return 0.f;
+  } else {  // alpha
+    return 1.f;
+  }
+}
+
 void Display(int width, int height) {
   std::vector<float> buf(width * height * 4);
   if (gShowBufferMode == SHOW_BUFFER_COLOR) {
@@ -282,6 +318,18 @@ void Display(int width, int height) {
   } else if (gShowBufferMode == SHOW_BUFFER_POSITION) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gPositionRGBA[i] * gShowPositionScale;
+    }
+  } else if (gShowBufferMode == SHOW_BUFFER_DEPTH) {
+    float d_min = std::min(gShowDepthRange[0], gShowDepthRange[1]);
+    float d_diff = abs(gShowDepthRange[1] - gShowDepthRange[0]);
+    d_diff = std::max(d_diff, std::numeric_limits<float>::epsilon());
+    for (size_t i = 0; i < buf.size(); i++) {
+      float v = (gDepthRGBA[i] - d_min) / d_diff;
+      if (gShowDepthPeseudoColor) {
+        buf[i] = pesudoColor(v, i % 4);
+      } else {
+        buf[i] = v;
+      }
     }
   } else if (gShowBufferMode == SHOW_BUFFER_TEXCOORD) {
     for (size_t i = 0; i < buf.size(); i++) {
@@ -402,12 +450,18 @@ int main(int argc, char** argv) {
       ImGui::SameLine();
       ImGui::RadioButton("position", &gShowBufferMode, SHOW_BUFFER_POSITION);
       ImGui::SameLine();
+      ImGui::RadioButton("depth", &gShowBufferMode, SHOW_BUFFER_DEPTH);
+      ImGui::SameLine();
       ImGui::RadioButton("texcoord", &gShowBufferMode, SHOW_BUFFER_TEXCOORD);
       ImGui::SameLine();
       ImGui::RadioButton("varycoord", &gShowBufferMode, SHOW_BUFFER_VARYCOORD);
 
       ImGui::InputFloat("show pos scale", &gShowPositionScale);
+
+      ImGui::InputFloat2("show depth range", gShowDepthRange);
+      ImGui::Checkbox("show depth pesudo color", &gShowDepthPeseudoColor);
     }
+
     ImGui::End();
 
     glViewport(0, 0, window->getWidth(), window->getHeight());

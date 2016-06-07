@@ -3,28 +3,27 @@
 
 #include <string>
 
-namespace example
-{
+namespace example {
 
-typedef struct
-{
-	// framebuffer
+typedef struct {
+  // framebuffer
   int width;
   int height;
 
-	// camera
-	float eye[3];
-	float up[3];
-	float look_at[3];
-	float fov;						// vertical fov in degree.
+  // camera
+  float eye[3];
+  float up[3];
+  float look_at[3];
+  float fov;  // vertical fov in degree.
 
-	// render pass
+  // render pass
   int pass;
   int max_passes;
 
   // For debugging. Array size = width * height * 4.
   float *normalImage;
   float *positionImage;
+  float *depthImage;
   float *texcoordImage;
   float *varycoordImage;
 
@@ -35,9 +34,8 @@ typedef struct
 } RenderConfig;
 
 /// Loads config from JSON file.
-bool LoadRenderConfig(example::RenderConfig *config, const char* filename);
-
+bool LoadRenderConfig(example::RenderConfig *config, const char *filename);
 
 }  // namespace
 
-#endif // RENDER_CONFIG_H
+#endif  // RENDER_CONFIG_H

@@ -591,6 +591,14 @@ bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
                 0.5 * N[2] + 0.5;
             config.normalImage[4 * (y * config.width + x) + 3] = 1.0f;
 
+            config.depthImage[4 * (y * config.width + x) + 0] =
+                triangle_intersector.intersection.t;
+            config.depthImage[4 * (y * config.width + x) + 1] =
+                triangle_intersector.intersection.t;
+            config.depthImage[4 * (y * config.width + x) + 2] =
+                triangle_intersector.intersection.t;
+            config.depthImage[4 * (y * config.width + x) + 3] = 1.0f;
+
             nanort::float3 UV;
             if (gMesh.facevarying_uvs.size() > 0) {
               nanort::float3 uv0, uv1, uv2;
@@ -634,6 +642,10 @@ bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
               config.positionImage[4 * (y * config.width + x) + 1] = 0.0f;
               config.positionImage[4 * (y * config.width + x) + 2] = 0.0f;
               config.positionImage[4 * (y * config.width + x) + 3] = 0.0f;
+              config.depthImage[4 * (y * config.width + x) + 0] = 0.0f;
+              config.depthImage[4 * (y * config.width + x) + 1] = 0.0f;
+              config.depthImage[4 * (y * config.width + x) + 2] = 0.0f;
+              config.depthImage[4 * (y * config.width + x) + 3] = 0.0f;
               config.texcoordImage[4 * (y * config.width + x) + 0] = 0.0f;
               config.texcoordImage[4 * (y * config.width + x) + 1] = 0.0f;
               config.texcoordImage[4 * (y * config.width + x) + 2] = 0.0f;
