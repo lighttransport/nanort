@@ -8,6 +8,7 @@ sources = {
    "imgui.cpp",
    "imgui_draw.cpp",
    "imgui_impl_btgui.cpp",
+   "eson.cc",
    }
 
 -- premake4.lua

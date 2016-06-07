@@ -32,6 +32,7 @@ THE SOFTWARE.
 
 #include "../../nanort.h"
 
+#include "eson.h"
 #include "matrix.h"
 #include "tiny_obj_loader.h"
 #include "trackball.h"
@@ -412,9 +413,123 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   return true;
 }
 
+template <typename T>
+inline eson::Value createEsonValue(const std::vector<T>& src, size_t n_elem) {
+  assert(src.size() == n_elem);
+  return eson::Value((uint8_t*)&(src.at(0)), sizeof(T) * n_elem);
+}
+
+template <typename T>
+void recoverEsonValue(eson::Value v, const std::string& name,
+                      std::vector<T>& dst, size_t n_elem) {
+  eson::Binary binary = v.Get(name).Get<eson::Binary>();
+  const T* pointer = reinterpret_cast<T*>(const_cast<uint8_t*>(binary.ptr));
+  dst.resize(n_elem);
+  for (size_t i = 0; i < n_elem; i++) {
+    dst[i] = pointer[i];
+  }
+}
+
 bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale) {
-  bool ret = LoadObj(gMesh, obj_filename, scene_scale);
-  if (!ret) return false;
+  return LoadObj(gMesh, obj_filename, scene_scale);
+}
+
+bool Renderer::SaveEsonMesh(const char* eson_filename) {
+  std::cout << "[SaveESON] " << eson_filename << std::endl;
+  eson::Object root;
+
+  size_t num_vertices = gMesh.num_vertices;
+  size_t num_faces = gMesh.num_faces;
+
+  root["num_vertices"] = eson::Value((int64_t)num_vertices);
+  root["num_faces"] = eson::Value((int64_t)num_faces);
+  root["vertices"] = createEsonValue(gMesh.vertices, num_vertices * 3);
+  root["facevarying_normals"] =
+      createEsonValue(gMesh.facevarying_normals, num_faces * 3 * 3);
+  //   root["facevarying_tangents"] =
+  //   createEsonValue(gMesh.facevarying_tangents, num_faces * 3 * 3);
+  //   root["facevarying_binormals"] =
+  //   createEsonValue(gMesh.facevarying_binormals, num_faces * 3 * 3);
+  root["facevarying_uvs"] =
+      createEsonValue(gMesh.facevarying_uvs, num_faces * 2 * 3);
+  //   root["facevarying_vertex_colors"] =
+  //   createEsonValue(gMesh.facevarying_vertex_colors , num_faces * 3 * 3);
+  root["faces"] = createEsonValue(gMesh.faces, num_faces * 3);
+  root["material_ids"] = createEsonValue(gMesh.material_ids, num_faces);
+
+  eson::Value v = eson::Value(root);
+  int64_t size = v.Size();
+
+  std::vector<uint8_t> buf(size);
+  uint8_t* ptr = &buf[0];
+
+  ptr = v.Serialize(ptr);
+
+  assert((ptr - &buf[0]) == size);
+
+  FILE* fp = fopen(eson_filename, "wb");
+  if (!fp) {
+    return false;
+  }
+  fwrite(&buf[0], 1, size, fp);
+  fclose(fp);
+
+  return true;
+}
+
+bool Renderer::LoadEsonMesh(const char* eson_filename) {
+  std::vector<uint8_t> buf;
+
+  std::cout << "[LoadESON] " << eson_filename << std::endl;
+
+  FILE* fp = fopen(eson_filename, "rb");
+  if (!fp) {
+    return false;
+  }
+
+  fseek(fp, 0, SEEK_END);
+  size_t len = ftell(fp);
+  rewind(fp);
+  buf.resize(len);
+  len = fread(&buf[0], 1, len, fp);
+  fclose(fp);
+
+  eson::Value v;
+
+  std::string err = eson::Parse(v, &buf[0]);
+  if (!err.empty()) {
+    std::cout << "Err: " << err << std::endl;
+    exit(1);
+  }
+
+  // std::cout << "[LoadESON] # of shapes in .obj : " << shapes.size() <<
+  // std::endl;
+
+  int64_t num_vertices = v.Get("num_vertices").Get<int64_t>();
+  int64_t num_faces = v.Get("num_faces").Get<int64_t>();
+  printf("# of vertices: %lld\n", num_vertices);
+
+  gMesh.num_vertices = num_vertices;
+  gMesh.num_faces = num_faces;
+  recoverEsonValue(v, "vertices", gMesh.vertices, num_vertices * 3);
+  recoverEsonValue(v, "facevarying_normals", gMesh.facevarying_normals,
+                   num_faces * 3 * 3);
+  // recoverEsonValue(v, "facevarying_tangents", gMesh.facevarying_tangents,
+  // num_faces * 3 * 3);
+  // recoverEsonValue(v, "facevarying_binormals", gMesh.facevarying_binormals,
+  // num_faces * 3 * 3);
+  recoverEsonValue(v, "facevarying_uvs", gMesh.facevarying_uvs,
+                   num_faces * 2 * 3);
+  // recoverEsonValue(v, "facevarying_vertex_colors",
+  // gMesh.facevarying_vertex_colors, num_faces * 3 * 3);
+  recoverEsonValue(v, "faces", gMesh.faces, num_faces * 3);
+  recoverEsonValue(v, "material_ids", gMesh.material_ids, num_faces);
+
+  return true;
+}
+
+bool Renderer::BuildBVH() {
+  std::cout << "[Build BVH] " << std::endl;
 
   nanort::BVHBuildOptions build_options;  // Use default option
   build_options.cache_bbox = false;
@@ -431,8 +546,8 @@ bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale) {
 
   printf("num_triangles = %lu\n", gMesh.num_faces);
 
-  ret = gAccel.Build(gMesh.num_faces, build_options, triangle_mesh,
-                     triangle_pred);
+  bool ret = gAccel.Build(gMesh.num_faces, build_options, triangle_mesh,
+                          triangle_pred);
   assert(ret);
 
   auto t_end = std::chrono::system_clock::now();

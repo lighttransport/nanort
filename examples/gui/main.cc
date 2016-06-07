@@ -362,13 +362,35 @@ int main(int argc, char** argv) {
     }
   }
 
-  bool ret = gRenderer.LoadObjMesh(gRenderConfig.obj_filename.c_str(),
-                                   gRenderConfig.scene_scale);
-  if (!ret) {
-    fprintf(stderr, "Failed to load [ %s ]\n",
-            gRenderConfig.obj_filename.c_str());
-    return -1;
+  {
+    // load eson
+    bool eson_ret = false;
+    if (!gRenderConfig.eson_filename.empty()) {
+      eson_ret = gRenderer.LoadEsonMesh(gRenderConfig.eson_filename.c_str());
+      if (!eson_ret) {
+        fprintf(stderr, "Failed to load [ %s ]\n",
+                gRenderConfig.eson_filename.c_str());
+      }
+    }
+    if (!eson_ret) {
+      // load obj
+      bool obj_ret = gRenderer.LoadObjMesh(gRenderConfig.obj_filename.c_str(),
+                                           gRenderConfig.scene_scale);
+      if (!obj_ret) {
+        fprintf(stderr, "Failed to load [ %s ]\n",
+                gRenderConfig.obj_filename.c_str());
+        return -1;
+      }
+      // save eson
+      eson_ret = gRenderer.SaveEsonMesh(gRenderConfig.eson_filename.c_str());
+      if (!eson_ret) {
+        fprintf(stderr, "Failed to save [ %s ]\n",
+                gRenderConfig.eson_filename.c_str());
+      }
+    }
   }
+
+  gRenderer.BuildBVH();
 
   window = new b3gDefaultOpenGLWindow;
   b3gWindowConstructionInfo ci;
