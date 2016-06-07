@@ -25,6 +25,7 @@ THE SOFTWARE.
 #include "render.h"
 
 #include <chrono>  // C++11
+#include <sstream>
 #include <thread>  // C++11
 #include <vector>
 
@@ -36,6 +37,8 @@ THE SOFTWARE.
 #include "matrix.h"
 #include "tiny_obj_loader.h"
 #include "trackball.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 namespace example {
 
@@ -54,42 +57,64 @@ typedef struct {
 } Mesh;
 
 struct Material {
-  float ambient[3];
-  float diffuse[3];
-  float reflection[3];
-  float refraction[3];
+  // float ambient[3];
+  // float diffuse[3];
+  // float specular[3];
+  // float reflection[3];
+  // float refraction[3];
   int id;
   int diffuse_texid;
-  int reflection_texid;
-  int transparency_texid;
-  int bump_texid;
-  int normal_texid;  // normal map
-  int alpha_texid;   // alpha map
+  int specular_texid;
+  // int reflection_texid;
+  // int transparency_texid;
+  // int bump_texid;
+  // int normal_texid;  // normal map
+  // int alpha_texid;  // alpha map
 
   Material() {
-    ambient[0] = 0.0;
-    ambient[1] = 0.0;
-    ambient[2] = 0.0;
-    diffuse[0] = 0.5;
-    diffuse[1] = 0.5;
-    diffuse[2] = 0.5;
-    reflection[0] = 0.0;
-    reflection[1] = 0.0;
-    reflection[2] = 0.0;
-    refraction[0] = 0.0;
-    refraction[1] = 0.0;
-    refraction[2] = 0.0;
+    // ambient[0] = 0.0;
+    // ambient[1] = 0.0;
+    // ambient[2] = 0.0;
+    // diffuse[0] = 0.5;
+    // diffuse[1] = 0.5;
+    // diffuse[2] = 0.5;
+    // specular[0] = 0.5;
+    // specular[1] = 0.5;
+    // specular[2] = 0.5;
+    // reflection[0] = 0.0;
+    // reflection[1] = 0.0;
+    // reflection[2] = 0.0;
+    // refraction[0] = 0.0;
+    // refraction[1] = 0.0;
+    // refraction[2] = 0.0;
     id = -1;
     diffuse_texid = -1;
-    reflection_texid = -1;
-    transparency_texid = -1;
-    bump_texid = -1;
-    normal_texid = -1;
-    alpha_texid = -1;
+    specular_texid = -1;
+    // reflection_texid = -1;
+    // transparency_texid = -1;
+    // bump_texid = -1;
+    // normal_texid = -1;
+    // alpha_texid = -1;
+  }
+};
+
+struct Texture {
+  int width;
+  int height;
+  int components;
+  unsigned char* image;
+
+  Texture() {
+    width = -1;
+    height = -1;
+    components = -1;
+    image = NULL;
   }
 };
 
 Mesh gMesh;
+std::vector<Material> gMaterials;
+std::vector<Texture> gTextures;
 nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred,
                  nanort::TriangleIntersector<> >
     gAccel;
@@ -228,6 +253,33 @@ nanort::Ray GenerateRay(const nanort::float3& origin,
   return ray;
 }
 
+int LoadTexture(const std::string& filename) {
+  if (filename.empty()) return -1;
+
+  printf("  Loading texture : %s\n", filename.c_str());
+  Texture texture;
+
+  int w, h, n;
+  unsigned char* data = stbi_load(filename.c_str(), &w, &h, &n, 0);
+  if (data) {
+    texture.width = w;
+    texture.height = h;
+    texture.components = n;
+
+    size_t n_elem = w * h * n;
+    texture.image = new unsigned char[n_elem];
+    for (int i = 0; i < n_elem; i++) {
+      texture.image[i] = data[i];
+    }
+
+    gTextures.push_back(texture);
+    return gTextures.size() - 1;
+  }
+
+  printf("  Failed to load : %s\n", filename.c_str());
+  return -1;
+}
+
 bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
@@ -259,8 +311,6 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   }
   std::cout << "[LoadOBJ] # of faces: " << num_faces << std::endl;
   std::cout << "[LoadOBJ] # of vertices: " << num_vertices << std::endl;
-
-  // @todo { material and texture. }
 
   // Shape -> Mesh
   mesh.num_faces = num_faces;
@@ -410,6 +460,20 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
     faceIdxOffset += shapes[i].mesh.indices.size() / 3;
   }
 
+  // material_t -> Material and Texture
+  gMaterials.resize(materials.size());
+  gTextures.resize(0);
+  for (size_t i = 0; i < materials.size(); i++) {
+    // @todo { raw material values. }
+
+    gMaterials[i].id = i;
+
+    // map_Kd
+    gMaterials[i].diffuse_texid = LoadTexture(materials[i].diffuse_texname);
+    // map_Ks
+    gMaterials[i].specular_texid = LoadTexture(materials[i].specular_texname);
+  }
+
   return true;
 }
 
@@ -417,6 +481,10 @@ template <typename T>
 inline eson::Value createEsonValue(const std::vector<T>& src, size_t n_elem) {
   assert(src.size() == n_elem);
   return eson::Value((uint8_t*)&(src.at(0)), sizeof(T) * n_elem);
+}
+template <typename T>
+inline eson::Value createEsonValue(const T* src, size_t n_elem) {
+  return eson::Value((uint8_t*)&(src[0]), sizeof(T) * n_elem);
 }
 
 template <typename T>
@@ -426,6 +494,16 @@ void recoverEsonValue(eson::Value v, const std::string& name,
   const T* pointer = reinterpret_cast<T*>(const_cast<uint8_t*>(binary.ptr));
   dst.resize(n_elem);
   for (size_t i = 0; i < n_elem; i++) {
+    dst[i] = pointer[i];
+  }
+}
+template <typename T>
+void recoverEsonValue(eson::Value v, const std::string& name, T* dst,
+                      size_t n_elem) {
+  eson::Binary binary = v.Get(name).Get<eson::Binary>();
+
+  const T* pointer = reinterpret_cast<T*>(const_cast<uint8_t*>(binary.ptr));
+  for (int i = 0; i < n_elem; i++) {
     dst[i] = pointer[i];
   }
 }
@@ -441,6 +519,7 @@ bool Renderer::SaveEsonMesh(const char* eson_filename) {
   size_t num_vertices = gMesh.num_vertices;
   size_t num_faces = gMesh.num_faces;
 
+  // Mesh
   root["num_vertices"] = eson::Value((int64_t)num_vertices);
   root["num_faces"] = eson::Value((int64_t)num_faces);
   root["vertices"] = createEsonValue(gMesh.vertices, num_vertices * 3);
@@ -457,14 +536,39 @@ bool Renderer::SaveEsonMesh(const char* eson_filename) {
   root["faces"] = createEsonValue(gMesh.faces, num_faces * 3);
   root["material_ids"] = createEsonValue(gMesh.material_ids, num_faces);
 
+  // Materials
+  root["num_materials"] = eson::Value((int64_t)gMaterials.size());
+  for (int i = 0; i < gMaterials.size(); i++) {
+    Material& material = gMaterials[i];
+    std::stringstream ss;
+    ss << "material" << i << "_";
+    std::string pf = ss.str();
+
+    root[pf + "id"] = eson::Value((int64_t)material.id);
+    root[pf + "diffuse_texid"] = eson::Value((int64_t)material.diffuse_texid);
+    root[pf + "specular_texid"] = eson::Value((int64_t)material.specular_texid);
+  }
+
+  // Textures
+  root["num_textures"] = eson::Value((int64_t)gTextures.size());
+  for (int i = 0; i < gTextures.size(); i++) {
+    Texture& texture = gTextures[i];
+    std::stringstream ss;
+    ss << "texture" << i << "_";
+    std::string pf = ss.str();
+
+    root[pf + "width"] = eson::Value((int64_t)texture.width);
+    root[pf + "height"] = eson::Value((int64_t)texture.height);
+    root[pf + "components"] = eson::Value((int64_t)texture.components);
+    root[pf + "image"] = createEsonValue(
+        texture.image, texture.width * texture.height * texture.components);
+  }
+
   eson::Value v = eson::Value(root);
   int64_t size = v.Size();
-
   std::vector<uint8_t> buf(size);
   uint8_t* ptr = &buf[0];
-
   ptr = v.Serialize(ptr);
-
   assert((ptr - &buf[0]) == size);
 
   FILE* fp = fopen(eson_filename, "wb");
@@ -509,6 +613,7 @@ bool Renderer::LoadEsonMesh(const char* eson_filename) {
   int64_t num_faces = v.Get("num_faces").Get<int64_t>();
   printf("# of vertices: %lld\n", num_vertices);
 
+  // Mesh
   gMesh.num_vertices = num_vertices;
   gMesh.num_faces = num_faces;
   recoverEsonValue(v, "vertices", gMesh.vertices, num_vertices * 3);
@@ -524,6 +629,38 @@ bool Renderer::LoadEsonMesh(const char* eson_filename) {
   // gMesh.facevarying_vertex_colors, num_faces * 3 * 3);
   recoverEsonValue(v, "faces", gMesh.faces, num_faces * 3);
   recoverEsonValue(v, "material_ids", gMesh.material_ids, num_faces);
+
+  // Materials
+  int64_t num_materials = v.Get("num_materials").Get<int64_t>();
+  gMaterials.resize(num_materials);
+  for (int i = 0; i < gMaterials.size(); i++) {
+    Material& material = gMaterials[i];
+    std::stringstream ss;
+    ss << "material" << i << "_";
+    std::string pf = ss.str();
+
+    material.id = v.Get(pf + "id").Get<int64_t>();
+    material.diffuse_texid = v.Get(pf + "diffuse_texid").Get<int64_t>();
+    material.specular_texid = v.Get(pf + "specular_texid").Get<int64_t>();
+  }
+
+  // Textures
+  int64_t num_textures = v.Get("num_textures").Get<int64_t>();
+  gTextures.resize(num_textures);
+  for (int i = 0; i < gTextures.size(); i++) {
+    Texture& texture = gTextures[i];
+    std::stringstream ss;
+    ss << "texture" << i << "_";
+    std::string pf = ss.str();
+
+    texture.width = v.Get(pf + "width").Get<int64_t>();
+    texture.height = v.Get(pf + "height").Get<int64_t>();
+    texture.components = v.Get(pf + "components").Get<int64_t>();
+
+    size_t n_elem = texture.width * texture.height * texture.components;
+    texture.image = new unsigned char[n_elem];
+    recoverEsonValue(v, pf + "image", texture.image, n_elem);
+  }
 
   return true;
 }
@@ -567,6 +704,17 @@ bool Renderer::BuildBVH() {
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
 
   return true;
+}
+
+void fetchTexture(int tex_idx, float u, float v, float* col) {
+  assert(tex_idx >= 0);
+  Texture& texture = gTextures[tex_idx];
+  int tx = u * texture.width;
+  int ty = (1.0f - v) * texture.height;
+  int idx_offset = (ty * texture.width + tx) * texture.components;
+  col[0] = texture.image[idx_offset + 0] / 255.f;
+  col[1] = texture.image[idx_offset + 1] / 255.f;
+  col[2] = texture.image[idx_offset + 2] / 255.f;
 }
 
 bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
@@ -731,11 +879,28 @@ bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
               config.texcoordImage[4 * (y * config.width + x) + 1] = UV[1];
             }
 
+            // Fetch texture
+            unsigned int material_id =
+                gMesh.material_ids[triangle_intersector.intersection.prim_id];
+            float diffuse_col[3] = {1.0f, 1.0f, 1.0f};
+            float specular_col[3] = {1.0f, 1.0f, 1.0f};
+            int diffuse_texid = gMaterials[material_id].diffuse_texid;
+            if (diffuse_texid >= 0) {
+              fetchTexture(diffuse_texid, UV[0], UV[1], diffuse_col);
+            }
+            int specular_texid = gMaterials[material_id].specular_texid;
+            if (specular_texid >= 0) {
+              fetchTexture(specular_texid, UV[0], UV[1], specular_col);
+            }
+
             // Simple shading
             float NdotV = fabsf(vdot(N, dir));
-            rgba[4 * (y * config.width + x) + 0] = NdotV;
-            rgba[4 * (y * config.width + x) + 1] = NdotV;
-            rgba[4 * (y * config.width + x) + 2] = NdotV;
+            rgba[4 * (y * config.width + x) + 0] = NdotV * diffuse_col[0];
+            rgba[4 * (y * config.width + x) + 1] = NdotV * diffuse_col[1];
+            rgba[4 * (y * config.width + x) + 2] = NdotV * diffuse_col[2];
+            // rgba[4 * (y * config.width + x) + 0] = NdotV * specular_col[0];
+            // rgba[4 * (y * config.width + x) + 1] = NdotV * specular_col[1];
+            // rgba[4 * (y * config.width + x) + 2] = NdotV * specular_col[2];
             rgba[4 * (y * config.width + x) + 3] = 1.0f;
 
           } else {

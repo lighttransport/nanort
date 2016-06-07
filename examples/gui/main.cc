@@ -382,10 +382,12 @@ int main(int argc, char** argv) {
         return -1;
       }
       // save eson
-      eson_ret = gRenderer.SaveEsonMesh(gRenderConfig.eson_filename.c_str());
-      if (!eson_ret) {
-        fprintf(stderr, "Failed to save [ %s ]\n",
-                gRenderConfig.eson_filename.c_str());
+      if (!gRenderConfig.eson_filename.empty()) {
+        eson_ret = gRenderer.SaveEsonMesh(gRenderConfig.eson_filename.c_str());
+        if (!eson_ret) {
+          fprintf(stderr, "Failed to save [ %s ]\n",
+                  gRenderConfig.eson_filename.c_str());
+        }
       }
     }
   }
