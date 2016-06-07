@@ -53,6 +53,7 @@ THE SOFTWARE.
 #include <limits>
 #include <string>
 #include <vector>
+#include <cmath>
 
 #include <atomic>  // C++11
 #include <chrono>  // C++11
@@ -321,7 +322,7 @@ void Display(int width, int height) {
     }
   } else if (gShowBufferMode == SHOW_BUFFER_DEPTH) {
     float d_min = std::min(gShowDepthRange[0], gShowDepthRange[1]);
-    float d_diff = abs(gShowDepthRange[1] - gShowDepthRange[0]);
+    float d_diff = fabsf(gShowDepthRange[1] - gShowDepthRange[0]);
     d_diff = std::max(d_diff, std::numeric_limits<float>::epsilon());
     for (size_t i = 0; i < buf.size(); i++) {
       float v = (gDepthRGBA[i] - d_min) / d_diff;
