@@ -697,6 +697,7 @@ int X11OpenGLWindow::getAsciiCodeFromVirtualKeycode(int keycode)
         case XK_Return:       return B3G_RETURN;
         case XK_BackSpace:    return B3G_BACKSPACE;
         case XK_Delete:       return B3G_DELETE;
+        case XK_Tab:       	  return 9;
 
 	case XK_Control_L:
 	case XK_Control_R:     {
