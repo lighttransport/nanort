@@ -30,6 +30,7 @@ enum
 	INTERNAL_SHIFT_MODIFIER=1,
 	INTERNAL_ALT_MODIFIER=2,
 	INTERNAL_CONTROL_MODIFIER=4,
+	INTERNAL_TAB_MODIFIER=8,
 };
 
 void Win32Window::pumpMessage()
@@ -96,6 +97,7 @@ int getSpecialKeyFromVirtualKeycode(int virtualKeyCode)
 		case VK_RIGHT:{keycode= B3G_RIGHT_ARROW; break;}
 		case VK_DOWN:{keycode= B3G_DOWN_ARROW; break;}
 		case VK_SHIFT:{keycode=B3G_SHIFT;break;}
+		case VK_TAB:{keycode=9;break;}
 		case VK_MENU:{keycode=B3G_ALT;break;}
 		case VK_CONTROL:{keycode=B3G_CONTROL;break;}
 		default:
@@ -144,6 +146,11 @@ bool Win32Window::isModifierKeyPressed(int key)
 		case B3G_CONTROL:
 		{
 			isPressed = ((sData->m_internalKeyModifierFlags&INTERNAL_CONTROL_MODIFIER)!=0);
+			break;
+		};
+		case 9: // tab
+		{
+			isPressed = ((sData->m_internalKeyModifierFlags&INTERNAL_TAB_MODIFIER)!=0);
 			break;
 		};
 
@@ -206,6 +213,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					sData->m_internalKeyModifierFlags &=~INTERNAL_CONTROL_MODIFIER;
 					break;
 				};
+				case 9: // tab
+				{
+					sData->m_internalKeyModifierFlags &=~INTERNAL_TAB_MODIFIER;
+					break;
+				};
 			}
 
 			if (keycode>=0 && sData && sData->m_keyboardCallback )
@@ -248,6 +260,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				case B3G_CONTROL:
 				{
 					sData->m_internalKeyModifierFlags |=INTERNAL_CONTROL_MODIFIER;
+					break;
+				};
+				case 9: // tab
+				{
+					sData->m_internalKeyModifierFlags |=INTERNAL_TAB_MODIFIER;
 					break;
 				};
 			}

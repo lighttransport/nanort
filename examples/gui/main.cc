@@ -54,6 +54,7 @@ THE SOFTWARE.
 #include <string>
 #include <vector>
 #include <cmath>
+#include <algorithm>
 
 #include <atomic>  // C++11
 #include <chrono>  // C++11

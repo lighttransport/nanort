@@ -42,6 +42,8 @@ THE SOFTWARE.
 
 namespace example {
 
+const float kPI = 3.141592f;
+
 typedef struct {
   size_t num_vertices;
   size_t num_faces;
@@ -205,7 +207,7 @@ void BuildCameraFrame(nanort::float3* origin, nanort::float3* corner,
 
   {
     float flen =
-        (0.5f * (float)height / tanf(0.5f * (float)(fov * M_PI / 180.0f)));
+        (0.5f * (float)height / tanf(0.5f * (float)(fov * kPI / 180.0f)));
     nanort::float3 look1;
     look1[0] = lookat1[0] - eye1[0];
     look1[1] = lookat1[1] - eye1[1];

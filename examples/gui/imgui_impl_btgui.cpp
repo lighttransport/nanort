@@ -257,7 +257,7 @@ bool ImGui_ImplBtGui_Init(b3gDefaultOpenGLWindow* window) {
   io.SetClipboardTextFn = ImGui_ImplBtGui_SetClipboardText;
   io.GetClipboardTextFn = ImGui_ImplBtGui_GetClipboardText;
 #ifdef _WIN32
-  io.ImeWindowHandle = glfwGetWin32Window(g_Window);
+  //io.ImeWindowHandle = glfwGetWin32Window(g_Window);
 #endif
 
 #if 0

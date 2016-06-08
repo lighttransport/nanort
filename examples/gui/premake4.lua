@@ -15,7 +15,11 @@ sources = {
 solution "ViewerSolution"
    configurations { "Release", "Debug" }
 
-   platforms { "native", "x64", "x32" }
+   if os.is("Windows") then
+      platforms { "x64", "x32" }
+   else
+      platforms { "native", "x64", "x32" }
+   end
 
 
    projectRootDir = os.getcwd() .. "/"
@@ -32,6 +36,8 @@ solution "ViewerSolution"
       includedirs { "./", "../../" }
 
       if os.is("Windows") then
+         defines { "NOMINMAX" }
+         buildoptions { "/W4" } -- raise compile error level.
          files{
             "OpenGLWindow/Win32OpenGLWindow.cpp",
             "OpenGLWindow/Win32OpenGLWindow.h",

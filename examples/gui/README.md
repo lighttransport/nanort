@@ -21,9 +21,13 @@ Right-handed coorinate, Y up, counter clock-wise normal definition.
     $ premake5 gmake
     $ make
 
-## Build on Windows(Experimental. May not work)
+## Build on Windows
 
-    $ premake5 vs2015
+    > premake5 vs2013
+
+Or 
+
+    > premake5 vs2015
 
 ## Usage
 
