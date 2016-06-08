@@ -58,8 +58,8 @@ typedef struct {
 
 struct Material {
   // float ambient[3];
-  // float diffuse[3];
-  // float specular[3];
+  float diffuse[3];
+  float specular[3];
   // float reflection[3];
   // float refraction[3];
   int id;
@@ -75,12 +75,12 @@ struct Material {
     // ambient[0] = 0.0;
     // ambient[1] = 0.0;
     // ambient[2] = 0.0;
-    // diffuse[0] = 0.5;
-    // diffuse[1] = 0.5;
-    // diffuse[2] = 0.5;
-    // specular[0] = 0.5;
-    // specular[1] = 0.5;
-    // specular[2] = 0.5;
+    diffuse[0] = 0.5;
+    diffuse[1] = 0.5;
+    diffuse[2] = 0.5;
+    specular[0] = 0.5;
+    specular[1] = 0.5;
+    specular[2] = 0.5;
     // reflection[0] = 0.0;
     // reflection[1] = 0.0;
     // reflection[2] = 0.0;
@@ -251,6 +251,17 @@ nanort::Ray GenerateRay(const nanort::float3& origin,
   ray.dir[0] = dir[0];
 
   return ray;
+}
+
+void FetchTexture(int tex_idx, float u, float v, float* col) {
+  assert(tex_idx >= 0);
+  Texture& texture = gTextures[tex_idx];
+  int tx = u * texture.width;
+  int ty = (1.0f - v) * texture.height;
+  int idx_offset = (ty * texture.width + tx) * texture.components;
+  col[0] = texture.image[idx_offset + 0] / 255.f;
+  col[1] = texture.image[idx_offset + 1] / 255.f;
+  col[2] = texture.image[idx_offset + 2] / 255.f;
 }
 
 int LoadTexture(const std::string& filename) {
@@ -464,7 +475,12 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   gMaterials.resize(materials.size());
   gTextures.resize(0);
   for (size_t i = 0; i < materials.size(); i++) {
-    // @todo { raw material values. }
+    gMaterials[i].diffuse[0] = materials[i].diffuse[0];
+    gMaterials[i].diffuse[1] = materials[i].diffuse[1];
+    gMaterials[i].diffuse[2] = materials[i].diffuse[2];
+    gMaterials[i].specular[0] = materials[i].specular[0];
+    gMaterials[i].specular[1] = materials[i].specular[1];
+    gMaterials[i].specular[2] = materials[i].specular[2];
 
     gMaterials[i].id = i;
 
@@ -477,11 +493,16 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   return true;
 }
 
+bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale) {
+  return LoadObj(gMesh, obj_filename, scene_scale);
+}
+
 template <typename T>
 inline eson::Value createEsonValue(const std::vector<T>& src, size_t n_elem) {
   assert(src.size() == n_elem);
   return eson::Value((uint8_t*)&(src.at(0)), sizeof(T) * n_elem);
 }
+
 template <typename T>
 inline eson::Value createEsonValue(const T* src, size_t n_elem) {
   return eson::Value((uint8_t*)&(src[0]), sizeof(T) * n_elem);
@@ -497,6 +518,7 @@ void recoverEsonValue(eson::Value v, const std::string& name,
     dst[i] = pointer[i];
   }
 }
+
 template <typename T>
 void recoverEsonValue(eson::Value v, const std::string& name, T* dst,
                       size_t n_elem) {
@@ -506,10 +528,6 @@ void recoverEsonValue(eson::Value v, const std::string& name, T* dst,
   for (int i = 0; i < n_elem; i++) {
     dst[i] = pointer[i];
   }
-}
-
-bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale) {
-  return LoadObj(gMesh, obj_filename, scene_scale);
 }
 
 bool Renderer::SaveEsonMesh(const char* eson_filename) {
@@ -544,6 +562,8 @@ bool Renderer::SaveEsonMesh(const char* eson_filename) {
     ss << "material" << i << "_";
     std::string pf = ss.str();
 
+    root[pf + "diffuse"] = createEsonValue(material.diffuse, 3);
+    root[pf + "specular"] = createEsonValue(material.specular, 3);
     root[pf + "id"] = eson::Value((int64_t)material.id);
     root[pf + "diffuse_texid"] = eson::Value((int64_t)material.diffuse_texid);
     root[pf + "specular_texid"] = eson::Value((int64_t)material.specular_texid);
@@ -639,6 +659,8 @@ bool Renderer::LoadEsonMesh(const char* eson_filename) {
     ss << "material" << i << "_";
     std::string pf = ss.str();
 
+    recoverEsonValue(v, pf + "diffuse", material.diffuse, 3);
+    recoverEsonValue(v, pf + "specular", material.specular, 3);
     material.id = v.Get(pf + "id").Get<int64_t>();
     material.diffuse_texid = v.Get(pf + "diffuse_texid").Get<int64_t>();
     material.specular_texid = v.Get(pf + "specular_texid").Get<int64_t>();
@@ -704,17 +726,6 @@ bool Renderer::BuildBVH() {
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
 
   return true;
-}
-
-void fetchTexture(int tex_idx, float u, float v, float* col) {
-  assert(tex_idx >= 0);
-  Texture& texture = gTextures[tex_idx];
-  int tx = u * texture.width;
-  int ty = (1.0f - v) * texture.height;
-  int idx_offset = (ty * texture.width + tx) * texture.components;
-  col[0] = texture.image[idx_offset + 0] / 255.f;
-  col[1] = texture.image[idx_offset + 1] / 255.f;
-  col[2] = texture.image[idx_offset + 2] / 255.f;
 }
 
 bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
@@ -882,15 +893,25 @@ bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
             // Fetch texture
             unsigned int material_id =
                 gMesh.material_ids[triangle_intersector.intersection.prim_id];
-            float diffuse_col[3] = {1.0f, 1.0f, 1.0f};
-            float specular_col[3] = {1.0f, 1.0f, 1.0f};
+
+            float diffuse_col[3];
             int diffuse_texid = gMaterials[material_id].diffuse_texid;
             if (diffuse_texid >= 0) {
-              fetchTexture(diffuse_texid, UV[0], UV[1], diffuse_col);
+              FetchTexture(diffuse_texid, UV[0], UV[1], diffuse_col);
+            } else {
+              diffuse_col[0] = gMaterials[material_id].diffuse[0];
+              diffuse_col[1] = gMaterials[material_id].diffuse[1];
+              diffuse_col[2] = gMaterials[material_id].diffuse[2];
             }
+
+            float specular_col[3];
             int specular_texid = gMaterials[material_id].specular_texid;
             if (specular_texid >= 0) {
-              fetchTexture(specular_texid, UV[0], UV[1], specular_col);
+              FetchTexture(specular_texid, UV[0], UV[1], specular_col);
+            } else {
+              specular_col[0] = gMaterials[material_id].specular[0];
+              specular_col[1] = gMaterials[material_id].specular[1];
+              specular_col[2] = gMaterials[material_id].specular[2];
             }
 
             // Simple shading
