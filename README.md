@@ -12,12 +12,13 @@
 
 * Portable C++
   * Only use C++-03 features.
+  * Some example applications use C++-11 though.
 * BVH spatial data structure for efficient ray intersection finding.
   * Should be able to handle ~10M triangles scene efficiently with moderate memory consumption
 * Custom geometry & intersection
   * Built-in triangle mesh gemetry & intersector is provided.
 * Cross platform
-  * MacOSX, Linux, Windows, ARM, x86, SPARC, MIPS, etc.
+  * MacOSX, Linux, Windows, ARM, x86, SPARC, (maybe)MIPS, etc.
 * GPU effient data structure
   * Built BVH tree from `NanoRT` is a linear array and does not have pointers, thus it is suited for GPU raytracing(GPU ray traversal).
 * OpenMP multithreaded BVH build.
@@ -42,8 +43,6 @@
 ## API
 
 `nanort::Ray` represents ray. The origin `org`, the direction `dir`(not necessarily normalized), the minimum hit distance `minT`(usually 0.0) and the maximum hit distance `maxT`(usually too far, e.g. 1.0e+30) must be filled before shooting ray.
-
-`nanort::Intersection` stores intersection information. 
 
 `nanort::BVHAccel` builds BVH data structure from geometry, and provides the function to find intersection point for a given ray.
 
@@ -93,9 +92,12 @@ bool hit = accel.Traverse(ray, trace_options, triangle_intersecter);
 
 Application must prepare geometric information and store it in linear array.
 
+For a builtin Triangle intersector,
+
 * `vertices` : The array of triangle vertices(xyz * numVertices)
 * `faces` : The array of triangle face indices(3 * numFaces)
-* uvs, normals, custom vertex attributes : We recommend the application define vertex attributes as facevarying.
+
+are required attributes.
 
 
 ## Usage
@@ -177,7 +179,7 @@ See `examples` directory for example renderer using `NanoRT`.
 
 ## Custom geometry
 
-See API wiki: https://github.com/lighttransport/nanort/wiki/API
+See `examples/particle_primitive/` and API wiki: https://github.com/lighttransport/nanort/wiki/API
 
 ## License
 
