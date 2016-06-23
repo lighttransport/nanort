@@ -79,8 +79,13 @@ typedef struct _nanort_ray_t
   int dir_sign[3];   /* filled internally */
 } nanort_ray_t;
 
-extern int nanort_bvh_accel_init(nanort_bvh_accel_t *accel);
-extern int nanort_bvh_accel_build(nanort_bvh_accel_t *accel);
+/* Currenly triangle mesh only. */
+
+#define NANORT_SUCCESS              (0)
+#define NANORT_INVALID_PARAMETER    (-100)
+
+extern void nanort_bvh_accel_init(nanort_bvh_accel_t *accel);
+extern int nanort_bvh_accel_build(nanort_bvh_accel_t *accel, const float* vertices, unsigned int num_indices, const unsigned int *indices, const nanort_bvh_build_options_t options);
 extern int nanort_bvh_accel_traverse(const nanort_bvh_accel_t *accel);
 
 #ifdef __cplusplus
@@ -90,6 +95,7 @@ extern int nanort_bvh_accel_traverse(const nanort_bvh_accel_t *accel);
 #ifdef NANORT_C_IMPLEMENTATION
 
 #include <string.h>
+#include <stdlib.h>
 #include <memory.h>
 
 static int nanort_triangle_interect(float *t_inout, unsigned int prim_index)
@@ -99,17 +105,38 @@ static int nanort_triangle_interect(float *t_inout, unsigned int prim_index)
   return 0;
 }
 
-int nanort_bvh_accel_init(nanort_bvh_accel_t *accel)
+void nanort_bvh_accel_init(nanort_bvh_accel_t *accel)
 {
-  memset(accel, 0, sizeof(nanort_bvh_accel_t));
-  return 0;
+  if (accel) {
+    memset(accel, 0, sizeof(nanort_bvh_accel_t));
+  }
+  return;
 }
 
-int nanort_bvh_accel_build(nanort_bvh_accel_t *accel)
+int nanort_bvh_accel_build(nanort_bvh_accel_t *accel, const float* vertices, unsigned int num_indices, const unsigned int *indices, const nanort_bvh_build_options_t options)
 {
   /* @todo */
   accel->num_indices = 0;
-  return 0;
+
+  if (!vertices) {
+    return NANORT_INVALID_PARAMETER;
+  }
+
+  if (!indices) {
+    return NANORT_INVALID_PARAMETER;
+  }
+  
+  if (num_indices == 0) {
+    return NANORT_INVALID_PARAMETER;
+  }
+
+  /* Allocate internal buffer for face indices */
+  accel->num_indices = num_indices;
+  accel->indices = (unsigned int*)malloc(sizeof(unsigned int) * num_indices);
+
+  accel->build_options = options;
+
+  return NANORT_SUCCESS;
 }
 
 int nanort_bvh_accel_traverse(const nanort_bvh_accel_t *accel)
