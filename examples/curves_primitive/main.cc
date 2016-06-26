@@ -9,7 +9,7 @@
 namespace {
 
 unsigned char fclamp(float x) {
-  int i = (int)(powf(x, 1.0 / 2.2) * 256.0f);
+  int i = (int)(powf(x, 1.0 / 2.2) * 256.0f); // Simple gamma correction.
   if (i > 255)
     i = 255;
   if (i < 0)
@@ -188,15 +188,16 @@ void genFur(std::vector<float>* cps, std::vector<float>* thicknesses, const nano
   cps->clear();
   thicknesses->clear();
 
-  int nDiv = 20;
+  int nDivY = 20;
+  int nDivX = 20;
 
   int s = 0;
-  for (size_t iy=0; iy<nDiv; iy++)
+  for (size_t iy=0; iy<nDivY; iy++)
   {
-    for (size_t ix=0; ix<nDiv; ix++)
+    for (size_t ix=0; ix<nDivX; ix++)
     {
-      float fx = (float(ix)+2.0f*g2[s])/(float)(nDiv); s=(s+1)%255;
-      float fy = (float(iy)+2.0f*g2[s])/(float)(nDiv); s=(s+1)%255;
+      float fx = (float(ix)+2.0f*g2[s])/(float)(nDivX); s=(s+1)%255;
+      float fy = (float(iy)+2.0f*g2[s])/(float)(nDivY); s=(s+1)%255;
       nanort::float3 dp = uniformSampleSphere(fx,fy);
       assert(!isnan(dp.x()));
       assert(!isnan(dp.y()));
@@ -207,7 +208,7 @@ void genFur(std::vector<float>* cps, std::vector<float>* thicknesses, const nano
       nanort::float3 l2 = p + r*noise3D(dp + 0.50f*dp);
       nanort::float3 l3 = p + r*noise3D(dp + 0.75f*dp);
       
-      // Assume all cubic curves(4 control points)
+      // Assume curve is all represented as cubic curve(4 control points)
       cps->push_back(l0.x());
       cps->push_back(l0.y());
       cps->push_back(l0.z());
@@ -221,11 +222,7 @@ void genFur(std::vector<float>* cps, std::vector<float>* thicknesses, const nano
       cps->push_back(l3.y());
       cps->push_back(l3.z());
 
-      assert(!std::isnan(l0.x()));
-      assert(!std::isnan(l0.y()));
-      assert(!std::isnan(l0.z()));
-
-      // Asssume all thickness for all 4 control points.
+      // Asssume thickness is same for all 4 control points.
       thicknesses->push_back(thickness);
       thicknesses->push_back(thickness);
       thicknesses->push_back(thickness);
@@ -449,9 +446,9 @@ class CurveIntersector
     nanort::float3 cps[4];	// projected control points.
     nanort::float3 ocps[4]; // original control points.
 
-    float radius[2]; // Radius at begin point and end point. Do not consider intermediate radius
+    float radius[2]; // Radius at begin point and end point. Do not consider intermediate radius currently.
     radius[0] = radiuss_[4 * prim_index + 0];
-    radius[1] = radiuss_[4 * prim_index + 1];
+    radius[1] = radiuss_[4 * prim_index + 3];
 
     ocps[0][0] = vertices_[12 * prim_index + 0];
     ocps[0][1] = vertices_[12 * prim_index + 1];
@@ -485,6 +482,7 @@ class CurveIntersector
     bool has_hit = false;
     
     int n = num_subdivisions_;
+    const float inv_n = 1.0f / static_cast<float>(n);
     for (int s = 0; s < n; s++ ) {
       nanort::float3 p[2];
 
@@ -545,8 +543,8 @@ class CurveIntersector
       // d2 <= r2 & ray.tnear < t & t < ray.tfar;
       if ((d2 <= r2) && (t < (*t_inout))) {
 
-        // Store u and v parameters which is used in `Update` function.
-        u_param = u;
+        // Store u and v parameters which is used in `Update' function.
+        u_param = (u + static_cast<float>(s)) * inv_n; // Adjust `u' so that it spans [0, 1] for the original cubic bezier curve.
         v_param = sqrtf(d2);
 
         (*t_inout) = t;
@@ -713,11 +711,20 @@ int main(int argc, char **argv) {
       if (hit) {
         // Write your shader here.
         nanort::float3 P;
-        // Flip Y
         nanort::float3 v = isector.intersection.normal;
+        //nanort::float3 v;
+        //v[0] = isector.intersection.u;
+        //v[1] = isector.intersection.u;
+        //v[2] = isector.intersection.u;
+        
+        // Flip Y
         rgb[3 * ((height - y - 1) * width + x) + 0] = fabsf(v.x());
         rgb[3 * ((height - y - 1) * width + x) + 1] = fabsf(v.y());
         rgb[3 * ((height - y - 1) * width + x) + 2] = fabsf(v.z());
+      } else {
+        rgb[3 * ((height - y - 1) * width + x) + 0] = 0.0f;
+        rgb[3 * ((height - y - 1) * width + x) + 1] = 0.0f;
+        rgb[3 * ((height - y - 1) * width + x) + 2] = 0.0f;
       }
 
     }
