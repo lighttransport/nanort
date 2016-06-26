@@ -79,7 +79,8 @@ typedef struct _nanort_ray_t
   int dir_sign[3];   /* filled internally */
 } nanort_ray_t;
 
-extern int nanort_bvh_accel_init(nanort_bvh_accel_t *accel);
+extern nanort_bvh_accel_t *nanort_bvh_accel_new(void);
+extern void nanort_bvh_accel_init(nanort_bvh_accel_t *accel);
 extern int nanort_bvh_accel_build(nanort_bvh_accel_t *accel);
 extern int nanort_bvh_accel_traverse(const nanort_bvh_accel_t *accel);
 
@@ -90,6 +91,7 @@ extern int nanort_bvh_accel_traverse(const nanort_bvh_accel_t *accel);
 #ifdef NANORT_C_IMPLEMENTATION
 
 #include <string.h>
+#include <stdlib.h>
 #include <memory.h>
 
 static int nanort_triangle_interect(float *t_inout, unsigned int prim_index)
@@ -99,10 +101,16 @@ static int nanort_triangle_interect(float *t_inout, unsigned int prim_index)
   return 0;
 }
 
-int nanort_bvh_accel_init(nanort_bvh_accel_t *accel)
+nanort_bvh_accel_t *nanort_bvh_accel_new(void)
+{
+	nanort_bvh_accel_t *bvh = (nanort_bvh_accel_t *)malloc(sizeof(nanort_bvh_accel_t));
+	nanort_bvh_accel_init(bvh);
+	return bvh;
+}
+
+void nanort_bvh_accel_init(nanort_bvh_accel_t *accel)
 {
   memset(accel, 0, sizeof(nanort_bvh_accel_t));
-  return 0;
 }
 
 int nanort_bvh_accel_build(nanort_bvh_accel_t *accel)
