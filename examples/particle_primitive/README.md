@@ -1,2 +1,2 @@
 Example use of custom geometry.
-Particle(Sphere) renderer.
+Cylinder(line + width) renderer.
