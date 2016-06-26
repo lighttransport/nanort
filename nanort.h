@@ -298,8 +298,6 @@ struct float3 {
   float operator[](int i) const { return v[i]; }
   float &operator[](int i) { return v[i]; }
 
-  float3 neg() { return float3(-x(), -y(), -z()); }
-
   float v[3];
   // float pad;  // for alignment
 };
@@ -311,6 +309,11 @@ inline float3 operator*(float f, const float3 &v) {
 inline float vlength(const float3 &rhs) {
   return sqrtf(rhs.x() * rhs.x() + rhs.y() * rhs.y() + rhs.z() * rhs.z());
 }
+
+inline float3 vneg(const float3 &rhs) {
+  return float3(-rhs.x(), -rhs.y(), -rhs.z());
+}
+
 
 inline float3 vnormalize(const float3 &rhs) {
   float3 v = rhs;
