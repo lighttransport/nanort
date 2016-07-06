@@ -306,6 +306,8 @@ inline float3 operator*(float f, const float3 &v) {
   return float3(v.x() * f, v.y() * f, v.z() * f);
 }
 
+inline float3 vneg(const float3 &rhs) { return float3(-rhs.x(), -rhs.y(), -rhs.z()); }
+
 inline float vlength(const float3 &rhs) {
   return sqrtf(rhs.x() * rhs.x() + rhs.y() * rhs.y() + rhs.z() * rhs.z());
 }
