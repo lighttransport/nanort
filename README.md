@@ -179,7 +179,13 @@ See `examples` directory for example renderer using `NanoRT`.
 
 ## Custom geometry
 
-See `examples/particle_primitive/` and API wiki: https://github.com/lighttransport/nanort/wiki/API
+Here is an example of custom geometry.
+ 
+* [x] Spheres(particles) `examples/particle_primitive/`
+* [ ] Bezier Curves
+* [x] Cylinders `examples/cylinder_primitive/`
+
+And plesae see API at wiki: https://github.com/lighttransport/nanort/wiki/API
 
 ## License
 
@@ -209,7 +215,4 @@ PR are always welcome!
   * [x] Custom intersection filter.
 * [ ] Fast BVH build
   * [ ] Bonsai: Rapid Bounding Volume Hierarchy Generation using Mini Trees http://jcgt.org/published/0004/03/02/
-* [ ] Support various primitive types
-  * [x] Spheres(particles) `examples/particle_primitive/`
-  * [ ] Bezier Curves
-  * [ ] Cylinders
+* [ ] Motion blur
