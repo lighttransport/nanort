@@ -182,7 +182,9 @@ See `examples` directory for example renderer using `NanoRT`.
 Here is an example of custom geometry.
  
 * [x] Spheres(particles) `examples/particle_primitive/`
-* [ ] Bezier Curves
+* Cubic Bezier Curves 
+  * [x] Approximate as lines `examples/curves_primitive/`
+  * [ ] Recursive ray-Bezier intersection.
 * [x] Cylinders `examples/cylinder_primitive/`
 
 And plesae see API at wiki: https://github.com/lighttransport/nanort/wiki/API
@@ -216,3 +218,5 @@ PR are always welcome!
 * [ ] Fast BVH build
   * [ ] Bonsai: Rapid Bounding Volume Hierarchy Generation using Mini Trees http://jcgt.org/published/0004/03/02/
 * [ ] Motion blur
+* [ ] Accurate ray curve intersection
+* [ ] Example path tracing renderer.
