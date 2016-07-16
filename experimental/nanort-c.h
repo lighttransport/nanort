@@ -735,15 +735,15 @@ int nanort_bvh_accel_traverse(nanort_intersection_t *isect_out,
 
   {
     /* Calculate dimension where the ray direction is maximal. */
-    float abs_dir = fabsf(ray->dir[0]);
+    float abs_dir = (float)fabs((double)ray->dir[0]);
     ray_coeff.kz = 0;
-    if (abs_dir < fabsf(ray->dir[1])) {
+    if (abs_dir < (float)fabs((double)ray->dir[1])) {
       ray_coeff.kz = 1;
-      abs_dir = fabsf(ray->dir[1]);
+      abs_dir = (float)fabs((double)ray->dir[1]);
     }
-    if (abs_dir < fabsf(ray->dir[2])) {
+    if (abs_dir < (float)fabs((double)ray->dir[2])) {
       ray_coeff.kz = 2;
-      abs_dir = fabsf(ray->dir[2]);
+      abs_dir = (float)fabs((double)ray->dir[2]);
     }
 
     ray_coeff.kx = ray_coeff.kz + 1;

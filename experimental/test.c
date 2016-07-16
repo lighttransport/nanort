@@ -336,9 +336,9 @@ static int LoadObj(Mesh *mesh, const char *data, size_t data_len, float scale) {
 
     for (f = 0; f < attrib.num_face_num_verts; f++) {
       /* Assume all triangle geometry */
-      mesh->faces[3 * f + 0] = attrib.faces[3 * f + 0].v_idx;
-      mesh->faces[3 * f + 1] = attrib.faces[3 * f + 1].v_idx;
-      mesh->faces[3 * f + 2] = attrib.faces[3 * f + 2].v_idx;
+      mesh->faces[3 * f + 0] = (unsigned int)attrib.faces[3 * f + 0].v_idx;
+      mesh->faces[3 * f + 1] = (unsigned int)attrib.faces[3 * f + 1].v_idx;
+      mesh->faces[3 * f + 2] = (unsigned int)attrib.faces[3 * f + 2].v_idx;
     }
 
     if (attrib.num_normals > 0) {
@@ -351,12 +351,12 @@ static int LoadObj(Mesh *mesh, const char *data, size_t data_len, float scale) {
           float n0[3];
           float n1[3];
           float n2[3];
-          int k;
+          size_t k;
 
           for (k = 0; k < 3; k++) {
-            n0[k] = attrib.normals[3 * i0 + k];
-            n1[k] = attrib.normals[3 * i1 + k];
-            n2[k] = attrib.normals[3 * i2 + k];
+            n0[k] = attrib.normals[3 * (size_t)i0 + k];
+            n1[k] = attrib.normals[3 * (size_t)i1 + k];
+            n2[k] = attrib.normals[3 * (size_t)i2 + k];
           }
 
           for (k = 0; k < 3; k++) {
@@ -468,7 +468,7 @@ main(
   }
 
   if (argc > 2) {
-    scale = atof(argv[2]);
+    scale = (float)atof(argv[2]);
   }
 
   obj_filename = argv[1];

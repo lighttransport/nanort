@@ -76,16 +76,19 @@ typedef struct {
 typedef struct { int v_idx, vt_idx, vn_idx; } tinyobj_vertex_index_t;
 
 typedef struct {
-  float *vertices;
   unsigned int num_vertices;
-  float *normals;
   unsigned int num_normals;
-  float *texcoords;
   unsigned int num_texcoords;
-  tinyobj_vertex_index_t *faces;
   unsigned int num_faces;
-  int *face_num_verts;
   unsigned int num_face_num_verts;
+
+  int pad0;
+
+  float *vertices;
+  float *normals;
+  float *texcoords;
+  tinyobj_vertex_index_t *faces;
+  int *face_num_verts;
   int *material_ids;
 } tinyobj_attrib_t;
 
@@ -230,16 +233,6 @@ static tinyobj_vertex_index_t parseRawTriple(const char **token) {
     (*token)++;
   }
   return vi;
-}
-
-/* assume `s' has enough storage spage to store parsed string. */
-static void parseString(char *s, int *n, const char **token) {
-  int e = 0;
-  skip_space(token);
-  e = until_space((*token));
-  memcpy(s, (*token), (size_t)e);
-  (*n) = e;
-  (*token) += e;
 }
 
 static int parseInt(const char **token) {
@@ -1070,17 +1063,17 @@ int tinyobj_parse_obj(tinyobj_attrib_t *attrib, tinyobj_shape_t **shapes,
     size_t i = 0;
 
     attrib->vertices = (float *)malloc(sizeof(float) * num_v * 3);
-    attrib->num_vertices = num_v;
+    attrib->num_vertices = (unsigned int)num_v;
     attrib->normals = (float *)malloc(sizeof(float) * num_vn * 3);
-    attrib->num_normals = num_vn;
+    attrib->num_normals = (unsigned int)num_vn;
     attrib->texcoords = (float *)malloc(sizeof(float) * num_vt * 2);
-    attrib->num_texcoords = num_vt;
+    attrib->num_texcoords = (unsigned int)num_vt;
     attrib->faces = (tinyobj_vertex_index_t *)malloc(
         sizeof(tinyobj_vertex_index_t) * num_f);
-    attrib->num_faces = num_f;
+    attrib->num_faces = (unsigned int)num_f;
     attrib->face_num_verts = (int *)malloc(sizeof(int) * num_faces);
     attrib->material_ids = (int *)malloc(sizeof(int) * num_faces);
-    attrib->num_face_num_verts = num_faces;
+    attrib->num_face_num_verts = (unsigned int)num_faces;
 
     for (i = 0; i < num_lines; i++) {
       if (commands[i].type == COMMAND_EMPTY) {
