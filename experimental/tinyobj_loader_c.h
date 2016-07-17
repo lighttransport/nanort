@@ -1048,12 +1048,13 @@ int tinyobj_parse_obj(tinyobj_attrib_t *attrib, tinyobj_shape_t **shapes,
 
     int ret = tinyobj_parse_mtl_file(&materials, &num_materials, filename);
 
-    free(filename);
-
     if (ret != TINYOBJ_SUCCESS) {
       /* warning. */
       fprintf(stderr, "TINYOBJ: Failed to parse .mtl file: %s\n", filename);
     }
+
+    if (filename) free(filename);
+
   }
 
   /* Construct attributes */
