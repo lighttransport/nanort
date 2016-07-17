@@ -218,7 +218,6 @@ void keyboardCallback(int keycode, int state) {
 }
 
 void mouseMoveCallback(float x, float y) {
-  //   printf("Mouse Move: %f, %f\n", x, y);
 
   if (gMouseLeftDown) {
     float w = gRenderConfig.width;
@@ -231,16 +230,17 @@ void mouseMoveCallback(float x, float y) {
       gRenderConfig.eye[2] += dolly_scale * (gMousePosY - y);
       gRenderConfig.look_at[2] += dolly_scale * (gMousePosY - y);
     } else if (gShiftPressed) {
-      const float trans_scale = 0.1;
+      const float trans_scale = 0.02;
       gRenderConfig.eye[0] += trans_scale * (gMousePosX - x);
       gRenderConfig.eye[1] -= trans_scale * (gMousePosY - y);
       gRenderConfig.look_at[0] += trans_scale * (gMousePosX - x);
       gRenderConfig.look_at[1] -= trans_scale * (gMousePosY - y);
 
     } else {
-      trackball(gPrevQuat, (2.f * gMousePosX - w) / w,
-                (h - 2.f * (gMousePosY - y_offset)) / h, (2.f * x - w) / w,
-                (h - 2.f * (y - y_offset)) / h);
+      // Adjust y.
+      trackball(gPrevQuat, (2.f * gMousePosX - w) / (float)w,
+                (h - 2.f * (gMousePosY - y_offset)) / (float)h, (2.f * x - w) / (float)w,
+                (h - 2.f * (y - y_offset)) / (float)h);
       add_quats(gPrevQuat, gCurrQuat, gCurrQuat);
     }
     RequestRender();
