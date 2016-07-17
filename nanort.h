@@ -1362,13 +1362,13 @@ unsigned int BVHAccel<P, Pred, I>::BuildTree(BVHBuildStatistics *out_stat,
   // Try all 3 axis until good cut position avaiable.
   unsigned int mid_idx = left_idx;
   int cut_axis = min_cut_axis;
-  for (int axisTry = 0; axisTry < 1; axisTry++) {
+  for (int axis_try = 0; axis_try < 3; axis_try++) {
     unsigned int *begin = &indices_[left_idx];
     unsigned int *end = &indices_[right_idx - 1] + 1;  // mimics end() iterator.
     unsigned int *mid = 0;
 
     // try min_cut_axis first.
-    cut_axis = (min_cut_axis + axisTry) % 3;
+    cut_axis = (min_cut_axis + axis_try) % 3;
 
     pred.Set(cut_axis, cut_pos[cut_axis]);
 
@@ -1378,8 +1378,6 @@ unsigned int BVHAccel<P, Pred, I>::BuildTree(BVHBuildStatistics *out_stat,
     //
     mid = std::partition(begin, end, pred);
 
-    (void)end;
-
     mid_idx = left_idx + static_cast<unsigned int>((mid - begin));
     if ((mid_idx == left_idx) || (mid_idx == right_idx)) {
       // Can't split well.
@@ -1387,7 +1385,7 @@ unsigned int BVHAccel<P, Pred, I>::BuildTree(BVHBuildStatistics *out_stat,
       // stable)
       mid_idx = left_idx + (n >> 1);
 
-      // Try another axis if there's axis to try.
+      // Try another axis to find better cut.
 
     } else {
       // Found good cut. exit loop.
