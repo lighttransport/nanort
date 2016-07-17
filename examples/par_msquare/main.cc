@@ -469,17 +469,17 @@ int main(int argc, char **argv) {
           ray.dir[1] = dir[1];
           ray.dir[2] = dir[2];
 
-          nanort::TriangleIntersector<nanort::TriangleIntersection> > isecter(triangleMesh.vertices_, triangleMesh.faces_);
+          nanort::TriangleIntersector<> isector(triangleMesh.vertices_, triangleMesh.faces_);
           float tFar = 1.0e+30f;
           ray.min_t = 0.0f;
           ray.max_t = tFar;
           nanort::BVHTraceOptions traceOptions;
-          bool hit = accel.Traverse(ray, traceOptions, isecter);
+          bool hit = accel.Traverse(ray, traceOptions, isector);
           if (hit) {
             // Write your shader here.
             nanort::float3 P;
             nanort::float3 N;
-            unsigned int fid = isecter.intersection.prim_id;
+            unsigned int fid = isector.intersection.prim_id;
             unsigned int f0, f1, f2;
             f0 = mesh.faces[3 * fid + 0];
             f1 = mesh.faces[3 * fid + 1];
@@ -496,9 +496,9 @@ int main(int argc, char **argv) {
             v2[2] = mesh.vertices[3 * f2 + 2];
             calcNormal(N, v0, v1, v2);
 
-            P[0] = ray.org[0] + isecter.GetT() * ray.dir[0];
-            P[1] = ray.org[1] + isecter.GetT() * ray.dir[1];
-            P[2] = ray.org[2] + isecter.GetT() * ray.dir[2];
+            P[0] = ray.org[0] + isector.GetT() * ray.dir[0];
+            P[1] = ray.org[1] + isector.GetT() * ray.dir[1];
+            P[2] = ray.org[2] + isector.GetT() * ray.dir[2];
 
             nanort::float3 aoCol = ShadeAO(P, N, &rng, accel, triangleMesh);
             if (fid < (unsigned int)mesh.facegroups[1]) {
