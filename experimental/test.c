@@ -12,15 +12,22 @@
 typedef struct {
   size_t num_vertices;
   size_t num_faces;
-  float *vertices;              /* [xyz] * num_vertices */
-  float *facevarying_normals;   /* [xyz] * 3(triangle) * num_faces */
-  float *facevarying_uvs;       /* [xyz] * 3(triangle) * num_faces */
-  unsigned int *faces;          /* triangle x num_faces */
-  unsigned int *material_ids;   /* index x num_faces */
+  float *vertices;            /* [xyz] * num_vertices */
+  float *facevarying_normals; /* [xyz] * 3(triangle) * num_faces */
+  float *facevarying_uvs;     /* [xyz] * 3(triangle) * num_faces */
+  unsigned int *faces;        /* triangle x num_faces */
+  unsigned int *material_ids; /* index x num_faces */
 } Mesh;
 
+static unsigned char ftouc(float f) {
+  int i = (int)(f * 256.0f);
+  if (i < 0) i = 0;
+  if (i > 255) i = 255;
 
-static const char* mmap_file(size_t* len, const char* filename) {
+  return (unsigned char)(i);
+}
+
+static const char *mmap_file(size_t *len, const char *filename) {
 #ifdef _WIN64
   HANDLE file =
       CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
@@ -31,14 +38,14 @@ static const char* mmap_file(size_t* len, const char* filename) {
   assert(fileMapping != INVALID_HANDLE_VALUE);
 
   LPVOID fileMapView = MapViewOfFile(fileMapping, FILE_MAP_READ, 0, 0, 0);
-  auto fileMapViewChar = (const char*)fileMapView;
+  auto fileMapViewChar = (const char *)fileMapView;
   assert(fileMapView != NULL);
 #else
 
-  FILE* f;
+  FILE *f;
   long file_size;
   struct stat sb;
-  char* p;
+  char *p;
   int fd;
 
   (*len) = 0;
@@ -64,7 +71,7 @@ static const char* mmap_file(size_t* len, const char* filename) {
     return NULL;
   }
 
-  p = (char*)mmap(0, (size_t)file_size, PROT_READ, MAP_SHARED, fd, 0);
+  p = (char *)mmap(0, (size_t)file_size, PROT_READ, MAP_SHARED, fd, 0);
 
   if (p == MAP_FAILED) {
     perror("mmap");
@@ -81,6 +88,17 @@ static const char* mmap_file(size_t* len, const char* filename) {
   return p;
 
 #endif
+}
+
+static void VNormalize(float v[3]) {
+  const float len2 = v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+  if (len2 > 0.0f) {
+    float len = (float)sqrt((double)len2);
+
+    v[0] /= len;
+    v[1] /= len;
+    v[2] /= len;
+  }
 }
 
 static void CalcNormal(float N[3], float v0[3], float v1[3], float v2[3]) {
@@ -106,184 +124,9 @@ static void CalcNormal(float N[3], float v0[3], float v1[3], float v2[3]) {
 
     N[0] /= len;
     N[1] /= len;
+    N[2] /= len;
   }
 }
-
-#if 0
-static int load_obj_and(float bmin[3], float bmax[3],
-                             const char* filename) {
-  tinyobj_attrib_t attrib;
-  tinyobj_shape_t* shapes = NULL;
-  size_t num_shapes;
-  tinyobj_material_t* materials = NULL;
-  size_t num_materials;
-
-  size_t data_len = 0;
-  const char* data = get_file_data(&data_len, filename);
-  if (data == NULL) {
-    exit(-1);
-    return 0;
-  }
-  printf("filesize: %d\n", (int)data_len);
-
-  {
-    unsigned int flags = TINYOBJ_FLAG_TRIANGULATE;
-    int ret = tinyobj_parse_obj(&attrib, &shapes, &num_shapes, &materials,
-                                &num_materials, data, data_len, flags);
-    if (ret != TINYOBJ_SUCCESS) {
-      return 0;
-    }
-
-    printf("# of shapes    = %d\n", (int)num_shapes);
-    printf("# of materiasl = %d\n", (int)num_materials);
-
-    if (0) {
-      int i;
-      for (i = 0; i < num_shapes; i++) {
-        printf("shape[%d] name = %s\n", i, shapes[i].name);
-      }
-    }
-
-  }
-
-  bmin[0] = bmin[1] = bmin[2] = FLT_MAX;
-  bmax[0] = bmax[1] = bmax[2] = -FLT_MAX;
-
-  {
-    DrawObject o;
-    float* vb;
-    /* std::vector<float> vb; //  */
-    size_t face_offset = 0;
-    size_t i;
-
-    /* Assume triangulated face. */
-    size_t num_triangles = attrib.num_face_num_verts;
-    size_t stride = 9; /* 9 = pos(3float), normal(3float), color(3float) */
-
-    vb = (float*)malloc(sizeof(float) * stride * num_triangles * 3);
-
-    for (i = 0; i < attrib.num_face_num_verts; i++) {
-      size_t f;
-      assert(attrib.face_num_verts[i] % 3 ==
-             0); /* assume all triangle faces. */
-      for (f = 0; f < attrib.face_num_verts[i] / 3; f++) {
-        int k;
-        float v[3][3];
-        float n[3][3];
-        float c[3];
-        float len2;
-
-        tinyobj_vertex_index_t idx0 = attrib.faces[face_offset + 3 * f + 0];
-        tinyobj_vertex_index_t idx1 = attrib.faces[face_offset + 3 * f + 1];
-        tinyobj_vertex_index_t idx2 = attrib.faces[face_offset + 3 * f + 2];
-
-        for (k = 0; k < 3; k++) {
-          int f0 = idx0.v_idx;
-          int f1 = idx1.v_idx;
-          int f2 = idx2.v_idx;
-          assert(f0 >= 0);
-          assert(f1 >= 0);
-          assert(f2 >= 0);
-
-          v[0][k] = attrib.vertices[3 * f0 + k];
-          v[1][k] = attrib.vertices[3 * f1 + k];
-          v[2][k] = attrib.vertices[3 * f2 + k];
-          bmin[k] = (v[0][k] < bmin[k]) ? v[0][k] : bmin[k];
-          bmin[k] = (v[1][k] < bmin[k]) ? v[1][k] : bmin[k];
-          bmin[k] = (v[2][k] < bmin[k]) ? v[2][k] : bmin[k];
-          bmax[k] = (v[0][k] > bmax[k]) ? v[0][k] : bmax[k];
-          bmax[k] = (v[1][k] > bmax[k]) ? v[1][k] : bmax[k];
-          bmax[k] = (v[2][k] > bmax[k]) ? v[2][k] : bmax[k];
-        }
-
-        if (attrib.num_normals > 0) {
-          int f0 = idx0.vn_idx;
-          int f1 = idx1.vn_idx;
-          int f2 = idx2.vn_idx;
-          if (f0 >= 0 && f1 >= 0 && f2 >= 0) {
-            assert(f0 < attrib.num_normals);
-            assert(f1 < attrib.num_normals);
-            assert(f2 < attrib.num_normals);
-            for (k = 0; k < 3; k++) {
-              n[0][k] = attrib.normals[3 * f0 + k];
-              n[1][k] = attrib.normals[3 * f1 + k];
-              n[2][k] = attrib.normals[3 * f2 + k];
-            }
-          } else { /* normal index is not defined for this face */
-            /* compute geometric normal */
-            CalcNormal(n[0], v[0], v[1], v[2]);
-            n[1][0] = n[0][0];
-            n[1][1] = n[0][1];
-            n[1][2] = n[0][2];
-            n[2][0] = n[0][0];
-            n[2][1] = n[0][1];
-            n[2][2] = n[0][2];
-          }
-        } else {
-          /* compute geometric normal */
-          CalcNormal(n[0], v[0], v[1], v[2]);
-          n[1][0] = n[0][0];
-          n[1][1] = n[0][1];
-          n[1][2] = n[0][2];
-          n[2][0] = n[0][0];
-          n[2][1] = n[0][1];
-          n[2][2] = n[0][2];
-        }
-
-        for (k = 0; k < 3; k++) {
-          vb[(3 * i + k) * stride + 0] = v[k][0];
-          vb[(3 * i + k) * stride + 1] = v[k][1];
-          vb[(3 * i + k) * stride + 2] = v[k][2];
-          vb[(3 * i + k) * stride + 3] = n[k][0];
-          vb[(3 * i + k) * stride + 4] = n[k][1];
-          vb[(3 * i + k) * stride + 5] = n[k][2];
-
-          /* Use normal as color. */
-          c[0] = n[k][0];
-          c[1] = n[k][1];
-          c[2] = n[k][2];
-          len2 = c[0] * c[0] + c[1] * c[1] + c[2] * c[2];
-          if (len2 > 0.0f) {
-            float len = (float)sqrt(len2);
-
-            c[0] /= len;
-            c[1] /= len;
-            c[2] /= len;
-          }
-
-          vb[(3 * i + k) * stride + 6] = (c[0] * 0.5 + 0.5);
-          vb[(3 * i + k) * stride + 7] = (c[1] * 0.5 + 0.5);
-          vb[(3 * i + k) * stride + 8] = (c[2] * 0.5 + 0.5);
-        }
-      }
-      face_offset += attrib.face_num_verts[i];
-    }
-
-    o.vb = 0;
-    o.numTriangles = 0;
-    if (num_triangles > 0) {
-      glGenBuffers(1, &o.vb);
-      glBindBuffer(GL_ARRAY_BUFFER, o.vb);
-      glBufferData(GL_ARRAY_BUFFER, num_triangles * 3 * stride * sizeof(float),
-                   vb, GL_STATIC_DRAW);
-      o.numTriangles = num_triangles;
-    }
-
-    free(vb);
-
-    gDrawObject = o;
-  }
-
-  printf("bmin = %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
-  printf("bmax = %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
-
-  tinyobj_attrib_free(&attrib);
-  tinyobj_shapes_free(shapes, num_shapes);
-  tinyobj_materials_free(materials, num_materials);
-
-  return 1;
-}
-#endif
 
 static int LoadObj(Mesh *mesh, const char *data, size_t data_len, float scale) {
   tinyobj_attrib_t attrib;
@@ -298,7 +141,9 @@ static int LoadObj(Mesh *mesh, const char *data, size_t data_len, float scale) {
   size_t num_faces;
   size_t num_vertices;
 
-  ret = tinyobj_parse_obj(&attrib, &shapes, &num_shapes, &materials, &num_materials, data, data_len, TINYOBJ_FLAG_TRIANGULATE);
+  ret = tinyobj_parse_obj(&attrib, &shapes, &num_shapes, &materials,
+                          &num_materials, data, data_len,
+                          TINYOBJ_FLAG_TRIANGULATE);
 
   if (ret != TINYOBJ_SUCCESS) {
     fprintf(stderr, "faield to parse .obj\n");
@@ -315,12 +160,14 @@ static int LoadObj(Mesh *mesh, const char *data, size_t data_len, float scale) {
 
     mesh->num_faces = num_faces;
     mesh->num_vertices = num_vertices;
-    mesh->vertices = (float*)malloc(sizeof(float) * num_vertices * 3);
-    mesh->faces = (unsigned int*)malloc(sizeof(unsigned int) * num_faces * 3);
-    mesh->material_ids = (unsigned int *)malloc(sizeof(unsigned int) * num_faces);
+    mesh->vertices = (float *)malloc(sizeof(float) * num_vertices * 3);
+    mesh->faces = (unsigned int *)malloc(sizeof(unsigned int) * num_faces * 3);
+    mesh->material_ids =
+        (unsigned int *)malloc(sizeof(unsigned int) * num_faces);
     memset(mesh->material_ids, 0, sizeof(unsigned int) * num_faces);
-    mesh->facevarying_normals = (float*)malloc(sizeof(float) * num_faces * 3 * 3);
-    mesh->facevarying_uvs = (float*)malloc(sizeof(float) * num_faces * 3 * 2);
+    mesh->facevarying_normals =
+        (float *)malloc(sizeof(float) * num_faces * 3 * 3);
+    mesh->facevarying_uvs = (float *)malloc(sizeof(float) * num_faces * 3 * 2);
     memset(mesh->facevarying_uvs, 0, sizeof(float) * 2 * 3 * num_faces);
   }
 
@@ -369,10 +216,9 @@ static int LoadObj(Mesh *mesh, const char *data, size_t data_len, float scale) {
           float v0[3], v1[3], v2[3];
           float N[3];
 
-          f0 = attrib.faces[3*f+0].v_idx;
-          f1 = attrib.faces[3*f+1].v_idx;
-          f2 = attrib.faces[3*f+2].v_idx;
-
+          f0 = attrib.faces[3 * f + 0].v_idx;
+          f1 = attrib.faces[3 * f + 1].v_idx;
+          f2 = attrib.faces[3 * f + 2].v_idx;
 
           v0[0] = attrib.vertices[3 * f0 + 0];
           v0[1] = attrib.vertices[3 * f0 + 1];
@@ -408,10 +254,9 @@ static int LoadObj(Mesh *mesh, const char *data, size_t data_len, float scale) {
         float v0[3], v1[3], v2[3];
         float N[3];
 
-        f0 = attrib.faces[3*f+0].v_idx;
-        f1 = attrib.faces[3*f+1].v_idx;
-        f2 = attrib.faces[3*f+2].v_idx;
-
+        f0 = attrib.faces[3 * f + 0].v_idx;
+        f1 = attrib.faces[3 * f + 1].v_idx;
+        f2 = attrib.faces[3 * f + 2].v_idx;
 
         v0[0] = attrib.vertices[3 * f0 + 0];
         v0[1] = attrib.vertices[3 * f0 + 1];
@@ -438,25 +283,25 @@ static int LoadObj(Mesh *mesh, const char *data, size_t data_len, float scale) {
         mesh->facevarying_normals[3 * (3 * f + 2) + 0] = N[0];
         mesh->facevarying_normals[3 * (3 * f + 2) + 1] = N[1];
         mesh->facevarying_normals[3 * (3 * f + 2) + 2] = N[2];
-
       }
-
     }
 
     /* @todo { texcoord, material_id, etc } */
   }
 
+  /* free tinyobj data */
+  {
+    tinyobj_attrib_free(&attrib);
+    tinyobj_shapes_free(shapes, num_shapes);
+    tinyobj_materials_free(materials, num_materials);
+  }
+
   return 0;
 }
 
-
-int
-main(
-	int argc,
-	char **argv)
-{
-  const char* obj_filename;
-  const char* obj_data;
+int main(int argc, char **argv) {
+  const char *obj_filename;
+  const char *obj_data;
   size_t obj_data_len;
   float scale = 1.0f;
 
@@ -475,7 +320,7 @@ main(
 
   obj_data = mmap_file(&obj_data_len, obj_filename);
   if (obj_data == NULL || obj_data_len == 0) {
-    fprintf(stderr, "failed to map file: %s\n", obj_filename); 
+    fprintf(stderr, "failed to map file: %s\n", obj_filename);
     exit(-1);
   }
 
@@ -487,5 +332,119 @@ main(
     }
   }
 
-	return EXIT_SUCCESS;
+  {
+    nanort_bvh_accel_t accel;
+    nanort_bvh_build_statistics_t stats;
+    nanort_bvh_build_options_t build_options;
+    int ret;
+    float bmin[3], bmax[3];
+
+    nanort_bvh_accel_init(&accel);
+    nanort_bvh_build_options_init(&build_options);
+    /* `stats` will be intialized inside of nanort_bvh_accel_build(), thus no
+     * initialization required for `stats` here. */
+
+    ret = nanort_bvh_accel_build(&accel, &stats, mesh.vertices,
+                                 (unsigned int)mesh.num_faces, mesh.faces,
+                                 &build_options);
+    assert(ret == NANORT_SUCCESS);
+
+    nanort_bvh_accel_bounding_box(bmin, bmax, &accel);
+
+    printf("BVH statistics\n");
+    printf("  bmin              : %f, %f, %f\n", (double)bmin[0],
+           (double)bmin[1], (double)bmin[2]);
+    printf("  bmax              : %f, %f, %f\n", (double)bmax[0],
+           (double)bmax[1], (double)bmax[2]);
+    printf("  max tree depth    : %d\n", stats.max_tree_depth);
+    printf("  # of leaf nodes   : %d\n", stats.num_leaf_nodes);
+    printf("  # of branch nodes : %d\n", stats.num_branch_nodes);
+
+    /* very simple rendering */
+    {
+      int x, y;
+      int width = 512;
+      int height = 512;
+      nanort_bvh_trace_options_t trace_options;
+
+      unsigned char *rgb =
+          (unsigned char *)malloc((size_t)(width * height * 3));
+      memset(rgb, 0, (size_t)(width * height * 3));
+
+      /* Use default trace option. */
+      nanort_bvh_trace_options_init(&trace_options);
+
+/* Shoot rays. */
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
+      for (y = 0; y < height; y++) {
+        for (x = 0; x < width; x++) {
+          float dir[3];
+          nanort_ray_t ray;
+          float kFar = 1.0e+30f;
+          int hit;
+          nanort_intersection_t isect;
+
+          /* @fixme { adjust eye position. (0, 5, 20) is set for
+           * `cornellbox_suzanne.obj` } */
+          ray.org[0] = 0.0f;
+          ray.org[1] = 5.0f;
+          ray.org[2] = 20.0f;
+
+          dir[0] = (x / (float)width) - 0.5f;
+          dir[1] = (y / (float)height) - 0.5f;
+          dir[2] = -1.0f;
+          VNormalize(dir);
+          ray.dir[0] = dir[0];
+          ray.dir[1] = dir[1];
+          ray.dir[2] = dir[2];
+
+          ray.min_t = 0.0f;
+          ray.max_t = kFar;
+
+          hit = nanort_bvh_accel_traverse(&isect, &accel, mesh.vertices,
+                                          mesh.faces, &ray, &trace_options);
+          if (hit) {
+            /* @fixme { write your shader here. } */
+            float normal[3] = {1, 1, 1};
+            unsigned int fid = isect.prim_id;
+            if (mesh.facevarying_normals) {
+              normal[0] = mesh.facevarying_normals[9 * fid + 0];
+              normal[1] = mesh.facevarying_normals[9 * fid + 1];
+              normal[2] = mesh.facevarying_normals[9 * fid + 2];
+            }
+            /* Flip Y */
+            rgb[3 * ((height - y - 1) * width + x) + 0] =
+                ftouc(0.5f * normal[0] + 0.5f);
+            rgb[3 * ((height - y - 1) * width + x) + 1] =
+                ftouc(0.5f * normal[1] + 0.5f);
+            rgb[3 * ((height - y - 1) * width + x) + 2] =
+                ftouc(0.5f * normal[2] + 0.5f);
+          }
+        }
+      }
+
+      {
+        ret = save_png("render.png", width, height, rgb);
+        if (ret > 0) {
+          printf("saved to render.png\n");
+        }
+
+        free(rgb);
+      }
+    }
+
+    nanort_bvh_accel_free(&accel);
+
+    {
+      free(mesh.vertices);
+      free(mesh.faces);
+      free(mesh.material_ids);
+      free(mesh.facevarying_normals);
+      free(mesh.facevarying_uvs);
+    }
+  }
+
+  return EXIT_SUCCESS;
 }

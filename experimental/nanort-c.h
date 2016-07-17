@@ -59,6 +59,7 @@ typedef struct _nanort_bvh_accel_t {
 } nanort_bvh_accel_t;
 
 typedef struct _nanort_intersection_t {
+  unsigned int prim_id;
   float t;
   float u, v;
 } nanort_intersection_t;
@@ -84,6 +85,7 @@ extern void nanort_bvh_build_options_init(nanort_bvh_build_options_t *options);
 extern void nanort_bvh_trace_options_init(nanort_bvh_trace_options_t *options);
 
 extern void nanort_bvh_accel_init(nanort_bvh_accel_t *accel);
+extern void nanort_bvh_accel_free(nanort_bvh_accel_t *accel);
 extern int nanort_bvh_accel_build(nanort_bvh_accel_t *accel,
                                   nanort_bvh_build_statistics_t *stats,
                                   const float *vertices,
@@ -97,6 +99,10 @@ extern int nanort_bvh_accel_traverse(nanort_intersection_t *isect_out,
                                      const nanort_ray_t *ray,
                                      const nanort_bvh_trace_options_t *options);
 
+/* Get bounding box of build BVH. Valid after `nanort_bvh_accel_build` */
+extern void nanort_bvh_accel_bounding_box(float bmin[3], float bmax[3],
+                                          const nanort_bvh_accel_t *accel);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
@@ -107,6 +113,7 @@ extern int nanort_bvh_accel_traverse(nanort_intersection_t *isect_out,
 #include <float.h>
 #include <math.h>
 #include <memory.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -292,10 +299,11 @@ static int nanort_ray_triangle_intersection(float *t_inout, float *u_out,
 }
 
 static int nanort_test_leaf_node(
-    float *t_inout, float *u_out, float *v_out, const nanort_bvh_node_t *node,
-    const nanort_ray_t *ray, const nanort_raycoeff_t *ray_coeff,
-    const float *vertices, const unsigned int *faces,
-    const unsigned int *indices, const nanort_bvh_trace_options_t *options) {
+    float *t_inout, float *u_out, float *v_out, unsigned int *prim_id_out,
+    const nanort_bvh_node_t *node, const nanort_ray_t *ray,
+    const nanort_raycoeff_t *ray_coeff, const float *vertices,
+    const unsigned int *faces, const unsigned int *indices,
+    const nanort_bvh_trace_options_t *options) {
   unsigned int i = 0;
   int hit = 0;
 
@@ -323,10 +331,15 @@ static int nanort_test_leaf_node(
 
         (*u_out) = u;
         (*v_out) = v;
+        (*prim_id_out) = prim_idx;
 
         hit = 1;
       }
     }
+  }
+
+  if (hit) {
+    (*t_inout) = t;
   }
 
   return hit;
@@ -376,9 +389,9 @@ static void nanort_bounding_box(float bmin[3], float bmax[3],
     bmin[1] = NANORT_MIN(bmin[1], p[i][1]);
     bmin[2] = NANORT_MIN(bmin[2], p[i][2]);
 
-    bmax[0] = NANORT_MIN(bmax[0], p[i][0]);
-    bmax[1] = NANORT_MIN(bmax[1], p[i][1]);
-    bmax[2] = NANORT_MIN(bmax[2], p[i][2]);
+    bmax[0] = NANORT_MAX(bmax[0], p[i][0]);
+    bmax[1] = NANORT_MAX(bmax[1], p[i][1]);
+    bmax[2] = NANORT_MAX(bmax[2], p[i][2]);
   }
 }
 
@@ -432,7 +445,8 @@ static void nanort_contribute_bin_buffer(
   }
 
   /* clear bin data */
-  memset(bins, 0, sizeof(2 * 3 * bin_size)); /* 2 * 3 = (bmin, bmax) * xyz */
+  memset(bins, 0, sizeof(unsigned int) * 2 * 3 *
+                      bin_size); /* 2 * 3 = (bmin, bmax) * xyz */
 
   for (i = left_idx; i < right_idx; i++) {
     /*
@@ -581,13 +595,50 @@ static void nanort_find_cut_from_bin_buffer(
   }
 }
 
+/* partition indicdes so that left elements contain vertex position less than
+ * `cost'.
+ * Note that end index(`hi') is inclusive, i.e. it sorts indices in range [lo,
+ * hi] */
+static unsigned int partition_indices(unsigned int *indices /* [inout] */,
+                                      const float *vertices,
+                                      const unsigned int *faces, int axis,
+                                      float cost, size_t lo, size_t hi) {
+  size_t i = lo;
+  size_t j;
+
+  for (j = lo; j < hi; j++) {
+    const unsigned int f0 = faces[3 * indices[j] + 0];
+    const unsigned int f1 = faces[3 * indices[j] + 1];
+    const unsigned int f2 = faces[3 * indices[j] + 2];
+    const float v0 = vertices[3 * f0 + (size_t)axis];
+    const float v1 = vertices[3 * f1 + (size_t)axis];
+    const float v2 = vertices[3 * f2 + (size_t)axis];
+    const float center = (v0 + v1 + v2) / 3.0f;
+    if (center <= cost) {
+      unsigned int tmp = indices[i];
+      indices[i] = indices[j];
+      indices[j] = tmp;
+      i++;
+    }
+  }
+
+  {
+    unsigned int tmp = indices[i];
+    indices[i] = indices[hi];
+    indices[hi] = tmp;
+  }
+
+  assert(i <= hi);
+  return (unsigned int)(i);
+}
+
 static unsigned int nanort_build_tree(
-    nanort_bvh_node_t *nodes_out, unsigned int nodes_out_size,
+    nanort_bvh_node_t *nodes_out, unsigned int *nodes_out_size,
     nanort_bvh_build_statistics_t *stats_out, const float *vertices,
     const unsigned int *faces, unsigned int *indices /* inout */,
     const unsigned int left_idx, const unsigned int right_idx,
-    const unsigned int depth, const nanort_bvh_build_options_t *option) {
-  unsigned int offset = nodes_out_size;
+    const unsigned int depth, const nanort_bvh_build_options_t *options) {
+  unsigned int offset = (*nodes_out_size);
 
   float bmin[3], bmax[3];
   unsigned int n = right_idx - left_idx;
@@ -600,7 +651,8 @@ static unsigned int nanort_build_tree(
   nanort_bounding_boxes(bmin, bmax, vertices, faces, indices, left_idx,
                         right_idx);
 
-  if ((n < option->min_leaf_primitives) || (depth >= option->max_tree_depth)) {
+  if ((n < options->min_leaf_primitives) ||
+      (depth >= options->max_tree_depth)) {
     /* Create leaf node. */
     nanort_bvh_node_t leaf;
 
@@ -617,24 +669,87 @@ static unsigned int nanort_build_tree(
     leaf.data[1] = left_idx;
 
     nodes_out[offset] = leaf;
+    (*nodes_out_size)++;
 
-    /* out_stat->num_leaf_nodes++; */
+    stats_out->num_leaf_nodes++;
 
     return offset;
   }
 
+  assert(left_idx < right_idx);
+
   /* Create branch node. */
   {
-    int min_cut_axis = 0;
-    float cut_pos[3] = {0.0, 0.0, 0.0};
+    unsigned int mid_idx = left_idx;
+    int cut_axis = 0;
+    {
+      int min_cut_axis = 0;
+      float cut_pos[3] = {0.0, 0.0, 0.0};
+      int axis_try;
 
-    /* bins will be cleared inside of nanort_contribute_bin_buffer() */
-    unsigned int bins[NANORT_MAX_BIN_SIZE];
-    nanort_contribute_bin_buffer(bins, option->bin_size, bmin, bmax, vertices,
-                                 faces, indices, left_idx, right_idx);
-    nanort_find_cut_from_bin_buffer(cut_pos, &min_cut_axis, bins,
-                                    option->bin_size, bmin, bmax, n,
-                                    option->cost_t_aabb);
+      /* bins will be cleared inside of nanort_contribute_bin_buffer() */
+      unsigned int bins[NANORT_MAX_BIN_SIZE];
+      nanort_contribute_bin_buffer(bins, options->bin_size, bmin, bmax,
+                                   vertices, faces, indices, left_idx,
+                                   right_idx);
+      nanort_find_cut_from_bin_buffer(cut_pos, &min_cut_axis, bins,
+                                      options->bin_size, bmin, bmax, n,
+                                      options->cost_t_aabb);
+
+      /* Try all 3 axis until good cut position avaiable. */
+      for (axis_try = 0; axis_try < 3; axis_try++) {
+        /* try min_cut_axis first. */
+        cut_axis = (min_cut_axis + axis_try) % 3;
+
+        mid_idx = partition_indices(indices, vertices, faces, cut_axis,
+                                    cut_pos[cut_axis], left_idx, right_idx - 1);
+
+        if ((mid_idx == left_idx) || (mid_idx == (right_idx - 1))) {
+          /* Can't split well. Switch to object median(which may create
+           * unoptimized tree, but stable */
+          mid_idx = left_idx + (n >> 1);
+
+          /* Try another axis if there's axis to try. */
+
+        } else {
+          /* Found good cut. exit loop. */
+          break;
+        }
+      }
+    }
+
+    /* Should increment `nodes_out_size` here */
+    (*nodes_out_size)++;
+    {
+      unsigned int left_child_index = 0;
+      unsigned int right_child_index = 0;
+
+      left_child_index = nanort_build_tree(nodes_out, nodes_out_size, stats_out,
+                                           vertices, faces, indices, left_idx,
+                                           mid_idx, depth + 1, options);
+
+      right_child_index = nanort_build_tree(
+          nodes_out, nodes_out_size, stats_out, vertices, faces, indices,
+          mid_idx, right_idx, depth + 1, options);
+
+      {
+        nodes_out[offset].axis = cut_axis;
+        nodes_out[offset].flag = 0; /* branch */
+
+        nodes_out[offset].data[0] = left_child_index;
+        nodes_out[offset].data[1] = right_child_index;
+
+        nodes_out[offset].bmin[0] = bmin[0];
+        nodes_out[offset].bmin[1] = bmin[1];
+        nodes_out[offset].bmin[2] = bmin[2];
+
+        nodes_out[offset].bmax[0] = bmax[0];
+        nodes_out[offset].bmax[1] = bmax[1];
+        nodes_out[offset].bmax[2] = bmax[2];
+      }
+    }
+
+    stats_out->num_branch_nodes++;
   }
 
   return offset;
@@ -643,6 +758,14 @@ static unsigned int nanort_build_tree(
 void nanort_bvh_accel_init(nanort_bvh_accel_t *accel) {
   if (accel) {
     memset(accel, 0, sizeof(nanort_bvh_accel_t));
+  }
+  return;
+}
+
+void nanort_bvh_accel_free(nanort_bvh_accel_t *accel) {
+  if (accel) {
+    if (accel->indices) free(accel->indices);
+    if (accel->nodes) free(accel->nodes);
   }
   return;
 }
@@ -673,10 +796,16 @@ int nanort_bvh_accel_build(nanort_bvh_accel_t *accel,            /* out */
     return NANORT_INVALID_PARAMETER;
   }
 
+  if (!options) {
+    return NANORT_INVALID_PARAMETER;
+  }
+
   assert(options->max_tree_depth <= NANORT_MAX_STACK_DEPTH);
 
+  memset(stats, 0, sizeof(nanort_bvh_build_statistics_t));
+
   /* Allocate internal buffer for primitive indices */
-  n = num_faces / 3; /* Assume all faces are composed of triangle. */
+  n = num_faces; /* Assume all faces are composed of triangle. */
 
   accel->num_indices = n;
   accel->indices = (unsigned int *)malloc(sizeof(unsigned int) * n);
@@ -687,12 +816,18 @@ int nanort_bvh_accel_build(nanort_bvh_accel_t *accel,            /* out */
 
   accel->build_options = (*options);
 
-  /* Assume no duplicated indices, thus its safe to allocate `n` nodes
-   * firstly(no dynamically adjust array). */
+  /* Assume # of nodes won't exceed `n` */
   accel->nodes = (nanort_bvh_node_t *)malloc(sizeof(nanort_bvh_node_t) * n);
-  nanort_build_tree(accel->nodes, 0, stats, vertices, faces, accel->indices, 0,
-                    n,
-                    /* depth */ 0, &accel->build_options);
+
+  {
+    unsigned int nodes_count = 0;
+    nanort_build_tree(accel->nodes, &nodes_count, stats, vertices, faces,
+                      accel->indices, 0, n,
+                      /* depth */ 0, &accel->build_options);
+
+    assert(nodes_count < n);
+    accel->num_nodes = nodes_count;
+  }
 
   return NANORT_SUCCESS;
 }
@@ -707,6 +842,7 @@ int nanort_bvh_accel_traverse(nanort_intersection_t *isect_out,
   float t = ray->max_t;
   float u = 0.0f, v = 0.0f;
   float hit_t = ray->max_t;
+  unsigned int hit_prim_id = (unsigned int)(-1);
   float min_t = FLT_MAX;
   float max_t = -FLT_MAX;
   int dir_sign[3];
@@ -735,6 +871,7 @@ int nanort_bvh_accel_traverse(nanort_intersection_t *isect_out,
 
   {
     /* Calculate dimension where the ray direction is maximal. */
+    /* @todo { Optimize fabs() call. } */
     float abs_dir = (float)fabs((double)ray->dir[0]);
     ray_coeff.kz = 0;
     if (abs_dir < (float)fabs((double)ray->dir[1])) {
@@ -786,8 +923,9 @@ int nanort_bvh_accel_traverse(nanort_intersection_t *isect_out,
       }
     } else { /* leaf node */
       if (hit) {
-        if (nanort_test_leaf_node(&t, &u, &v, node, ray, &ray_coeff, vertices,
-                                  faces, accel->indices, options)) {
+        if (nanort_test_leaf_node(&t, &u, &v, &hit_prim_id, node, ray,
+                                  &ray_coeff, vertices, faces, accel->indices,
+                                  options)) {
           hit_t = t;
         }
       }
@@ -799,6 +937,7 @@ int nanort_bvh_accel_traverse(nanort_intersection_t *isect_out,
   {
     int hit = t < ray->max_t;
     if (hit) {
+      isect_out->prim_id = hit_prim_id;
       isect_out->t = t;
       isect_out->u = u;
       isect_out->v = v;
@@ -819,6 +958,20 @@ void nanort_bvh_trace_options_init(nanort_bvh_trace_options_t *options) {
   options->prim_ids_range[0] = 0;
   options->prim_ids_range[1] = 0x7FFFFFFF; /* Up to 2G face IDs. */
   options->cull_back_face = 0;
+}
+
+void nanort_bvh_accel_bounding_box(float bmin[3], float bmax[3],
+                                   const nanort_bvh_accel_t *accel) {
+  if (!accel) return;
+  if (accel->nodes && accel->num_nodes > 0) {
+    bmin[0] = accel->nodes[0].bmin[0];
+    bmin[1] = accel->nodes[0].bmin[1];
+    bmin[2] = accel->nodes[0].bmin[2];
+
+    bmax[0] = accel->nodes[0].bmax[0];
+    bmax[1] = accel->nodes[0].bmax[1];
+    bmax[2] = accel->nodes[0].bmax[2];
+  }
 }
 
 #endif /* NANORT_C_IMPLEMENTATION */
