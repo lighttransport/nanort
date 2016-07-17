@@ -777,6 +777,7 @@ int nanort_bvh_accel_build(nanort_bvh_accel_t *accel,            /* out */
                            const nanort_bvh_build_options_t *options) {
   unsigned int i;
   unsigned int n;
+  size_t max_num_nodes;
 
   accel->num_indices = 0;
 
@@ -818,7 +819,7 @@ int nanort_bvh_accel_build(nanort_bvh_accel_t *accel,            /* out */
 
   /* Assume # of nodes won't exceed `n` * 1.5 */
 	/* @fixme { Theoretically, # of BVH nodes should be less than `n'. So there may be some bugs in bvh tree build... } */
-	size_t max_num_nodes = (size_t)(n * 1.5);
+	max_num_nodes = (size_t)(n * 1.5);
   accel->nodes = (nanort_bvh_node_t *)malloc(sizeof(nanort_bvh_node_t) * max_num_nodes);
 
   {
