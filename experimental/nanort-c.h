@@ -1,5 +1,31 @@
 /* NanoRT in pure C89
-   Limitation: No parallel BVH build.
+ * Limitation: No parallel BVH build.
+ * @todo
+ * [ ] libc dependency(Possible by just providing custom malloc(), free(), memset() and assert() ).
+ */
+
+/*
+The MIT License (MIT)
+
+Copyright (c) 2015 - 2016 Light Transport Entertainment, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 */
 #ifndef NANORT_C_H_
 #define NANORT_C_H_
@@ -110,16 +136,16 @@ extern void nanort_bvh_accel_bounding_box(float bmin[3], float bmax[3],
 #ifdef NANORT_C_IMPLEMENTATION
 
 #include <assert.h>
-#include <float.h>
-#include <math.h>
 #include <memory.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #define NANORT_MAX_BIN_SIZE (2 * 3 * 512)
 #define NANORT_LEAF_NODE_FLAG (1)
 #define NANORT_MAX_STACK_DEPTH (512)
+
+/* Assume IEEE-754 FPU */
+#define NANORT_FLT_EPSILON (1.19209290E-07F)
+#define NANORT_FLT_MAX     (3.40282347E+38F)
 
 #define NANORT_MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define NANORT_MAX(a, b) (((a) > (b)) ? (a) : (b))
@@ -133,6 +159,11 @@ typedef struct {
   int ky;
   int kz;
 } nanort_raycoeff_t;
+
+static float my_fabsf(float f)
+{
+	return (f < 0.0f) ? -f : f;
+}
 
 static int nanort_intersect_aabb_ray(float *tmin_out, /* out */
                                      float *tmax_out, /* out */
@@ -497,7 +528,7 @@ static void nanort_find_cut_from_bin_buffer(
     const unsigned int *bins, const unsigned int bin_size, const float bmin[3],
     const float bmax[3], size_t num_primitives,
     float cost_t_aabb) { /* should be in [0.0, 1.0] */
-  const float kEPS = FLT_EPSILON;
+  const float kEPS = NANORT_FLT_EPSILON;
 
   unsigned int i, j;
   size_t left, right;
@@ -536,7 +567,7 @@ static void nanort_find_cut_from_bin_buffer(
      */
 
     float min_cost_pos = bmin[j] + 0.5f * bstep[j];
-    min_cost[j] = FLT_MAX;
+    min_cost[j] = NANORT_FLT_MAX;
 
     left = 0;
     right = num_primitives;
@@ -846,8 +877,8 @@ int nanort_bvh_accel_traverse(nanort_intersection_t *isect_out,
   float u = 0.0f, v = 0.0f;
   float hit_t = ray->max_t;
   unsigned int hit_prim_id = (unsigned int)(-1);
-  float min_t = FLT_MAX;
-  float max_t = -FLT_MAX;
+  float min_t = NANORT_FLT_MAX;
+  float max_t = -NANORT_FLT_MAX;
   int dir_sign[3];
   float ray_inv_dir[3];
   float ray_org[3];
@@ -874,16 +905,15 @@ int nanort_bvh_accel_traverse(nanort_intersection_t *isect_out,
 
   {
     /* Calculate dimension where the ray direction is maximal. */
-    /* @todo { Optimize fabs() call. } */
-    float abs_dir = (float)fabs((double)ray->dir[0]);
+    float abs_dir = my_fabsf(ray->dir[0]);
     ray_coeff.kz = 0;
-    if (abs_dir < (float)fabs((double)ray->dir[1])) {
+    if (abs_dir < my_fabsf(ray->dir[1])) {
       ray_coeff.kz = 1;
-      abs_dir = (float)fabs((double)ray->dir[1]);
+      abs_dir = my_fabsf(ray->dir[1]);
     }
-    if (abs_dir < (float)fabs((double)ray->dir[2])) {
+    if (abs_dir < my_fabsf(ray->dir[2])) {
       ray_coeff.kz = 2;
-      abs_dir = (float)fabs((double)ray->dir[2]);
+      abs_dir = my_fabsf(ray->dir[2]);
     }
 
     ray_coeff.kx = ray_coeff.kz + 1;
