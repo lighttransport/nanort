@@ -18,7 +18,8 @@
 * Custom geometry & intersection
   * Built-in triangle mesh gemetry & intersector is provided.
 * Cross platform
-  * MacOSX, Linux, Windows, ARM, x86, SPARC, (maybe)MIPS, etc.
+  * MacOSX, Linux, Windows, iOS, Android, ARM, x86, SPARC, (maybe)MIPS, etc.
+  * For example, NanoRT works finely on Raspberry Pi 2(arm 32bit) and Raspberrry Pi 3!(AARCH64 kernel)
 * GPU effient data structure
   * Built BVH tree from `NanoRT` is a linear array and does not have pointers, thus it is suited for GPU raytracing(GPU ray traversal).
 * OpenMP multithreaded BVH build.
@@ -177,7 +178,11 @@ are required attributes.
 
 See `examples` directory for example renderer using `NanoRT`.
 
-## Custom geometry
+* [x] [examples/vrcamera](examples/vrcamera) Stereo VR Camera 
+* [x] [examples/objrender](examples/objrender) Render wavefront .obj model using NanoRT.
+* [x] [examples/par_msquare](examples/par_msquare) Render heightfield by converting it to meshes using par_msquare(marching squares)
+
+### Custom geometry
 
 Here is an example of custom geometry.
  
@@ -191,13 +196,15 @@ And plesae see API at wiki: https://github.com/lighttransport/nanort/wiki/API
 
 ## License
 
-MIT license.
+`nanort.h` is licensed under MIT license.
 
 `NanoRT` uses `stack_container.h` which is licensed under:
 
     // Copyright (c) 2006-2008 The Chromium Authors. All rights reserved.
     // Use of this source code is governed by a BSD-style license that can be
     // found in the LICENSE file.
+
+`NanoRT` examples use some external third party libraries. Licenses for such third party libraries obey their own license.
 
 ## TODO
 
@@ -220,3 +227,5 @@ PR are always welcome!
 * [ ] Motion blur
 * [ ] Accurate ray curve intersection
 * [ ] Example path tracing renderer.
+* [ ] Example bi-directional path tracing renderer.
+
