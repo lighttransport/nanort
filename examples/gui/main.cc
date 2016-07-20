@@ -97,8 +97,10 @@ std::atomic<bool> gRenderCancel;
 example::RenderConfig gRenderConfig;
 std::mutex gMutex;
 
+std::vector<float> gDisplayRGBA;    // Accumurated image.
 std::vector<float> gRGBA;
 std::vector<float> gAuxRGBA;        // Auxiliary buffer
+std::vector<int>   gSampleCounts;   // Sample num counter for each pixel.
 std::vector<float> gNormalRGBA;     // For visualizing normal
 std::vector<float> gPositionRGBA;   // For visualizing position
 std::vector<float> gDepthRGBA;      // For visualizing depth
@@ -132,15 +134,27 @@ void RenderThread() {
 
     auto startT = std::chrono::system_clock::now();
 
+    // Initialize display buffer for the first pass.
+    bool initial_pass = false;
+    {
+      std::lock_guard<std::mutex> guard(gMutex);
+      if (gRenderConfig.pass == 0) {
+        initial_pass = true;
+      }
+    }
+
     gRenderCancel = false;
     // gRenderCancel may be set to true in main loop.
     // Render() will repeatedly check this flag inside the rendering loop.
-    bool ret = gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), gCurrQuat,
+
+    bool ret = gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), &gSampleCounts.at(0), gCurrQuat,
                                 gRenderConfig, gRenderCancel);
 
     if (ret) {
       std::lock_guard<std::mutex> guard(gMutex);
+
       gRenderConfig.pass++;
+      
     }
 
     auto endT = std::chrono::system_clock::now();
@@ -155,6 +169,12 @@ void InitRender(example::RenderConfig* rc) {
   rc->pass = 0;
 
   rc->max_passes = 128;
+
+  gSampleCounts.resize(rc->width * rc->height);
+  std::fill(gSampleCounts.begin(), gSampleCounts.end(), 0.0);
+
+  gDisplayRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gDisplayRGBA.begin(), gDisplayRGBA.end(), 0.0);
 
   gRGBA.resize(rc->width * rc->height * 4);
   std::fill(gRGBA.begin(), gRGBA.end(), 0.0);
@@ -310,8 +330,18 @@ inline float pesudoColor(float v, int ch) {
 void Display(int width, int height) {
   std::vector<float> buf(width * height * 4);
   if (gShowBufferMode == SHOW_BUFFER_COLOR) {
-    for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gRGBA[i] + gAuxRGBA[i];
+    // normalize 
+    for (size_t i = 0; i < buf.size() / 4; i++) {
+      buf[4*i+0] = gRGBA[4*i+0]; 
+      buf[4*i+1] = gRGBA[4*i+1]; 
+      buf[4*i+2] = gRGBA[4*i+2]; 
+      buf[4*i+3] = gRGBA[4*i+3]; 
+      if (gSampleCounts[i] > 0) {
+        buf[4*i+0] /= static_cast<float>(gSampleCounts[i]); 
+        buf[4*i+1] /= static_cast<float>(gSampleCounts[i]); 
+        buf[4*i+2] /= static_cast<float>(gSampleCounts[i]); 
+        buf[4*i+3] /= static_cast<float>(gSampleCounts[i]); 
+      }
     }
   } else if (gShowBufferMode == SHOW_BUFFER_NORMAL) {
     for (size_t i = 0; i < buf.size(); i++) {

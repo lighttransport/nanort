@@ -42,6 +42,35 @@ THE SOFTWARE.
 
 namespace example {
 
+// PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
+// Licensed under Apache License 2.0 (NO WARRANTY, etc. see website)
+// http://www.pcg-random.org/
+typedef struct {
+  unsigned long long state;
+  unsigned long long inc; // not used?
+} pcg32_state_t;
+
+#define PCG32_INITIALIZER                                                      \
+  { 0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL }
+
+float pcg32_random(pcg32_state_t *rng) {
+  unsigned long long oldstate = rng->state;
+  rng->state = oldstate * 6364136223846793005ULL + rng->inc;
+  unsigned int xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
+  unsigned int rot = oldstate >> 59u;
+  unsigned int ret = (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+
+  return (float)((double)ret / (double)4294967296.0);
+}
+
+void pcg32_srandom(pcg32_state_t *rng, uint64_t initstate, uint64_t initseq) {
+  rng->state = 0U;
+  rng->inc = (initseq << 1U) | 1U;
+  pcg32_random(rng);
+  rng->state += initstate;
+  pcg32_random(rng);
+}
+
 const float kPI = 3.141592f;
 
 typedef struct {
@@ -730,7 +759,7 @@ bool Renderer::BuildBVH() {
   return true;
 }
 
-bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
+bool Renderer::Render(float* rgba, float* aux_rgba, int *sample_counts, float quat[4],
                       const RenderConfig& config,
                       std::atomic<bool>& cancelFlag) {
   if (!gAccel.IsValid()) {
@@ -758,8 +787,12 @@ bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
 
   auto startT = std::chrono::system_clock::now();
 
+  // Initialize RNG.
+  
   for (auto t = 0; t < num_threads; t++) {
-    workers.push_back(std::thread([&, t]() {
+    workers.emplace_back(std::thread([&, t]() {
+      pcg32_state_t rng;
+      pcg32_srandom(&rng, config.pass, t); // seed = combination of render pass + thread no. 
 
       int y = 0;
       while ((y = i++) < config.height) {
@@ -788,8 +821,11 @@ bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
           ray.org[1] = origin[1];
           ray.org[2] = origin[2];
 
+          float u0 = pcg32_random(&rng);
+          float u1 = pcg32_random(&rng);
+
           nanort::float3 dir;
-          dir = corner + float(x) * u + float(config.height - y - 1) * v;
+          dir = corner + (float(x) + u0) * u + (float(config.height - y - 1) + u1) * v;
           dir = vnormalize(dir);
           ray.dir[0] = dir[0];
           ray.dir[1] = dir[1];
@@ -918,25 +954,40 @@ bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
 
             // Simple shading
             float NdotV = fabsf(vdot(N, dir));
-            rgba[4 * (y * config.width + x) + 0] = NdotV * diffuse_col[0];
-            rgba[4 * (y * config.width + x) + 1] = NdotV * diffuse_col[1];
-            rgba[4 * (y * config.width + x) + 2] = NdotV * diffuse_col[2];
-            // rgba[4 * (y * config.width + x) + 0] = NdotV * specular_col[0];
-            // rgba[4 * (y * config.width + x) + 1] = NdotV * specular_col[1];
-            // rgba[4 * (y * config.width + x) + 2] = NdotV * specular_col[2];
-            rgba[4 * (y * config.width + x) + 3] = 1.0f;
+
+
+            if (config.pass == 0) {
+              rgba[4 * (y * config.width + x) + 0] = NdotV * diffuse_col[0];
+              rgba[4 * (y * config.width + x) + 1] = NdotV * diffuse_col[1];
+              rgba[4 * (y * config.width + x) + 2] = NdotV * diffuse_col[2];
+              rgba[4 * (y * config.width + x) + 3] = 1.0f;
+              sample_counts[y * config.width + x] = 1; // Set 1 for the first pass 
+            } else { // additive.
+              rgba[4 * (y * config.width + x) + 0] += NdotV * diffuse_col[0];
+              rgba[4 * (y * config.width + x) + 1] += NdotV * diffuse_col[1];
+              rgba[4 * (y * config.width + x) + 2] += NdotV * diffuse_col[2];
+              rgba[4 * (y * config.width + x) + 3] += 1.0f;
+              sample_counts[y * config.width + x]++;
+            }
 
           } else {
-            if (config.pass == 0) {
-              // clear pixel
-              rgba[4 * (y * config.width + x) + 0] = 0.0f;
-              rgba[4 * (y * config.width + x) + 1] = 0.0f;
-              rgba[4 * (y * config.width + x) + 2] = 0.0f;
-              rgba[4 * (y * config.width + x) + 3] = 0.0f;
-              aux_rgba[4 * (y * config.width + x) + 0] = 0.0f;
-              aux_rgba[4 * (y * config.width + x) + 1] = 0.0f;
-              aux_rgba[4 * (y * config.width + x) + 2] = 0.0f;
-              aux_rgba[4 * (y * config.width + x) + 3] = 0.0f;
+            {
+              if (config.pass == 0) {
+                // clear pixel
+                rgba[4 * (y * config.width + x) + 0] = 0.0f;
+                rgba[4 * (y * config.width + x) + 1] = 0.0f;
+                rgba[4 * (y * config.width + x) + 2] = 0.0f;
+                rgba[4 * (y * config.width + x) + 3] = 0.0f;
+                aux_rgba[4 * (y * config.width + x) + 0] = 0.0f;
+                aux_rgba[4 * (y * config.width + x) + 1] = 0.0f;
+                aux_rgba[4 * (y * config.width + x) + 2] = 0.0f;
+                aux_rgba[4 * (y * config.width + x) + 3] = 0.0f;
+                sample_counts[y * config.width + x] = 1; // Set 1 for the first pass 
+              } else {
+                sample_counts[y * config.width + x]++;
+              }
+
+              // No super sampling
               config.normalImage[4 * (y * config.width + x) + 0] = 0.0f;
               config.normalImage[4 * (y * config.width + x) + 1] = 0.0f;
               config.normalImage[4 * (y * config.width + x) + 2] = 0.0f;
@@ -957,7 +1008,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
               config.varycoordImage[4 * (y * config.width + x) + 1] = 0.0f;
               config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
               config.varycoordImage[4 * (y * config.width + x) + 3] = 0.0f;
-            }
+            } 
           }
         }
 
@@ -966,6 +1017,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, float quat[4],
           aux_rgba[4 * (y * config.width + x) + 1] = 0.0f;
           aux_rgba[4 * (y * config.width + x) + 2] = 0.0f;
           aux_rgba[4 * (y * config.width + x) + 3] = 0.0f;
+
         }
       }
     }));
