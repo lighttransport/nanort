@@ -13,8 +13,6 @@
 #include "OpenGLWindow/X11OpenGLWindow.h"
 #endif
 
-#include "CommonInterfaces/CommonRenderInterface.h"
-
 #include <cstdio>
 
 #define IMGUI_B3G_CONTROL (300)
