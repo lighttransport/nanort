@@ -3,7 +3,7 @@
 
 #define b3gDefaultOpenGLWindow X11OpenGLWindow
 
-#include "../CommonInterfaces/CommonWindowInterface.h"
+#include "CommonWindowInterface.h"
 
 class X11OpenGLWindow : public CommonWindowInterface
 {

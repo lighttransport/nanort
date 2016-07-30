@@ -33,8 +33,6 @@ THE SOFTWARE.
 #include "OpenGLWindow/X11OpenGLWindow.h"
 #endif
 
-#include "CommonInterfaces/CommonRenderInterface.h"
-
 #ifdef _WIN32
 #include <sys/stat.h>
 #include <sys/types.h>

@@ -1,7 +1,7 @@
 #ifndef MAC_OPENGL_WINDOW_H
 #define MAC_OPENGL_WINDOW_H
 
-#include "../CommonInterfaces/CommonWindowInterface.h"
+#include "CommonWindowInterface.h"
 
 #define b3gDefaultOpenGLWindow MacOpenGLWindow
 

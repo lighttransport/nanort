@@ -21,7 +21,7 @@ subject to the following restrictions:
 
 struct InternalData2;
 
-#include "CommonInterfaces/CommonWindowInterface.h"
+#include "CommonWindowInterface.h"
 
 class Win32Window : public CommonWindowInterface
 {
