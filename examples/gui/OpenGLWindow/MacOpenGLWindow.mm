@@ -957,12 +957,20 @@ void MacOpenGLWindow::startRendering()
         if ([event type] == NSMouseMoved)
         {
             
-            NSPoint eventLocation = [event locationInWindow];
-            NSPoint center = [m_internalData->m_myview convertPoint:eventLocation fromView:nil];
+            // http://stackoverflow.com/questions/4630509/how-to-find-if-the-mouse-is-over-a-view
+            NSPoint globalLocation = [ NSEvent mouseLocation ];
+            NSPoint windowLocation = [ [m_internalData->m_myview window] convertScreenToBase:globalLocation ];
+            NSPoint viewLocation = [ m_internalData->m_myview convertPoint:windowLocation fromView: nil ];
+            //printf("global = %f, %f\n", globalLocation.x, globalLocation.y);
+            //printf("window = %f, %f\n", windowLocation.x, windowLocation.y);
+            //printf("view = %f, %f\n", viewLocation.x, viewLocation.y);
+
+            //NSPoint eventLocation = [event locationInWindow];
+            //NSPoint center = [m_internalData->m_myview convertPoint:eventLocation fromView:nil];
+            NSPoint center = viewLocation;
             m_mouseX = center.x;
             m_mouseY = [m_internalData->m_myview GetWindowHeight] - center.y;
-       
-            
+
            // printf("mouse coord = %f, %f\n",m_mouseX,m_mouseY);
             if (m_mouseMoveCallback)
 			{
