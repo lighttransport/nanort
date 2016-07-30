@@ -51,13 +51,13 @@ namespace example {
 // http://www.pcg-random.org/
 typedef struct {
   unsigned long long state;
-  unsigned long long inc; // not used?
+  unsigned long long inc;  // not used?
 } pcg32_state_t;
 
-#define PCG32_INITIALIZER                                                      \
+#define PCG32_INITIALIZER \
   { 0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL }
 
-float pcg32_random(pcg32_state_t *rng) {
+float pcg32_random(pcg32_state_t* rng) {
   unsigned long long oldstate = rng->state;
   rng->state = oldstate * 6364136223846793005ULL + rng->inc;
   unsigned int xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
@@ -67,7 +67,7 @@ float pcg32_random(pcg32_state_t *rng) {
   return (float)((double)ret / (double)4294967296.0);
 }
 
-void pcg32_srandom(pcg32_state_t *rng, uint64_t initstate, uint64_t initseq) {
+void pcg32_srandom(pcg32_state_t* rng, uint64_t initstate, uint64_t initseq) {
   rng->state = 0U;
   rng->inc = (initseq << 1U) | 1U;
   pcg32_random(rng);
@@ -334,7 +334,8 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
 
   auto t_start = std::chrono::system_clock::now();
 
-  bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename, /*basepath*/NULL, /* triangulate */true);
+  bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename,
+                              /*basepath*/ NULL, /* triangulate */ true);
 
   auto t_end = std::chrono::system_clock::now();
   std::chrono::duration<double, std::milli> ms = t_end - t_start;
@@ -344,7 +345,8 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
     return false;
   }
 
-  std::cout << "[LoadOBJ] Parse time : " << ms.count() << " [msecs]" << std::endl;
+  std::cout << "[LoadOBJ] Parse time : " << ms.count() << " [msecs]"
+            << std::endl;
 
   std::cout << "[LoadOBJ] # of shapes in .obj : " << shapes.size() << std::endl;
   std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size()
@@ -355,14 +357,13 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
 
   num_vertices = attrib.vertices.size() / 3;
   printf("  vertices: %ld\n", attrib.vertices.size() / 3);
-  
+
   for (size_t i = 0; i < shapes.size(); i++) {
     printf("  shape[%ld].name = %s\n", i, shapes[i].name.c_str());
     printf("  shape[%ld].indices: %ld\n", i, shapes[i].mesh.indices.size());
     assert((shapes[i].mesh.indices.size() % 3) == 0);
 
     num_faces += shapes[i].mesh.indices.size() / 3;
-
   }
   std::cout << "[LoadOBJ] # of faces: " << num_faces << std::endl;
   std::cout << "[LoadOBJ] # of vertices: " << num_vertices << std::endl;
@@ -384,7 +385,7 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   size_t faceIdxOffset = 0;
 
   for (size_t i = 0; i < attrib.vertices.size(); i++) {
-      mesh.vertices[i] = scale * attrib.vertices[i];
+    mesh.vertices[i] = scale * attrib.vertices[i];
   }
 
   for (size_t i = 0; i < shapes.size(); i++) {
@@ -422,18 +423,27 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
           n2[1] = attrib.normals[3 * f2 + 1];
           n2[2] = attrib.normals[3 * f2 + 2];
 
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] = n0[0];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] = n0[1];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] = n0[2];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] =
+              n0[0];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] =
+              n0[1];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] =
+              n0[2];
 
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] = n1[0];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] = n1[1];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] = n1[2];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] =
+              n1[0];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] =
+              n1[1];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] =
+              n1[2];
 
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] = n2[0];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] = n2[1];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] = n2[2];
-        } else { // face contains invalid normal index. calc geometric normal.
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] =
+              n2[0];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] =
+              n2[1];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] =
+              n2[2];
+        } else {  // face contains invalid normal index. calc geometric normal.
           f0 = shapes[i].mesh.indices[3 * f + 0].vertex_index;
           f1 = shapes[i].mesh.indices[3 * f + 1].vertex_index;
           f2 = shapes[i].mesh.indices[3 * f + 2].vertex_index;
@@ -455,17 +465,26 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
           nanort::float3 N;
           CalcNormal(N, v0, v1, v2);
 
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] = N[0];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] = N[1];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] = N[2];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] =
+              N[0];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] =
+              N[1];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] =
+              N[2];
 
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] = N[0];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] = N[1];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] = N[2];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] =
+              N[0];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] =
+              N[1];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] =
+              N[2];
 
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] = N[0];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] = N[1];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] = N[2];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] =
+              N[0];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] =
+              N[1];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] =
+              N[2];
         }
       }
     } else {
@@ -516,25 +535,27 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
         f1 = shapes[i].mesh.indices[3 * f + 1].texcoord_index;
         f2 = shapes[i].mesh.indices[3 * f + 2].texcoord_index;
 
-        nanort::float3 n0, n1, n2;
+        if (f0 > 0 && f1 > 0 && f2 > 0) {
+          nanort::float3 n0, n1, n2;
 
-        n0[0] = attrib.texcoords[2 * f0 + 0];
-        n0[1] = attrib.texcoords[2 * f0 + 1];
+          n0[0] = attrib.texcoords[2 * f0 + 0];
+          n0[1] = attrib.texcoords[2 * f0 + 1];
 
-        n1[0] = attrib.texcoords[2 * f1 + 0];
-        n1[1] = attrib.texcoords[2 * f1 + 1];
+          n1[0] = attrib.texcoords[2 * f1 + 0];
+          n1[1] = attrib.texcoords[2 * f1 + 1];
 
-        n2[0] = attrib.texcoords[2 * f2 + 0];
-        n2[1] = attrib.texcoords[2 * f2 + 1];
+          n2[0] = attrib.texcoords[2 * f2 + 0];
+          n2[1] = attrib.texcoords[2 * f2 + 1];
 
-        mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 0) + 0] = n0[0];
-        mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 0) + 1] = n0[1];
+          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 0) + 0] = n0[0];
+          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 0) + 1] = n0[1];
 
-        mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 1) + 0] = n1[0];
-        mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 1) + 1] = n1[1];
+          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 1) + 0] = n1[0];
+          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 1) + 1] = n1[1];
 
-        mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 2) + 0] = n2[0];
-        mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 2) + 1] = n2[1];
+          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 2) + 0] = n2[0];
+          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 2) + 1] = n2[1];
+        }
       }
     }
 
@@ -798,8 +819,8 @@ bool Renderer::BuildBVH() {
   return true;
 }
 
-bool Renderer::Render(float* rgba, float* aux_rgba, int *sample_counts, float quat[4],
-                      const RenderConfig& config,
+bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
+                      float quat[4], const RenderConfig& config,
                       std::atomic<bool>& cancelFlag) {
   if (!gAccel.IsValid()) {
     return false;
@@ -827,11 +848,12 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int *sample_counts, float qu
   auto startT = std::chrono::system_clock::now();
 
   // Initialize RNG.
-  
+
   for (auto t = 0; t < num_threads; t++) {
     workers.emplace_back(std::thread([&, t]() {
       pcg32_state_t rng;
-      pcg32_srandom(&rng, config.pass, t); // seed = combination of render pass + thread no. 
+      pcg32_srandom(&rng, config.pass,
+                    t);  // seed = combination of render pass + thread no.
 
       int y = 0;
       while ((y = i++) < config.height) {
@@ -864,7 +886,8 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int *sample_counts, float qu
           float u1 = pcg32_random(&rng);
 
           nanort::float3 dir;
-          dir = corner + (float(x) + u0) * u + (float(config.height - y - 1) + u1) * v;
+          dir = corner + (float(x) + u0) * u +
+                (float(config.height - y - 1) + u1) * v;
           dir = vnormalize(dir);
           ray.dir[0] = dir[0];
           ray.dir[1] = dir[1];
@@ -994,14 +1017,14 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int *sample_counts, float qu
             // Simple shading
             float NdotV = fabsf(vdot(N, dir));
 
-
             if (config.pass == 0) {
               rgba[4 * (y * config.width + x) + 0] = NdotV * diffuse_col[0];
               rgba[4 * (y * config.width + x) + 1] = NdotV * diffuse_col[1];
               rgba[4 * (y * config.width + x) + 2] = NdotV * diffuse_col[2];
               rgba[4 * (y * config.width + x) + 3] = 1.0f;
-              sample_counts[y * config.width + x] = 1; // Set 1 for the first pass 
-            } else { // additive.
+              sample_counts[y * config.width + x] =
+                  1;  // Set 1 for the first pass
+            } else {  // additive.
               rgba[4 * (y * config.width + x) + 0] += NdotV * diffuse_col[0];
               rgba[4 * (y * config.width + x) + 1] += NdotV * diffuse_col[1];
               rgba[4 * (y * config.width + x) + 2] += NdotV * diffuse_col[2];
@@ -1021,7 +1044,8 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int *sample_counts, float qu
                 aux_rgba[4 * (y * config.width + x) + 1] = 0.0f;
                 aux_rgba[4 * (y * config.width + x) + 2] = 0.0f;
                 aux_rgba[4 * (y * config.width + x) + 3] = 0.0f;
-                sample_counts[y * config.width + x] = 1; // Set 1 for the first pass 
+                sample_counts[y * config.width + x] =
+                    1;  // Set 1 for the first pass
               } else {
                 sample_counts[y * config.width + x]++;
               }
@@ -1047,7 +1071,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int *sample_counts, float qu
               config.varycoordImage[4 * (y * config.width + x) + 1] = 0.0f;
               config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
               config.varycoordImage[4 * (y * config.width + x) + 3] = 0.0f;
-            } 
+            }
           }
         }
 
@@ -1056,7 +1080,6 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int *sample_counts, float qu
           aux_rgba[4 * (y * config.width + x) + 1] = 0.0f;
           aux_rgba[4 * (y * config.width + x) + 2] = 0.0f;
           aux_rgba[4 * (y * config.width + x) + 3] = 0.0f;
-
         }
       }
     }));
