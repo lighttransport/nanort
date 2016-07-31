@@ -1,3 +1,8 @@
+newoption {
+   trigger = "with-gtk3nfd",
+   description = "Build with native file dialog support(GTK3 required. Linux only)"
+}
+
 sources = {
    "main.cc",
    "render.cc",
@@ -53,6 +58,15 @@ solution "ViewerSolution"
             "OpenGLWindow/X11OpenGLWindows.h"
             }
          links {"X11", "pthread", "dl"}
+         if _OPTIONS["with-gtk3nfd"] then
+            defines { "USE_NATIVEFILEDIALOG" }
+            includedirs { "./nativefiledialog/src/include" }
+            files { "nativefiledialog/src/nfd_gtk.c",
+                    "nativefiledialog/src/nfd_common.c"
+                  }
+            buildoptions { "`pkg-config --cflags gtk+-3.0`" }
+            linkoptions { "`pkg-config --libs gtk+-3.0`" }
+         end
       end
       if os.is("MacOSX") then
          defines { "USE_NATIVEFILEDIALOG" }
