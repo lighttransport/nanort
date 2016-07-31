@@ -32,9 +32,10 @@ THE SOFTWARE.
 #include <iostream>
 
 #include "../../nanort.h"
-
-#include "eson.h"
 #include "matrix.h"
+
+#define ESON_IMPLEMENTATION
+#include "eson.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
