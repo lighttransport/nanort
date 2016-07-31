@@ -1228,7 +1228,7 @@ unsigned int BVHAccel<P, Pred, I>::BuildShallowTree(
     // Try all 3 axis until good cut position avaiable.
     unsigned int mid_idx = left_idx;
     int cut_axis = min_cut_axis;
-    for (int axis_try = 0; axis_try < 1; axis_try++) {
+    for (int axis_try = 0; axis_try < 3; axis_try++) {
       unsigned int *begin = &indices_[left_idx];
       unsigned int *end =
           &indices_[right_idx - 1] + 1;  // mimics end() iterator.
