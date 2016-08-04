@@ -3,6 +3,7 @@
 [![Build Status](https://travis-ci.org/lighttransport/nanort.svg)](https://travis-ci.org/lighttransport/nanort)
 
 ![](images/render_path_traced.png)
+Path tracing example contributed by https://github.com/daseyb
 
 `NanoRT` is simple single header only ray tracing kernel.
 
@@ -12,7 +13,7 @@
 
 * Portable C++
   * Only use C++-03 features.
-  * Some example applications use C++-11 though.
+  * (Some example applications use C++-11 feature, though)
 * BVH spatial data structure for efficient ray intersection finding.
   * Should be able to handle ~10M triangles scene efficiently with moderate memory consumption
 * Custom geometry & intersection
@@ -178,6 +179,8 @@ are required attributes.
 
 See `examples` directory for example renderer using `NanoRT`.
 
+* [x] [examples/path_tracer](examples/path_tracer) Path tracer example by https://github.com/daseyb 
+* [x] [examples/gui](examples/gui) Simple renderer with GUI(using ImGui)
 * [x] [examples/vrcamera](examples/vrcamera) Stereo VR Camera 
 * [x] [examples/objrender](examples/objrender) Render wavefront .obj model using NanoRT.
 * [x] [examples/par_msquare](examples/par_msquare) Render heightfield by converting it to meshes using par_msquare(marching squares)
@@ -226,6 +229,5 @@ PR are always welcome!
   * [ ] Bonsai: Rapid Bounding Volume Hierarchy Generation using Mini Trees http://jcgt.org/published/0004/03/02/
 * [ ] Motion blur
 * [ ] Accurate ray curve intersection
-* [ ] Example path tracing renderer.
 * [ ] Example bi-directional path tracing renderer.
 
