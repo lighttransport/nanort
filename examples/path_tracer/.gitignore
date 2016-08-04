@@ -1,0 +1,7 @@
+path_tracer
+*.data
+*.exr
+*.exe
+*.png
+*.blend
+*.blend1
