@@ -45,7 +45,7 @@ Path tracing example contributed by https://github.com/daseyb
 
 ## API
 
-`nanort::Ray` represents ray. The origin `org`, the direction `dir`(not necessarily normalized), the minimum hit distance `minT`(usually 0.0) and the maximum hit distance `maxT`(usually too far, e.g. 1.0e+30) must be filled before shooting ray.
+`nanort::Ray` represents ray. The origin `org`, the direction `dir`(not necessarily normalized), the minimum hit distance `min_t`(usually 0.0) and the maximum hit distance `max_t`(usually too far, e.g. 1.0e+30) must be filled before shooting ray.
 
 `nanort::BVHAccel` builds BVH data structure from geometry, and provides the function to find intersection point for a given ray.
 
@@ -123,9 +123,9 @@ are required attributes.
     nanort::BVHBuildStatistics stats = accel.GetStatistics();
 
     printf("  BVH statistics:\n");
-    printf("    # of leaf   nodes: %d\n", stats.numLeafNodes);
-    printf("    # of branch nodes: %d\n", stats.numBranchNodes);
-    printf("  Max tree depth   : %d\n", stats.maxTreeDepth);
+    printf("    # of leaf   nodes: %d\n", stats.num_leaf_nodes);
+    printf("    # of branch nodes: %d\n", stats.num_branch_nodes);
+    printf("  Max tree depth   : %d\n", stats.max_tree_depth);
  
     std::vector<float> rgb(width * height * 3, 0.0f);
 
