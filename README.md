@@ -3,6 +3,7 @@
 [![Build Status](https://travis-ci.org/lighttransport/nanort.svg)](https://travis-ci.org/lighttransport/nanort)
 
 ![](images/render_path_traced.png)
+
 Path tracing example contributed by https://github.com/daseyb
 
 `NanoRT` is simple single header only ray tracing kernel.
