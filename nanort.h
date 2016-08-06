@@ -217,7 +217,6 @@ class StackContainer {
   void operator=(const StackContainer &);
 };
 
-
 // StackVector
 //
 // Example:
@@ -306,7 +305,9 @@ inline float3 operator*(float f, const float3 &v) {
   return float3(v.x() * f, v.y() * f, v.z() * f);
 }
 
-inline float3 vneg(const float3 &rhs) { return float3(-rhs.x(), -rhs.y(), -rhs.z()); }
+inline float3 vneg(const float3 &rhs) {
+  return float3(-rhs.x(), -rhs.y(), -rhs.z());
+}
 
 inline float vlength(const float3 &rhs) {
   return sqrtf(rhs.x() * rhs.x() + rhs.y() * rhs.y() + rhs.z() * rhs.z());
@@ -366,14 +367,11 @@ class BVHNode {
   unsigned int data[2];
 };
 
-template<class I>
+template <class I>
 class IsectComparator {
  public:
-  bool operator()(const I &a, const I &b) const {
-    return a.t < b.t;
-  }
+  bool operator()(const I &a, const I &b) const { return a.t < b.t; }
 };
-
 
 /// BVH build option.
 struct BVHBuildOptions {
@@ -464,13 +462,14 @@ class BVHAccel {
 
   /// Traverse into BVH along ray and find closest hit point & primitive if
   /// found
-  bool Traverse(const Ray &ray,
-                const BVHTraceOptions &options, const I &intersector) const;
+  bool Traverse(const Ray &ray, const BVHTraceOptions &options,
+                const I &intersector) const;
 
   /// Multi-hit ray traversal
   /// Returns `max_intersections` frontmost intersections
-  bool MultiHitTraverse(const Ray &ray,
-                        const BVHTraceOptions &optins, int max_intersections, StackVector<I, 128> *intersector) const;
+  bool MultiHitTraverse(const Ray &ray, const BVHTraceOptions &optins,
+                        int max_intersections,
+                        StackVector<I, 128> *intersector) const;
 
   const std::vector<BVHNode> &GetNodes() const { return nodes_; }
   const std::vector<unsigned int> &GetIndices() const { return indices_; }
@@ -490,9 +489,7 @@ class BVHAccel {
     }
   }
 
- 	bool IsValid() const {
-		return nodes_.size() > 0;
-	}
+  bool IsValid() const { return nodes_.size() > 0; }
 
  private:
 #if NANORT_ENABLE_PARALLEL_BUILD
@@ -522,7 +519,7 @@ class BVHAccel {
   bool TestLeafNode(const BVHNode &node, const Ray &ray,
                     const I &intersector) const;
 
-  //bool MultiHitTestLeafNode(IsectVector *isects, int max_intersections,
+  // bool MultiHitTestLeafNode(IsectVector *isects, int max_intersections,
   //                          const BVHNode &node, const Ray &ray,
   //                          const I &intersector) const;
 
@@ -605,19 +602,17 @@ class TriangleMesh {
   const unsigned int *faces_;
 };
 
-struct TriangleIntersection
-{
-	float u;
-	float v;
+struct TriangleIntersection {
+  float u;
+  float v;
 
   // Required member variables.
-	float t;
-	unsigned int prim_id;
+  float t;
+  unsigned int prim_id;
 };
 
-template<class I = TriangleIntersection>
-class TriangleIntersector
-{
+template <class I = TriangleIntersection>
+class TriangleIntersector {
  public:
   TriangleIntersector(const float *vertices, const unsigned int *faces)
       : vertices_(vertices), faces_(faces) {}
@@ -631,7 +626,6 @@ class TriangleIntersector
     int ky;
     int kz;
   } RayCoeff;
-
 
   /// Do ray interesection stuff for `prim_index` th primitive and return hit
   /// distance `t`,
@@ -706,26 +700,24 @@ class TriangleIntersector
     }
 
     (*t_inout) = tt;
-		// Use Thomas-Mueller style barycentric coord.
-		// U + V + W = 1.0 and interp(p) = U * p0 + V * p1 + W * p2
-		// We want interp(p) = (1 - u - v) * p0 + u * v1 + v * p2;
-		// => u = V, v = W.
+    // Use Thomas-Mueller style barycentric coord.
+    // U + V + W = 1.0 and interp(p) = U * p0 + V * p1 + W * p2
+    // We want interp(p) = (1 - u - v) * p0 + u * v1 + v * p2;
+    // => u = V, v = W.
     intersection.u = V * rcpDet;
     intersection.v = W * rcpDet;
 
     return true;
   }
 
-	/// Returns the nearest hit distance.
-	float GetT() const {
-		return intersection.t;
-	}
+  /// Returns the nearest hit distance.
+  float GetT() const { return intersection.t; }
 
-	/// Update is called when initializing intesection and nearest hit is found.
-	void Update(float t, unsigned int prim_idx) const {
+  /// Update is called when initializing intesection and nearest hit is found.
+  void Update(float t, unsigned int prim_idx) const {
     intersection.t = t;
     intersection.prim_id = prim_idx;
-	}
+  }
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
   /// This function is called only once in BVH traversal.
@@ -762,8 +754,8 @@ class TriangleIntersector
 
     trace_options_ = trace_options;
 
-		intersection.u = 0.0f;
-		intersection.v = 0.0f;
+    intersection.u = 0.0f;
+    intersection.v = 0.0f;
   }
 
   /// Post BVH traversal stuff(e.g. compute intersection point information)
@@ -772,8 +764,8 @@ class TriangleIntersector
   void PostTraversal(const Ray &ray, bool hit) const {
     if (hit) {
       // Do something when there is a hit.
-    } 
-		(void)ray;
+    }
+    (void)ray;
   }
 
   const float *vertices_;
@@ -782,7 +774,7 @@ class TriangleIntersector
   mutable RayCoeff ray_coeff_;
   mutable BVHTraceOptions trace_options_;
 
-	mutable I intersection;
+  mutable I intersection;
 };
 
 //
@@ -1035,15 +1027,13 @@ inline bool FindCutFromBinBuffer(float *cut_pos,    // [out] xyz
 }
 
 #ifdef _OPENMP
-template<class P>
+template <class P>
 void ComputeBoundingBoxOMP(float3 *bmin, float3 *bmax,
                            const unsigned int *indices, unsigned int left_index,
-                           unsigned int right_index, const P& p) {
+                           unsigned int right_index, const P &p) {
   const float kEPS = 0.0f;  // std::numeric_limits<float>::epsilon() * epsScale;
 
-  {
-		p.BoundingBox(bmin, bmax, indices[left_index]);
-  }
+  { p.BoundingBox(bmin, bmax, indices[left_index]); }
 
   float local_bmin[3] = {(*bmin)[0], (*bmin)[1], (*bmin)[2]};
   float local_bmax[3] = {(*bmax)[0], (*bmax)[1], (*bmax)[2]};
@@ -1296,11 +1286,11 @@ unsigned int BVHAccel<P, Pred, I>::BuildShallowTree(
 
 template <class P, class Pred, class I>
 unsigned int BVHAccel<P, Pred, I>::BuildTree(BVHBuildStatistics *out_stat,
-                                          std::vector<BVHNode> *out_nodes,
-                                          unsigned int left_idx,
-                                          unsigned int right_idx,
-                                          unsigned int depth, const P &p,
-                                          const Pred &pred) {
+                                             std::vector<BVHNode> *out_nodes,
+                                             unsigned int left_idx,
+                                             unsigned int right_idx,
+                                             unsigned int depth, const P &p,
+                                             const Pred &pred) {
   assert(left_idx <= right_idx);
 
   unsigned int offset = static_cast<unsigned int>(out_nodes->size());
@@ -1428,8 +1418,8 @@ unsigned int BVHAccel<P, Pred, I>::BuildTree(BVHBuildStatistics *out_stat,
 
 template <class P, class Pred, class I>
 bool BVHAccel<P, Pred, I>::Build(unsigned int num_primitives,
-                              const BVHBuildOptions &options, const P &p,
-                              const Pred &pred) {
+                                 const BVHBuildOptions &options, const P &p,
+                                 const Pred &pred) {
   options_ = options;
   stats_ = BVHBuildStatistics();
 
@@ -1494,8 +1484,8 @@ bool BVHAccel<P, Pred, I>::Build(unsigned int num_primitives,
 
   // Do parallel build for enoughly large dataset.
   if (n > options.min_primitives_for_parallel_build) {
-    BuildShallowTree(&nodes_, 0, n, /* root depth */ 0,
-                     options.shallow_depth, p, pred);  // [0, n)
+    BuildShallowTree(&nodes_, 0, n, /* root depth */ 0, options.shallow_depth,
+                     p, pred);  // [0, n)
 
     assert(shallow_node_infos_.size() > 0);
 
@@ -1667,8 +1657,9 @@ inline bool IntersectRayAABB(float *tminOut,  // [out]
 }
 
 template <class P, class Pred, class I>
-inline bool BVHAccel<P, Pred, I>::TestLeafNode(const BVHNode &node, const Ray &ray,
-                                            const I &intersector) const {
+inline bool BVHAccel<P, Pred, I>::TestLeafNode(const BVHNode &node,
+                                               const Ray &ray,
+                                               const I &intersector) const {
   bool hit = false;
 
   unsigned int num_primitives = node.data[0];
@@ -1695,7 +1686,7 @@ inline bool BVHAccel<P, Pred, I>::TestLeafNode(const BVHNode &node, const Ray &r
         // Update isect state
         t = local_t;
 
-				intersector.Update(t, prim_idx);
+        intersector.Update(t, prim_idx);
         hit = true;
       }
     }
@@ -1776,8 +1767,8 @@ bool BVHAccel<P, Pred, I>::MultiHitTestLeafNode(const BVHNode &node,
 
 template <class P, class Pred, class I>
 bool BVHAccel<P, Pred, I>::Traverse(const Ray &ray,
-                                 const BVHTraceOptions &options,
-                                 const I& intersector) const {
+                                    const BVHTraceOptions &options,
+                                    const I &intersector) const {
   const int kMaxStackDepth = 512;
 
   float hit_t = ray.max_t;
