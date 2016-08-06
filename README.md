@@ -218,6 +218,7 @@ PR are always welcome!
   * [ ] Efficient Ray Tracing Kernels for Modern CPU Architectures http://jcgt.org/published/0004/04/05/
 * [ ] Scene graph support.
   * [ ] Instancing support.
+* [ ] Fix multi-hit ray traversal.
 * [ ] Optimize Multi-hit ray traversal for BVH.
   * [ ] http://jcgt.org/published/0004/04/04/ 
 * [ ] Ray traversal option.
