@@ -30,6 +30,9 @@ solution "ViewerSolution"
    initOpenGL()
    initGlew()
 
+   -- Use c++11
+   flags { "c++11" }
+
    -- A project defines one build target
    project "viwewer"
       kind "ConsoleApp"
@@ -52,7 +55,6 @@ solution "ViewerSolution"
          files { "nativefiledialog/src/nfd_win.cpp" }
       end
       if os.is("Linux") then
-         buildoptions { "-std=c++11" }
          files {
             "OpenGLWindow/X11OpenGLWindow.cpp",
             "OpenGLWindow/X11OpenGLWindows.h"
@@ -70,7 +72,6 @@ solution "ViewerSolution"
       end
       if os.is("MacOSX") then
          defines { "USE_NATIVEFILEDIALOG" }
-         buildoptions { "-std=c++11" }
          links {"Cocoa.framework"}
          files {
                 "OpenGLWindow/MacOpenGLWindow.h",
