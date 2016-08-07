@@ -2,8 +2,28 @@
 #define RENDER_CONFIG_H
 
 #include <string>
+#include <vector>
 
 namespace example {
+
+typedef struct {
+  // color
+  std::vector<float> rgba;
+
+  // Stores # of samples for each pixel.
+  std::vector<int> sample_counts;
+
+  // For debugging. Array size = width * height * 4.
+  std::vector<float> normal;
+  std::vector<float> position;
+  std::vector<float> depth;
+  std::vector<float> texcoord;
+  std::vector<float> varycoord;
+
+  int width;
+  int height;
+
+} RenderLayer;
 
 typedef struct {
   // framebuffer
@@ -19,13 +39,6 @@ typedef struct {
   // render pass
   int pass;
   int max_passes;
-
-  // For debugging. Array size = width * height * 4.
-  float *normalImage;
-  float *positionImage;
-  float *depthImage;
-  float *texcoordImage;
-  float *varycoordImage;
 
   // Scene input info
   std::string obj_filename;
