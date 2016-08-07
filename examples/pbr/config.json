@@ -1,0 +1,8 @@
+{ "obj_filename" : "cornellbox_suzanne.obj",
+  "width" : 512,
+  "height" : 512,
+  "eye" : [0, 2.5, 15],
+  "up" : [0, 1, 0],
+  "look_at" : [0, 0, 0],
+  "dummy" : 0
+}

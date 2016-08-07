@@ -340,8 +340,12 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
 
   if (!err.empty()) {
     std::cerr << err << std::endl;
+  }
+
+  if (false == ret) {
     return false;
   }
+  
 
   std::cout << "[LoadOBJ] Parse time : " << ms.count() << " [msecs]"
             << std::endl;
@@ -587,6 +591,10 @@ bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale) {
 }
 
 bool Renderer::BuildBVH() {
+  if (gMesh.num_faces < 1) {
+    return false;
+  }
+
   std::cout << "[Build BVH] " << std::endl;
 
   nanort::BVHBuildOptions build_options;  // Use default option
