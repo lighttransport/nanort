@@ -73,17 +73,30 @@ THE SOFTWARE.
 #define SHOW_BUFFER_TEXCOORD (4)
 #define SHOW_BUFFER_VARYCOORD (5)
 
+struct UIParam {
+  int show_buffer_mode;
+  float position_scale = 1.0f;
+  float depth_range[2];
+  bool depth_show_pseudo_color;
+
+  UIParam() {
+    show_buffer_mode = SHOW_BUFFER_COLOR;
+    position_scale = 1.0f;
+    depth_range[0] = 10.0f;
+    depth_range[1] = 20.0f;
+    depth_show_pseudo_color = true;
+  }
+};
+
+UIParam gUIParam;
+
 b3gDefaultOpenGLWindow* window = 0;
 int gWidth = 512;
 int gHeight = 512;
 int gMousePosX = -1, gMousePosY = -1;
 bool gMouseLeftDown = false;
-int gShowBufferMode = SHOW_BUFFER_COLOR;
 bool gTabPressed = false;
 bool gShiftPressed = false;
-float gShowPositionScale = 1.0f;
-float gShowDepthRange[2] = {10.0f, 20.f};
-bool gShowDepthPeseudoColor = true;
 float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
@@ -93,17 +106,10 @@ std::atomic<bool> gRenderQuit;
 std::atomic<bool> gRenderRefresh;
 std::atomic<bool> gRenderCancel;
 example::RenderConfig gRenderConfig;
+example::RenderLayer gRenderLayer;
 std::mutex gMutex;
 
 std::vector<float> gDisplayRGBA;  // Accumurated image.
-std::vector<float> gRGBA;
-std::vector<float> gAuxRGBA;        // Auxiliary buffer
-std::vector<int> gSampleCounts;     // Sample num counter for each pixel.
-std::vector<float> gNormalRGBA;     // For visualizing normal
-std::vector<float> gPositionRGBA;   // For visualizing position
-std::vector<float> gDepthRGBA;      // For visualizing depth
-std::vector<float> gTexCoordRGBA;   // For visualizing texcoord
-std::vector<float> gVaryCoordRGBA;  // For visualizing varycentric coord
 
 void RequestRender() {
   {
@@ -145,9 +151,8 @@ void RenderThread() {
     // gRenderCancel may be set to true in main loop.
     // Render() will repeatedly check this flag inside the rendering loop.
 
-    bool ret =
-        gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), &gSampleCounts.at(0),
-                         gCurrQuat, gRenderConfig, gRenderCancel);
+    bool ret = gRenderer.Render(&gRenderLayer, gCurrQuat, gRenderConfig,
+                                gRenderCancel);
 
     if (ret) {
       std::lock_guard<std::mutex> guard(gMutex);
@@ -163,43 +168,37 @@ void RenderThread() {
   }
 }
 
-void InitRender(example::RenderConfig* rc) {
+void InitRender(example::RenderConfig* rc, example::RenderLayer* layer) {
   rc->pass = 0;
 
   rc->max_passes = 128;
 
-  gSampleCounts.resize(rc->width * rc->height);
-  std::fill(gSampleCounts.begin(), gSampleCounts.end(), 0.0);
+  layer->width = rc->width;
+  layer->height = rc->height;
+
+  layer->sample_counts.resize(rc->width * rc->height);
+  std::fill(layer->sample_counts.begin(), layer->sample_counts.end(), 0.0);
 
   gDisplayRGBA.resize(rc->width * rc->height * 4);
   std::fill(gDisplayRGBA.begin(), gDisplayRGBA.end(), 0.0);
 
-  gRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gRGBA.begin(), gRGBA.end(), 0.0);
+  layer->rgba.resize(rc->width * rc->height * 4);
+  std::fill(layer->rgba.begin(), layer->rgba.end(), 0.0);
 
-  gAuxRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gAuxRGBA.begin(), gAuxRGBA.end(), 0.0);
+  layer->normal.resize(rc->width * rc->height * 4);
+  std::fill(layer->normal.begin(), layer->normal.end(), 0.0);
 
-  gNormalRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gNormalRGBA.begin(), gNormalRGBA.end(), 0.0);
+  layer->position.resize(rc->width * rc->height * 4);
+  std::fill(layer->position.begin(), layer->position.end(), 0.0);
 
-  gPositionRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gPositionRGBA.begin(), gPositionRGBA.end(), 0.0);
+  layer->depth.resize(rc->width * rc->height * 4);
+  std::fill(layer->depth.begin(), layer->depth.end(), 0.0);
 
-  gDepthRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gDepthRGBA.begin(), gDepthRGBA.end(), 0.0);
+  layer->texcoord.resize(rc->width * rc->height * 4);
+  std::fill(layer->texcoord.begin(), layer->texcoord.end(), 0.0);
 
-  gTexCoordRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gTexCoordRGBA.begin(), gTexCoordRGBA.end(), 0.0);
-
-  gVaryCoordRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gVaryCoordRGBA.begin(), gVaryCoordRGBA.end(), 0.0);
-
-  rc->normalImage = &gNormalRGBA.at(0);
-  rc->positionImage = &gPositionRGBA.at(0);
-  rc->depthImage = &gDepthRGBA.at(0);
-  rc->texcoordImage = &gTexCoordRGBA.at(0);
-  rc->varycoordImage = &gVaryCoordRGBA.at(0);
+  layer->varycoord.resize(rc->width * rc->height * 4);
+  std::fill(layer->varycoord.begin(), layer->varycoord.end(), 0.0);
 
   trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
@@ -325,49 +324,50 @@ inline float pesudoColor(float v, int ch) {
   }
 }
 
-void Display(int width, int height) {
+void Display(int width, int height, const example::RenderConfig& config,
+             const example::RenderLayer& layer) {
   std::vector<float> buf(width * height * 4);
-  if (gShowBufferMode == SHOW_BUFFER_COLOR) {
+  if (gUIParam.show_buffer_mode == SHOW_BUFFER_COLOR) {
     // normalize
     for (size_t i = 0; i < buf.size() / 4; i++) {
-      buf[4 * i + 0] = gRGBA[4 * i + 0];
-      buf[4 * i + 1] = gRGBA[4 * i + 1];
-      buf[4 * i + 2] = gRGBA[4 * i + 2];
-      buf[4 * i + 3] = gRGBA[4 * i + 3];
-      if (gSampleCounts[i] > 0) {
-        buf[4 * i + 0] /= static_cast<float>(gSampleCounts[i]);
-        buf[4 * i + 1] /= static_cast<float>(gSampleCounts[i]);
-        buf[4 * i + 2] /= static_cast<float>(gSampleCounts[i]);
-        buf[4 * i + 3] /= static_cast<float>(gSampleCounts[i]);
+      buf[4 * i + 0] = layer.rgba[4 * i + 0];
+      buf[4 * i + 1] = layer.rgba[4 * i + 1];
+      buf[4 * i + 2] = layer.rgba[4 * i + 2];
+      buf[4 * i + 3] = layer.rgba[4 * i + 3];
+      if (layer.sample_counts[i] > 0) {
+        buf[4 * i + 0] /= static_cast<float>(layer.sample_counts[i]);
+        buf[4 * i + 1] /= static_cast<float>(layer.sample_counts[i]);
+        buf[4 * i + 2] /= static_cast<float>(layer.sample_counts[i]);
+        buf[4 * i + 3] /= static_cast<float>(layer.sample_counts[i]);
       }
     }
-  } else if (gShowBufferMode == SHOW_BUFFER_NORMAL) {
+  } else if (gUIParam.show_buffer_mode == SHOW_BUFFER_NORMAL) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gNormalRGBA[i];
+      buf[i] = layer.normal[i];
     }
-  } else if (gShowBufferMode == SHOW_BUFFER_POSITION) {
+  } else if (gUIParam.show_buffer_mode == SHOW_BUFFER_POSITION) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gPositionRGBA[i] * gShowPositionScale;
+      buf[i] = layer.position[i] * gUIParam.position_scale;
     }
-  } else if (gShowBufferMode == SHOW_BUFFER_DEPTH) {
-    float d_min = std::min(gShowDepthRange[0], gShowDepthRange[1]);
-    float d_diff = fabsf(gShowDepthRange[1] - gShowDepthRange[0]);
+  } else if (gUIParam.show_buffer_mode == SHOW_BUFFER_DEPTH) {
+    float d_min = std::min(gUIParam.depth_range[0], gUIParam.depth_range[1]);
+    float d_diff = fabsf(gUIParam.depth_range[1] - gUIParam.depth_range[0]);
     d_diff = std::max(d_diff, std::numeric_limits<float>::epsilon());
     for (size_t i = 0; i < buf.size(); i++) {
-      float v = (gDepthRGBA[i] - d_min) / d_diff;
-      if (gShowDepthPeseudoColor) {
+      float v = (layer.depth[i] - d_min) / d_diff;
+      if (gUIParam.depth_show_pseudo_color) {
         buf[i] = pesudoColor(v, i % 4);
       } else {
         buf[i] = v;
       }
     }
-  } else if (gShowBufferMode == SHOW_BUFFER_TEXCOORD) {
+  } else if (gUIParam.show_buffer_mode == SHOW_BUFFER_TEXCOORD) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gTexCoordRGBA[i];
+      buf[i] = layer.texcoord[i];
     }
-  } else if (gShowBufferMode == SHOW_BUFFER_VARYCOORD) {
+  } else if (gUIParam.show_buffer_mode == SHOW_BUFFER_VARYCOORD) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gVaryCoordRGBA[i];
+      buf[i] = layer.varycoord[i];
     }
   }
 
@@ -430,7 +430,7 @@ int main(int argc, char** argv) {
   }
 #endif
 
-  InitRender(&gRenderConfig);
+  InitRender(&gRenderConfig, &gRenderLayer);
 
   checkErrors("init");
 
@@ -477,22 +477,29 @@ int main(int argc, char** argv) {
         RequestRender();
       }
 
-      ImGui::RadioButton("color", &gShowBufferMode, SHOW_BUFFER_COLOR);
+      ImGui::RadioButton("color", &gUIParam.show_buffer_mode,
+                         SHOW_BUFFER_COLOR);
       ImGui::SameLine();
-      ImGui::RadioButton("normal", &gShowBufferMode, SHOW_BUFFER_NORMAL);
+      ImGui::RadioButton("normal", &gUIParam.show_buffer_mode,
+                         SHOW_BUFFER_NORMAL);
       ImGui::SameLine();
-      ImGui::RadioButton("position", &gShowBufferMode, SHOW_BUFFER_POSITION);
+      ImGui::RadioButton("position", &gUIParam.show_buffer_mode,
+                         SHOW_BUFFER_POSITION);
       ImGui::SameLine();
-      ImGui::RadioButton("depth", &gShowBufferMode, SHOW_BUFFER_DEPTH);
+      ImGui::RadioButton("depth", &gUIParam.show_buffer_mode,
+                         SHOW_BUFFER_DEPTH);
       ImGui::SameLine();
-      ImGui::RadioButton("texcoord", &gShowBufferMode, SHOW_BUFFER_TEXCOORD);
+      ImGui::RadioButton("texcoord", &gUIParam.show_buffer_mode,
+                         SHOW_BUFFER_TEXCOORD);
       ImGui::SameLine();
-      ImGui::RadioButton("varycoord", &gShowBufferMode, SHOW_BUFFER_VARYCOORD);
+      ImGui::RadioButton("varycoord", &gUIParam.show_buffer_mode,
+                         SHOW_BUFFER_VARYCOORD);
 
-      ImGui::InputFloat("show pos scale", &gShowPositionScale);
+      ImGui::InputFloat("show pos scale", &gUIParam.position_scale);
 
-      ImGui::InputFloat2("show depth range", gShowDepthRange);
-      ImGui::Checkbox("show depth pesudo color", &gShowDepthPeseudoColor);
+      ImGui::InputFloat2("show depth range", gUIParam.depth_range);
+      ImGui::Checkbox("show depth pesudo color",
+                      &gUIParam.depth_show_pseudo_color);
     }
 
     ImGui::End();
@@ -503,12 +510,14 @@ int main(int argc, char** argv) {
 
     checkErrors("clear");
 
-    Display(gRenderConfig.width, gRenderConfig.height);
+    Display(gRenderConfig.width, gRenderConfig.height, gRenderConfig,
+            gRenderLayer);
 
     // Draw ImGui
-    { 
+    {
       float fb_scale = window->getRetinaScale();
-      glViewport(0, 0, fb_scale * window->getWidth(), fb_scale * window->getHeight());
+      glViewport(0, 0, fb_scale * window->getWidth(),
+                 fb_scale * window->getHeight());
       ImGui::Render();
       checkErrors("im render");
     }

@@ -345,7 +345,6 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   if (false == ret) {
     return false;
   }
-  
 
   std::cout << "[LoadOBJ] Parse time : " << ms.count() << " [msecs]"
             << std::endl;
@@ -635,8 +634,8 @@ bool Renderer::BuildBVH() {
   return true;
 }
 
-bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
-                      float quat[4], const RenderConfig& config,
+bool Renderer::Render(RenderLayer* layer, float quat[4],
+                      const RenderConfig& config,
                       std::atomic<bool>& cancelFlag) {
   if (!gAccel.IsValid()) {
     return false;
@@ -726,17 +725,17 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             p[2] =
                 ray.org[2] + triangle_intersector.intersection.t * ray.dir[2];
 
-            config.positionImage[4 * (y * config.width + x) + 0] = p.x();
-            config.positionImage[4 * (y * config.width + x) + 1] = p.y();
-            config.positionImage[4 * (y * config.width + x) + 2] = p.z();
-            config.positionImage[4 * (y * config.width + x) + 3] = 1.0f;
+            layer->position[4 * (y * config.width + x) + 0] = p.x();
+            layer->position[4 * (y * config.width + x) + 1] = p.y();
+            layer->position[4 * (y * config.width + x) + 2] = p.z();
+            layer->position[4 * (y * config.width + x) + 3] = 1.0f;
 
-            config.varycoordImage[4 * (y * config.width + x) + 0] =
+            layer->varycoord[4 * (y * config.width + x) + 0] =
                 triangle_intersector.intersection.u;
-            config.varycoordImage[4 * (y * config.width + x) + 1] =
+            layer->varycoord[4 * (y * config.width + x) + 1] =
                 triangle_intersector.intersection.v;
-            config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
-            config.varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
+            layer->varycoord[4 * (y * config.width + x) + 2] = 0.0f;
+            layer->varycoord[4 * (y * config.width + x) + 3] = 1.0f;
 
             unsigned int prim_id = triangle_intersector.intersection.prim_id;
 
@@ -773,21 +772,18 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               CalcNormal(N, v0, v1, v2);
             }
 
-            config.normalImage[4 * (y * config.width + x) + 0] =
-                0.5 * N[0] + 0.5;
-            config.normalImage[4 * (y * config.width + x) + 1] =
-                0.5 * N[1] + 0.5;
-            config.normalImage[4 * (y * config.width + x) + 2] =
-                0.5 * N[2] + 0.5;
-            config.normalImage[4 * (y * config.width + x) + 3] = 1.0f;
+            layer->normal[4 * (y * config.width + x) + 0] = 0.5 * N[0] + 0.5;
+            layer->normal[4 * (y * config.width + x) + 1] = 0.5 * N[1] + 0.5;
+            layer->normal[4 * (y * config.width + x) + 2] = 0.5 * N[2] + 0.5;
+            layer->normal[4 * (y * config.width + x) + 3] = 1.0f;
 
-            config.depthImage[4 * (y * config.width + x) + 0] =
+            layer->depth[4 * (y * config.width + x) + 0] =
                 triangle_intersector.intersection.t;
-            config.depthImage[4 * (y * config.width + x) + 1] =
+            layer->depth[4 * (y * config.width + x) + 1] =
                 triangle_intersector.intersection.t;
-            config.depthImage[4 * (y * config.width + x) + 2] =
+            layer->depth[4 * (y * config.width + x) + 2] =
                 triangle_intersector.intersection.t;
-            config.depthImage[4 * (y * config.width + x) + 3] = 1.0f;
+            layer->depth[4 * (y * config.width + x) + 3] = 1.0f;
 
             nanort::float3 UV;
             if (gMesh.facevarying_uvs.size() > 0) {
@@ -802,8 +798,8 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               UV = Lerp3(uv0, uv1, uv2, triangle_intersector.intersection.u,
                          triangle_intersector.intersection.v);
 
-              config.texcoordImage[4 * (y * config.width + x) + 0] = UV[0];
-              config.texcoordImage[4 * (y * config.width + x) + 1] = UV[1];
+              layer->texcoord[4 * (y * config.width + x) + 0] = UV[0];
+              layer->texcoord[4 * (y * config.width + x) + 1] = UV[1];
             }
 
             // Fetch texture
@@ -834,68 +830,63 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             float NdotV = fabsf(vdot(N, dir));
 
             if (config.pass == 0) {
-              rgba[4 * (y * config.width + x) + 0] = NdotV * diffuse_col[0];
-              rgba[4 * (y * config.width + x) + 1] = NdotV * diffuse_col[1];
-              rgba[4 * (y * config.width + x) + 2] = NdotV * diffuse_col[2];
-              rgba[4 * (y * config.width + x) + 3] = 1.0f;
-              sample_counts[y * config.width + x] =
+              layer->rgba[4 * (y * config.width + x) + 0] =
+                  NdotV * diffuse_col[0];
+              layer->rgba[4 * (y * config.width + x) + 1] =
+                  NdotV * diffuse_col[1];
+              layer->rgba[4 * (y * config.width + x) + 2] =
+                  NdotV * diffuse_col[2];
+              layer->rgba[4 * (y * config.width + x) + 3] = 1.0f;
+              layer->sample_counts[y * config.width + x] =
                   1;  // Set 1 for the first pass
             } else {  // additive.
-              rgba[4 * (y * config.width + x) + 0] += NdotV * diffuse_col[0];
-              rgba[4 * (y * config.width + x) + 1] += NdotV * diffuse_col[1];
-              rgba[4 * (y * config.width + x) + 2] += NdotV * diffuse_col[2];
-              rgba[4 * (y * config.width + x) + 3] += 1.0f;
-              sample_counts[y * config.width + x]++;
+              layer->rgba[4 * (y * config.width + x) + 0] +=
+                  NdotV * diffuse_col[0];
+              layer->rgba[4 * (y * config.width + x) + 1] +=
+                  NdotV * diffuse_col[1];
+              layer->rgba[4 * (y * config.width + x) + 2] +=
+                  NdotV * diffuse_col[2];
+              layer->rgba[4 * (y * config.width + x) + 3] += 1.0f;
+              layer->sample_counts[y * config.width + x]++;
             }
 
           } else {
             {
               if (config.pass == 0) {
                 // clear pixel
-                rgba[4 * (y * config.width + x) + 0] = 0.0f;
-                rgba[4 * (y * config.width + x) + 1] = 0.0f;
-                rgba[4 * (y * config.width + x) + 2] = 0.0f;
-                rgba[4 * (y * config.width + x) + 3] = 0.0f;
-                aux_rgba[4 * (y * config.width + x) + 0] = 0.0f;
-                aux_rgba[4 * (y * config.width + x) + 1] = 0.0f;
-                aux_rgba[4 * (y * config.width + x) + 2] = 0.0f;
-                aux_rgba[4 * (y * config.width + x) + 3] = 0.0f;
-                sample_counts[y * config.width + x] =
+                layer->rgba[4 * (y * config.width + x) + 0] = 0.0f;
+                layer->rgba[4 * (y * config.width + x) + 1] = 0.0f;
+                layer->rgba[4 * (y * config.width + x) + 2] = 0.0f;
+                layer->rgba[4 * (y * config.width + x) + 3] = 0.0f;
+                layer->sample_counts[y * config.width + x] =
                     1;  // Set 1 for the first pass
               } else {
-                sample_counts[y * config.width + x]++;
+                layer->sample_counts[y * config.width + x]++;
               }
 
               // No super sampling
-              config.normalImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.normalImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.normalImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.normalImage[4 * (y * config.width + x) + 3] = 0.0f;
-              config.positionImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.positionImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.positionImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.positionImage[4 * (y * config.width + x) + 3] = 0.0f;
-              config.depthImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.depthImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.depthImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.depthImage[4 * (y * config.width + x) + 3] = 0.0f;
-              config.texcoordImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.texcoordImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.texcoordImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.texcoordImage[4 * (y * config.width + x) + 3] = 0.0f;
-              config.varycoordImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.varycoordImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.varycoordImage[4 * (y * config.width + x) + 3] = 0.0f;
+              layer->normal[4 * (y * config.width + x) + 0] = 0.0f;
+              layer->normal[4 * (y * config.width + x) + 1] = 0.0f;
+              layer->normal[4 * (y * config.width + x) + 2] = 0.0f;
+              layer->normal[4 * (y * config.width + x) + 3] = 0.0f;
+              layer->position[4 * (y * config.width + x) + 0] = 0.0f;
+              layer->position[4 * (y * config.width + x) + 1] = 0.0f;
+              layer->position[4 * (y * config.width + x) + 2] = 0.0f;
+              layer->position[4 * (y * config.width + x) + 3] = 0.0f;
+              layer->depth[4 * (y * config.width + x) + 0] = 0.0f;
+              layer->depth[4 * (y * config.width + x) + 1] = 0.0f;
+              layer->depth[4 * (y * config.width + x) + 2] = 0.0f;
+              layer->depth[4 * (y * config.width + x) + 3] = 0.0f;
+              layer->texcoord[4 * (y * config.width + x) + 0] = 0.0f;
+              layer->texcoord[4 * (y * config.width + x) + 1] = 0.0f;
+              layer->texcoord[4 * (y * config.width + x) + 2] = 0.0f;
+              layer->texcoord[4 * (y * config.width + x) + 3] = 0.0f;
+              layer->varycoord[4 * (y * config.width + x) + 0] = 0.0f;
+              layer->varycoord[4 * (y * config.width + x) + 1] = 0.0f;
+              layer->varycoord[4 * (y * config.width + x) + 2] = 0.0f;
+              layer->varycoord[4 * (y * config.width + x) + 3] = 0.0f;
             }
           }
-        }
-
-        for (int x = 0; x < config.width; x++) {
-          aux_rgba[4 * (y * config.width + x) + 0] = 0.0f;
-          aux_rgba[4 * (y * config.width + x) + 1] = 0.0f;
-          aux_rgba[4 * (y * config.width + x) + 2] = 0.0f;
-          aux_rgba[4 * (y * config.width + x) + 3] = 0.0f;
         }
       }
     }));
