@@ -104,6 +104,14 @@ struct Material {
   // int normal_texid;  // normal map
   // int alpha_texid;  // alpha map
 
+  float roughness;
+  float metallic;
+  float sheen;
+  float anisotropy;
+  float anisotropy_rotation;
+  float clearcoat_thickness;
+  float clearcoat_roughness;
+
   Material() {
     // ambient[0] = 0.0;
     // ambient[1] = 0.0;
@@ -128,6 +136,15 @@ struct Material {
     // bump_texid = -1;
     // normal_texid = -1;
     // alpha_texid = -1;
+    
+    roughness = 0.0;
+    metallic = 0.0;
+    sheen = 0.0;
+    anisotropy = 0.0;
+    anisotropy_rotation = 0.0;
+    clearcoat_thickness = 0.0;
+    clearcoat_roughness = 0.0;
+    
   }
 };
 

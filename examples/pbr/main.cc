@@ -79,12 +79,29 @@ struct UIParam {
   float depth_range[2];
   bool depth_show_pseudo_color;
 
+  // PBR
+  float roughness;
+  float metallic;              
+  float sheen;                
+  float clearcoat_thickness; 
+  float clearcoat_roughness; 
+  float anisotropy;          
+  float anisotropy_rotation;
+
   UIParam() {
     show_buffer_mode = SHOW_BUFFER_COLOR;
     position_scale = 1.0f;
     depth_range[0] = 10.0f;
     depth_range[1] = 20.0f;
     depth_show_pseudo_color = true;
+
+    roughness = 0.0;
+    metallic = 0.0;
+    sheen = 0.0;
+    clearcoat_thickness = 0.0;
+    clearcoat_roughness = 0.0;
+    anisotropy = 0.0;
+    anisotropy_rotation = 0.0;
   }
 };
 
