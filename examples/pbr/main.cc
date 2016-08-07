@@ -219,6 +219,7 @@ void keyboardCallback(int keycode, int state) {
     if (window) window->setRequestExit();
   } else if (keycode == ' ') {
     trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+    RequestRender();
   } else if (keycode == 9) {
     gTabPressed = (state == 1);
   } else if (keycode == B3G_SHIFT) {
