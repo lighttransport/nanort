@@ -86,7 +86,7 @@ typedef struct {
   std::vector<float>
       facevarying_vertex_colors;           /// [xyz] * 3(triangle) * num_faces
   std::vector<unsigned int> faces;         /// triangle x num_faces
-  std::vector<unsigned int> material_ids;  /// index x num_faces
+  std::vector<int> material_ids;            /// index x num_faces
 } Mesh;
 
 struct Material {
@@ -699,15 +699,6 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
           }
         }
 
-        // draw dash line to aux buffer for progress.
-        // for (int x = 0; x < config.width; x++) {
-        //  float c = (x / 8) % 2;
-        //  aux_rgba[4*(y*config.width+x)+0] = c;
-        //  aux_rgba[4*(y*config.width+x)+1] = c;
-        //  aux_rgba[4*(y*config.width+x)+2] = c;
-        //  aux_rgba[4*(y*config.width+x)+3] = 0.0f;
-        //}
-
         for (int x = 0; x < config.width; x++) {
           nanort::Ray ray;
           ray.org[0] = origin[0];
@@ -819,28 +810,31 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
               layer->texcoord[4 * (y * config.width + x) + 1] = UV[1];
             }
 
-            // Fetch texture
-            unsigned int material_id =
+            int material_id =
                 gMesh.material_ids[triangle_intersector.intersection.prim_id];
 
-            float diffuse_col[3];
-            int diffuse_texid = gMaterials[material_id].diffuse_texid;
-            if (diffuse_texid >= 0) {
-              FetchTexture(diffuse_texid, UV[0], UV[1], diffuse_col);
-            } else {
-              diffuse_col[0] = gMaterials[material_id].diffuse[0];
-              diffuse_col[1] = gMaterials[material_id].diffuse[1];
-              diffuse_col[2] = gMaterials[material_id].diffuse[2];
+            float diffuse_col[3] = {0.5f, 0.5f, 0.5f};
+            if ((material_id > 0) && (material_id < gMaterials.size())) {
+              int diffuse_texid = gMaterials[material_id].diffuse_texid;
+              if (diffuse_texid >= 0) {
+                FetchTexture(diffuse_texid, UV[0], UV[1], diffuse_col);
+              } else {
+                diffuse_col[0] = gMaterials[material_id].diffuse[0];
+                diffuse_col[1] = gMaterials[material_id].diffuse[1];
+                diffuse_col[2] = gMaterials[material_id].diffuse[2];
+              }
             }
 
-            float specular_col[3];
-            int specular_texid = gMaterials[material_id].specular_texid;
-            if (specular_texid >= 0) {
-              FetchTexture(specular_texid, UV[0], UV[1], specular_col);
-            } else {
-              specular_col[0] = gMaterials[material_id].specular[0];
-              specular_col[1] = gMaterials[material_id].specular[1];
-              specular_col[2] = gMaterials[material_id].specular[2];
+            float specular_col[3] = {0.0f, 0.0f, 0.0f};
+            if ((material_id > 0) && (material_id < gMaterials.size())) {
+              int specular_texid = gMaterials[material_id].specular_texid;
+              if (specular_texid >= 0) {
+                FetchTexture(specular_texid, UV[0], UV[1], specular_col);
+              } else {
+                specular_col[0] = gMaterials[material_id].specular[0];
+                specular_col[1] = gMaterials[material_id].specular[1];
+                specular_col[2] = gMaterials[material_id].specular[2];
+              }
             }
 
             // Simple shading
