@@ -33,6 +33,10 @@ THE SOFTWARE.
 #include "OpenGLWindow/X11OpenGLWindow.h"
 #endif
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 #ifdef _WIN32
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -81,11 +85,11 @@ struct UIParam {
 
   // PBR
   float roughness;
-  float metallic;              
-  float sheen;                
-  float clearcoat_thickness; 
-  float clearcoat_roughness; 
-  float anisotropy;          
+  float metallic;
+  float sheen;
+  float clearcoat_thickness;
+  float clearcoat_roughness;
+  float anisotropy;
   float anisotropy_rotation;
 
   UIParam() {
@@ -400,6 +404,10 @@ int main(int argc, char** argv) {
   if (argc > 1) {
     config_filename = argv[1];
   }
+
+#ifdef _OPENMP
+  printf("OpenMP cores = %d\n", omp_get_max_threads());
+#endif
 
   {
     bool ret =

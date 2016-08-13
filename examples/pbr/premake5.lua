@@ -7,6 +7,7 @@ sources = {
    "imgui.cpp",
    "imgui_draw.cpp",
    "imgui_impl_btgui.cpp",
+   "ltalloc.cc",
    }
 
 -- premake4.lua
@@ -38,6 +39,7 @@ solution "PBRSolution"
 
       if os.is("Windows") then
          defines { "NOMINMAX" }
+         buildoptions { "/openmp" } -- Assume vs2013 or later
          buildoptions { "/W4" } -- raise compile error level.
          files{
             "OpenGLWindow/Win32OpenGLWindow.cpp",

@@ -13,7 +13,7 @@ class Renderer {
   ~Renderer() {}
 
   /// Loads wavefront .obj mesh.
-  bool LoadObjMesh(const char* obj_filename, float scene_scale);
+  bool LoadObjMesh(const char* obj_filename, float scene_scale, int num_threads = -1, bool verbose = false);
 
   /// Builds bvh.
   bool BuildBVH();
