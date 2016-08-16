@@ -337,6 +337,12 @@ inline float vdot(float3 a, float3 b) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
+inline const float *get_vertex_addr(const float *p, const size_t idx,
+                                    const size_t stride_bytes) {
+  return reinterpret_cast<const float *>(
+      reinterpret_cast<const unsigned char *>(p) + idx * stride_bytes);
+}
+
 typedef struct {
   float org[3];      // must set
   float dir[3];      // must set
@@ -534,8 +540,13 @@ class BVHAccel {
 // Predefined SAH predicator for triangle.
 class TriangleSAHPred {
  public:
-  TriangleSAHPred(const float *vertices, const unsigned int *faces)
-      : axis_(0), pos_(0.0f), vertices_(vertices), faces_(faces) {}
+  TriangleSAHPred(const float *vertices, const unsigned int *faces,
+                  size_t vertex_stride_bytes = 12)
+      : axis_(0),
+        pos_(0.0f),
+        vertices_(vertices),
+        faces_(faces),
+        vertex_stride_bytes_(vertex_stride_bytes) {}
 
   void Set(int axis, float pos) const {
     axis_ = axis;
@@ -550,9 +561,9 @@ class TriangleSAHPred {
     unsigned int i1 = faces_[3 * i + 1];
     unsigned int i2 = faces_[3 * i + 2];
 
-    float3 p0(&vertices_[3 * i0]);
-    float3 p1(&vertices_[3 * i1]);
-    float3 p2(&vertices_[3 * i2]);
+    float3 p0(get_vertex_addr(vertices_, i0, vertex_stride_bytes_));
+    float3 p1(get_vertex_addr(vertices_, i1, vertex_stride_bytes_));
+    float3 p2(get_vertex_addr(vertices_, i2, vertex_stride_bytes_));
 
     float center = p0[axis] + p1[axis] + p2[axis];
 
@@ -564,35 +575,47 @@ class TriangleSAHPred {
   mutable float pos_;
   const float *vertices_;
   const unsigned int *faces_;
+  const size_t vertex_stride_bytes_;
 };
 
 // Predefined Triangle mesh geometry.
 class TriangleMesh {
  public:
-  TriangleMesh(const float *vertices, const unsigned int *faces)
-      : vertices_(vertices), faces_(faces) {}
+  TriangleMesh(const float *vertices, const unsigned int *faces,
+               const size_t vertex_stride_bytes = 12)
+      : vertices_(vertices),
+        faces_(faces),
+        vertex_stride_bytes_(vertex_stride_bytes) {}
 
   /// Compute bounding box for `prim_index`th triangle.
   /// This function is called for each primitive in BVH build.
   void BoundingBox(float3 *bmin, float3 *bmax, unsigned int prim_index) const {
-    (*bmin)[0] = vertices_[3 * faces_[3 * prim_index + 0] + 0];
-    (*bmin)[1] = vertices_[3 * faces_[3 * prim_index + 0] + 1];
-    (*bmin)[2] = vertices_[3 * faces_[3 * prim_index + 0] + 2];
-    (*bmax)[0] = vertices_[3 * faces_[3 * prim_index + 0] + 0];
-    (*bmax)[1] = vertices_[3 * faces_[3 * prim_index + 0] + 1];
-    (*bmax)[2] = vertices_[3 * faces_[3 * prim_index + 0] + 2];
+    (*bmin)[0] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
+                                 vertex_stride_bytes_)[0];
+    (*bmin)[1] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
+                                 vertex_stride_bytes_)[1];
+    (*bmin)[2] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
+                                 vertex_stride_bytes_)[2];
+    (*bmax)[0] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
+                                 vertex_stride_bytes_)[0];
+    (*bmax)[1] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
+                                 vertex_stride_bytes_)[1];
+    (*bmax)[2] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
+                                 vertex_stride_bytes_)[2];
 
     for (unsigned int i = 1; i < 3; i++) {
       for (unsigned int k = 0; k < 3; k++) {
         if ((*bmin)[static_cast<int>(k)] >
-            vertices_[3 * faces_[3 * prim_index + i] + k]) {
-          (*bmin)[static_cast<int>(k)] =
-              vertices_[3 * faces_[3 * prim_index + i] + k];
+            get_vertex_addr(vertices_, faces_[3 * prim_index + i],
+                            vertex_stride_bytes_)[k]) {
+          (*bmin)[static_cast<int>(k)] = get_vertex_addr(
+              vertices_, faces_[3 * prim_index + i], vertex_stride_bytes_)[k];
         }
         if ((*bmax)[static_cast<int>(k)] <
-            vertices_[3 * faces_[3 * prim_index + i] + k]) {
-          (*bmax)[static_cast<int>(k)] =
-              vertices_[3 * faces_[3 * prim_index + i] + k];
+            get_vertex_addr(vertices_, faces_[3 * prim_index + i],
+                            vertex_stride_bytes_)[k]) {
+          (*bmax)[static_cast<int>(k)] = get_vertex_addr(
+              vertices_, faces_[3 * prim_index + i], vertex_stride_bytes_)[k];
         }
       }
     }
@@ -600,6 +623,7 @@ class TriangleMesh {
 
   const float *vertices_;
   const unsigned int *faces_;
+  const size_t vertex_stride_bytes_;
 };
 
 struct TriangleIntersection {
@@ -614,8 +638,11 @@ struct TriangleIntersection {
 template <class I = TriangleIntersection>
 class TriangleIntersector {
  public:
-  TriangleIntersector(const float *vertices, const unsigned int *faces)
-      : vertices_(vertices), faces_(faces) {}
+  TriangleIntersector(const float *vertices, const unsigned int *faces,
+                      const size_t vertex_stride_bytes = 12)
+      : vertices_(vertices),
+        faces_(faces),
+        vertex_stride_bytes_(vertex_stride_bytes) {}
 
   // For Watertight Ray/Triangle Intersection.
   typedef struct {
@@ -641,9 +668,9 @@ class TriangleIntersector {
     const unsigned int f1 = faces_[3 * prim_index + 1];
     const unsigned int f2 = faces_[3 * prim_index + 2];
 
-    const float3 p0(&vertices_[3 * f0 + 0]);
-    const float3 p1(&vertices_[3 * f1 + 0]);
-    const float3 p2(&vertices_[3 * f2 + 0]);
+    const float3 p0(get_vertex_addr(vertices_, f0 + 0, vertex_stride_bytes_));
+    const float3 p1(get_vertex_addr(vertices_, f1 + 0, vertex_stride_bytes_));
+    const float3 p2(get_vertex_addr(vertices_, f2 + 0, vertex_stride_bytes_));
 
     const float3 A = p0 - ray_org_;
     const float3 B = p1 - ray_org_;
@@ -770,6 +797,7 @@ class TriangleIntersector {
 
   const float *vertices_;
   const unsigned int *faces_;
+  const size_t vertex_stride_bytes_;
   mutable float3 ray_org_;
   mutable RayCoeff ray_coeff_;
   mutable BVHTraceOptions trace_options_;
