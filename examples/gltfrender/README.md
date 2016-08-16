@@ -9,6 +9,11 @@ Right-handed coorinate, Y up, counter clock-wise normal definition.
 * premake5
 * OpenGL 2.x
 
+## Limiation
+
+* Geometry only.
+* Only single(first) primitive in .gltf.
+
 ## Build on Linux/MacOSX
 
     $ premake5 gmake
