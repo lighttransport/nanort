@@ -1,0 +1,8 @@
+{ "las_filename" : "input.las",
+  "width" : 800,
+  "height" : 800,
+  "eye" : [0, 0, 2],
+  "up" : [0, 1, 0],
+  "look_at" : [0, 0, 0],
+  "dummy" : 0
+}
