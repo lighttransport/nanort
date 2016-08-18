@@ -185,6 +185,7 @@ See `examples` directory for example renderer using `NanoRT`.
 * [x] [examples/vrcamera](examples/vrcamera) Stereo VR Camera 
 * [x] [examples/objrender](examples/objrender) Render wavefront .obj model using NanoRT.
 * [x] [examples/par_msquare](examples/par_msquare) Render heightfield by converting it to meshes using par_msquare(marching squares)
+* [x] [examples/las](examples/las) Visualize LiDAR(LAS) point cloud as sphere geometry.
 
 ### Custom geometry
 
