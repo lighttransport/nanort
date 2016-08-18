@@ -1,5 +1,7 @@
 # Simple Physically Based Rendering example with GUI support(bullet3's OpenGLWindow + ImGui).
 
+W.I.P.(No PBR yet...)
+
 ## Coordinates
 
 Right-handed coorinate, Y up, counter clock-wise normal definition.
