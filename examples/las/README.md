@@ -1,5 +1,7 @@
 # Simple LAS(LiDAR) particle rendering example with GUI support(bullet3's OpenGLWindow + ImGui).
 
+![](../../images/las.png)
+
 ## Coordinates
 
 Right-handed coorinate, Y up, counter clock-wise normal definition.
