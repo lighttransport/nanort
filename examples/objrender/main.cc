@@ -264,34 +264,42 @@ void SaveImage(const char* filename, const float* rgb, int width, int height) {
   image_ptr[1] = &(images[1].at(0)); // G
   image_ptr[2] = &(images[0].at(0)); // R
 
+  EXRHeader header;
+  InitEXRHeader(&header);
+
   EXRImage image;
   InitEXRImage(&image);
 
-  image.num_channels = 3;
-  const char* channel_names[] = {"B", "G", "R"}; // must be BGR order.
+  header.num_channels = 3;
+  header.channels = (EXRChannelInfo *)malloc(sizeof(EXRChannelInfo) * header.num_channels);
+  // Must be (A)BGR order, since most of EXR viewers expect this channel order.
+  strncpy(header.channels[0].name, "B", 255); header.channels[0].name[strlen("B")] = '\0';
+  strncpy(header.channels[1].name, "G", 255); header.channels[1].name[strlen("G")] = '\0';
+  strncpy(header.channels[2].name, "R", 255); header.channels[2].name[strlen("R")] = '\0';
 
-  image.channel_names = channel_names;
+  header.pixel_types = (int *)malloc(sizeof(int) * header.num_channels);
+  header.requested_pixel_types = (int *)malloc(sizeof(int) * header.num_channels);
+  for (int i = 0; i < header.num_channels; i++) {
+    header.pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT; // pixel type of input image
+    header.requested_pixel_types[i] = TINYEXR_PIXELTYPE_HALF; // pixel type of output image to be stored in .EXR
+  }
+
+  image.num_channels = header.num_channels;
   image.images = (unsigned char**)image_ptr;
   image.width = width;
   image.height = height;
 
-  image.pixel_types = (int *)malloc(sizeof(int) * image.num_channels);
-  image.requested_pixel_types = (int *)malloc(sizeof(int) * image.num_channels);
-  for (int i = 0; i < image.num_channels; i++) {
-    image.pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT; // pixel type of input image
-    image.requested_pixel_types[i] = TINYEXR_PIXELTYPE_HALF; // pixel type of output image to be stored in .EXR
-  }
-
   const char* err;
-  int fail = SaveMultiChannelEXRToFile(&image, filename, &err);
+  int fail = SaveEXRImageToFile(&image, &header, filename, &err);
   if (fail) {
     fprintf(stderr, "Error: %s\n", err);
   } else {
     printf("Saved image to [ %s ]\n", filename);
   }
 
-  free(image.pixel_types);
-  free(image.requested_pixel_types);
+  free(header.requested_pixel_types);
+  free(header.channels);
+  free(header.pixel_types);
 
 }
 
@@ -572,6 +580,7 @@ int main(int argc, char** argv)
  
   std::vector<float> rgb(width * height * 3, 0.0f);
 
+  t.start();
 
   // Shoot rays.
   #ifdef _OPENMP
@@ -642,6 +651,9 @@ int main(int argc, char** argv)
 
     }
   }
+
+  t.end();
+  printf("Render %f secs\n", t.msec() / 1000.0);
 
   // Save image.
   SaveImage("render.exr", &rgb.at(0), width, height);
