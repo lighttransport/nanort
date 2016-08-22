@@ -1,3 +1,6 @@
+#include <iostream>
+#include <algorithm>
+
 #define NOMINMAX
 #include "tiny_obj_loader.h"
 
@@ -5,9 +8,6 @@
 #include "tinyexr.h"
 
 #include "nanort.h"
-
-#include <iostream>
-#include <algorithm>
 
 #define USE_MULTIHIT_RAY_TRAVERSAL (0)
 
