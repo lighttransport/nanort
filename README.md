@@ -8,13 +8,12 @@ Path tracing example contributed by https://github.com/daseyb
 
 `NanoRT` is simple single header only ray tracing kernel.
 
-`NanoRT` BVH traversal is based on mallie renderer: https://github.com/lighttransport/mallie
-
 ## Features
 
 * Portable C++
   * Only use C++-03 features.
   * (Some example applications use C++-11 feature, though)
+  * There is experimental C89 port of NanoRT in `c89` branch https://github.com/lighttransport/nanort/tree/c89
 * BVH spatial data structure for efficient ray intersection finding.
   * Should be able to handle ~10M triangles scene efficiently with moderate memory consumption
 * Custom geometry & intersection
@@ -217,6 +216,8 @@ PR are always welcome!
 
 * [ ] Optimize ray tracing kernel
   * [ ] Efficient Ray Tracing Kernels for Modern CPU Architectures http://jcgt.org/published/0004/04/05/
+  * [ ] ARM NEON SIMD
+  * [ ] Intel SSE SIMD
 * [ ] Scene graph support.
   * [ ] Instancing support.
 * [ ] Fix multi-hit ray traversal.
@@ -227,9 +228,11 @@ PR are always welcome!
   * [x] Double sided on/off.
   * [ ] Ray offset.
   * [ ] Avoid self-intersection.
-  * [x] Custom intersection filter.
+  * [x] Custom intersection filter through C++ template.
 * [ ] Fast BVH build
   * [ ] Bonsai: Rapid Bounding Volume Hierarchy Generation using Mini Trees http://jcgt.org/published/0004/03/02/
+* [ ] Efficient BVH
+  * [ ] Spatial split BVH
 * [ ] Motion blur
 * [ ] Accurate ray curve intersection
 * [ ] Example bi-directional path tracing renderer.
