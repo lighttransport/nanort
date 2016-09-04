@@ -105,8 +105,8 @@ class CylinderPred {
     int axis = axis_;
     float pos = pos_;
 
-    nanort::float3 p0(&vertices_[3 * (2 * i + 0)]);
-    nanort::float3 p1(&vertices_[3 * (2 * i + 1)]);
+    nanort::real3<float> p0(&vertices_[3 * (2 * i + 0)]);
+    nanort::real3<float> p1(&vertices_[3 * (2 * i + 1)]);
 
     float center = (p0[axis] + p1[axis]) / 2.0f;
 
@@ -128,7 +128,7 @@ class CylinderGeometry {
 
   /// Compute bounding box for `prim_index`th cylinder.
   /// This function is called for each primitive in BVH build.
-  void BoundingBox(nanort::float3 *bmin, nanort::float3 *bmax,
+  void BoundingBox(nanort::real3<float> *bmin, nanort::real3<float> *bmax,
                    unsigned int prim_index) const {
     (*bmin)[0] =
         vertices_[3 * (2 * prim_index + 0) + 0] - radiuss_[2 * prim_index + 0];
@@ -165,8 +165,8 @@ class CylinderGeometry {
 
   const float *vertices_;
   const float *radiuss_;
-  mutable nanort::float3 ray_org_;
-  mutable nanort::float3 ray_dir_;
+  mutable nanort::real3<float> ray_org_;
+  mutable nanort::real3<float> ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 };
 
@@ -176,7 +176,7 @@ class CylinderIntersection {
 
   float u;
   float v;
-  nanort::float3 normal;
+  nanort::real3<float> normal;
 
   // Required member variables.
   float t;
@@ -201,7 +201,7 @@ class CylinderIntersector {
     }
     const float kEPS = 1.0e-6f;
 
-    nanort::float3 p0, p1;
+    nanort::real3<float> p0, p1;
     p0[0] = vertices_[3 * (2 * prim_index + 0) + 0];
     p0[1] = vertices_[3 * (2 * prim_index + 0) + 1];
     p0[2] = vertices_[3 * (2 * prim_index + 0) + 2];
@@ -214,10 +214,10 @@ class CylinderIntersector {
 
     float tmax = (*t_inout);
     float rr = std::max<float>(r0, r1);
-    nanort::float3 ORG = ray_org_;
-    nanort::float3 n = ray_dir_;
-    nanort::float3 d = p1 - p0;
-    nanort::float3 m = ORG - p0;
+    nanort::real3<float> ORG = ray_org_;
+    nanort::real3<float> n = ray_dir_;
+    nanort::real3<float> d = p1 - p0;
+    nanort::real3<float> m = ORG - p0;
 
     float md = vdot(m, d);
     float nd = vdot(n, d);
@@ -227,9 +227,9 @@ class CylinderIntersector {
     float capT = std::numeric_limits<float>::max();  // far
 
     if (test_cap_) {
-      nanort::float3 dN0 = vnormalize(p0 - p1);
-      nanort::float3 dN1 = vneg(dN0);
-      nanort::float3 rd = vnormalize(ray_dir_);
+      nanort::real3<float> dN0 = vnormalize(p0 - p1);
+      nanort::real3<float> dN1 = vneg(dN0);
+      nanort::real3<float> rd = vnormalize(ray_dir_);
 
       if (fabs(vdot(ray_dir_, dN0)) > kEPS) {
         // test with 2 planes
@@ -239,8 +239,8 @@ class CylinderIntersector {
         float p0T = -(vdot(ray_org_, dN0) + p0D) / vdot(rd, dN0);
         float p1T = -(vdot(ray_org_, dN1) + p1D) / vdot(rd, dN1);
 
-        nanort::float3 q0 = ray_org_ + p0T * rd;
-        nanort::float3 q1 = ray_org_ + p1T * rd;
+        nanort::real3<float> q0 = ray_org_ + p0T * rd;
+        nanort::real3<float> q1 = ray_org_ + p1T * rd;
 
         float qp0Sqr = vdot(q0 - p0, q0 - p0);
         float qp1Sqr = vdot(q1 - p1, q1 - p1);
@@ -310,7 +310,7 @@ class CylinderIntersector {
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
   /// This function is called only once in BVH traversal.
-  void PrepareTraversal(const nanort::Ray &ray,
+  void PrepareTraversal(const nanort::Ray<float> &ray,
                         const nanort::BVHTraceOptions &trace_options) const {
     ray_org_[0] = ray.org[0];
     ray_org_[1] = ray.org[1];
@@ -326,11 +326,11 @@ class CylinderIntersector {
   /// Post BVH traversal stuff(e.g. compute intersection point information)
   /// This function is called only once in BVH traversal.
   /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray &ray, bool hit) const {
+  void PostTraversal(const nanort::Ray<float> &ray, bool hit) const {
     if (hit) {
       float v = intersection.v;
       unsigned int index = intersection.prim_id;
-      nanort::float3 p0, p1;
+      nanort::real3<float> p0, p1;
 
       p0[0] = vertices_[3 * (2 * index + 0) + 0];
       p0[1] = vertices_[3 * (2 * index + 0) + 1];
@@ -339,12 +339,13 @@ class CylinderIntersector {
       p1[1] = vertices_[3 * (2 * index + 1) + 1];
       p1[2] = vertices_[3 * (2 * index + 1) + 2];
 
-      nanort::float3 center = p0 + nanort::float3(v, v, v) * (p1 - p0);
-      nanort::float3 position = ray_org_ + intersection.t * ray_dir_;
+      nanort::real3<float> center =
+          p0 + nanort::real3<float>(v, v, v) * (p1 - p0);
+      nanort::real3<float> position = ray_org_ + intersection.t * ray_dir_;
 
-      nanort::float3 n;
+      nanort::real3<float> n;
       if (hit_cap_) {
-        nanort::float3 c = 0.5 * (p1 - p0) + p0;
+        nanort::real3<float> c = 0.5f * (p1 - p0) + p0;
         n = vnormalize(p1 - p0);
 
         if (vdot((position - c), n) > 0.0) {
@@ -367,8 +368,8 @@ class CylinderIntersector {
   const float *vertices_;
   const float *radiuss_;
   const bool test_cap_;
-  mutable nanort::float3 ray_org_;
-  mutable nanort::float3 ray_dir_;
+  mutable nanort::real3<float> ray_org_;
+  mutable nanort::real3<float> ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 
   mutable I intersection;
@@ -427,7 +428,7 @@ int main(int argc, char **argv) {
 
   size_t n = atoi(argv[1]);
 
-  nanort::BVHBuildOptions options;  // Use default option
+  nanort::BVHBuildOptions<float> options;  // Use default option
   options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -468,12 +469,12 @@ int main(int argc, char **argv) {
     for (int x = 0; x < width; x++) {
       // Simple camera. change eye pos and direction fit to your scene.
 
-      nanort::Ray ray;
+      nanort::Ray<float> ray;
       ray.org[0] = 0.0f;
       ray.org[1] = 0.0f;
       ray.org[2] = 4.0f;
 
-      nanort::float3 dir;
+      nanort::real3<float> dir;
       dir[0] = (x / (float)width) - 0.5f;
       dir[1] = (y / (float)height) - 0.5f;
       dir[2] = -1.0f;

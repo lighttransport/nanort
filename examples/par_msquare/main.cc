@@ -130,9 +130,11 @@ private:
 #endif
 };
 
-void calcNormal(nanort::float3 &N, nanort::float3 v0, nanort::float3 v1, nanort::float3 v2) {
-  nanort::float3 v10 = v1 - v0;
-  nanort::float3 v20 = v2 - v0;
+typedef nanort::real3<float> float3;
+
+void calcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
+  float3 v10 = v1 - v0;
+  float3 v20 = v2 - v0;
 
   N = vcross(v20, v10);
   N = vnormalize(N);
@@ -163,12 +165,12 @@ void SaveImagePNG(const char *filename, const float *rgb, int width,
   }
 }
 
-void BuildCameraFrame(nanort::float3 &corner, nanort::float3 &du, nanort::float3 &dv, const nanort::float3 &eye,
-                      const nanort::float3 &lookat, const nanort::float3 &up, int width,
+void BuildCameraFrame(float3 &corner, float3 &du, float3 &dv, const float3 &eye,
+                      const float3 &lookat, const float3 &up, int width,
                       int height, float fov) {
   float flen =
       (0.5f * (double)height / tanf(0.5f * (double)(fov * M_PI / 180.0f)));
-  nanort::float3 look;
+  float3 look;
   look = lookat - eye;
   du = vcross(look, up);
   du = vnormalize(du);
@@ -179,7 +181,7 @@ void BuildCameraFrame(nanort::float3 &corner, nanort::float3 &du, nanort::float3
   look = vnormalize(look);
   look = flen * look + eye;
 
-  corner = look - 0.5f * (width * du + height * dv);
+  corner = look - 0.5f * ((float)width * du + (float)height * dv);
 }
 
 typedef struct {
@@ -259,7 +261,7 @@ bool BuildMSQ(Mesh &meshOut, int &imgW, int &imgH, const char *filename) {
   return true;
 }
 
-void OrthoBasis(nanort::float3 basis[3], const nanort::float3 &n) {
+void OrthoBasis(float3 basis[3], const float3 &n) {
   basis[2] = n;
   basis[1][0] = 0.0;
   basis[1][1] = 0.0;
@@ -282,13 +284,13 @@ void OrthoBasis(nanort::float3 basis[3], const nanort::float3 &n) {
   basis[1] = vnormalize(basis[1]);
 }
 
-nanort::float3 ShadeAO(const nanort::float3 &P, const nanort::float3 &N, pcg32_state_t *rng,
-               nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<nanort::TriangleIntersection> > &accel, const nanort::TriangleMesh& triangleMesh)
+float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
+               nanort::BVHAccel<nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<>, float> &accel, const nanort::TriangleMesh<float>& triangleMesh)
 {
   const int ntheta = 16;
   const int nphi = 32;
 
-  nanort::float3 basis[3];
+  float3 basis[3];
   OrthoBasis(basis, N);
 
   float occlusion = 0.0f;
@@ -309,7 +311,7 @@ nanort::float3 ShadeAO(const nanort::float3 &P, const nanort::float3 &N, pcg32_s
       double ry = x * basis[0].y() + y * basis[1].y() + z * basis[2].y();
       double rz = x * basis[0].z() + y * basis[1].z() + z * basis[2].z();
 
-      nanort::Ray ray;
+      nanort::Ray<float> ray;
 
       ray.org[0] = P[0] + rx * 0.0001f;
       ray.org[1] = P[1] + ry * 0.0001f;
@@ -320,7 +322,7 @@ nanort::float3 ShadeAO(const nanort::float3 &P, const nanort::float3 &N, pcg32_s
       ray.min_t = 0.0f;
       ray.max_t = std::numeric_limits<float>::max();
 
-      nanort::TriangleIntersector<nanort::TriangleIntersection> isecter(triangleMesh.vertices_, triangleMesh.faces_);
+      nanort::TriangleIntersector<float> isecter(triangleMesh.vertices_, triangleMesh.faces_);
       nanort::BVHTraceOptions traceOptions;
       bool hit = accel.Traverse(ray, traceOptions, isecter);
       if (hit) {
@@ -331,7 +333,7 @@ nanort::float3 ShadeAO(const nanort::float3 &P, const nanort::float3 &N, pcg32_s
 
   occlusion = (ntheta * nphi - occlusion) / (float)(ntheta * nphi);
 
-  nanort::float3 col;
+  float3 col;
   col[0] = occlusion;
   col[1] = occlusion;
   col[2] = occlusion;
@@ -356,7 +358,7 @@ int main(int argc, char **argv) {
   bool ret = BuildMSQ(mesh, imgW, imgH, argv[1]);
   assert(ret);
 
-  nanort::BVHBuildOptions options; // Use default option
+  nanort::BVHBuildOptions<float> options; // Use default option
   options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -366,9 +368,9 @@ int main(int argc, char **argv) {
   timerutil t;
   t.start();
 
-  nanort::TriangleMesh triangleMesh(&mesh.vertices.at(0), &mesh.faces.at(0));
-  nanort::TriangleSAHPred trianglePred(&mesh.vertices.at(0), &mesh.faces.at(0));
-  nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<nanort::TriangleIntersection> > accel;
+  nanort::TriangleMesh<float> triangleMesh(&mesh.vertices.at(0), &mesh.faces.at(0));
+  nanort::TriangleSAHPred<float> trianglePred(&mesh.vertices.at(0), &mesh.faces.at(0));
+  nanort::BVHAccel<nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<>, float> accel;
   ret = accel.Build(mesh.faces.size() / 3, options, triangleMesh, trianglePred);
   assert(ret);
 
@@ -388,7 +390,7 @@ int main(int argc, char **argv) {
 
   std::vector<float> rgb(width * height * 3, 0.0f);
 
-  nanort::float3 eye, lookat, up;
+  float3 eye, lookat, up;
   eye[0] = 5.0f;
   eye[1] = 12.5f;
   eye[2] = 20.0f;
@@ -401,7 +403,7 @@ int main(int argc, char **argv) {
   up[1] = 1.0f;
   up[2] = 0.0f;
 
-  nanort::float3 corner, du, dv;
+  float3 corner, du, dv;
   BuildCameraFrame(corner, du, dv, eye, lookat, up, width, height, 45.0f);
   printf("corner = %f, %f, %f\n", corner[0], corner[1], corner[2]);
 
@@ -454,12 +456,12 @@ int main(int argc, char **argv) {
 
           // Simple camera. change eye pos and direction fit to .obj model.
 
-          nanort::Ray ray;
+          nanort::Ray<float> ray;
           ray.org[0] = eye[0];
           ray.org[1] = eye[1];
           ray.org[2] = eye[2];
 
-          nanort::float3 dir;
+          float3 dir;
           float pu = x + 0.5f;
           float pv = y + 0.5f;
 
@@ -477,14 +479,14 @@ int main(int argc, char **argv) {
           bool hit = accel.Traverse(ray, traceOptions, isector);
           if (hit) {
             // Write your shader here.
-            nanort::float3 P;
-            nanort::float3 N;
+            float3 P;
+            float3 N;
             unsigned int fid = isector.intersection.prim_id;
             unsigned int f0, f1, f2;
             f0 = mesh.faces[3 * fid + 0];
             f1 = mesh.faces[3 * fid + 1];
             f2 = mesh.faces[3 * fid + 2];
-            nanort::float3 v0, v1, v2;
+            float3 v0, v1, v2;
             v0[0] = mesh.vertices[3 * f0 + 0];
             v0[1] = mesh.vertices[3 * f0 + 1];
             v0[2] = mesh.vertices[3 * f0 + 2];
@@ -500,13 +502,13 @@ int main(int argc, char **argv) {
             P[1] = ray.org[1] + isector.GetT() * ray.dir[1];
             P[2] = ray.org[2] + isector.GetT() * ray.dir[2];
 
-            nanort::float3 aoCol = ShadeAO(P, N, &rng, accel, triangleMesh);
+            float3 aoCol = ShadeAO(P, N, &rng, accel, triangleMesh);
             if (fid < (unsigned int)mesh.facegroups[1]) {
                 // Ocean
-                aoCol = aoCol.x() * nanort::float3(0,0.25,0.5);
+                aoCol = aoCol.x() * float3(0,0.25,0.5);
             } else {
                 // Land
-                aoCol = aoCol.x() * nanort::float3(0,0.9,0.5);
+                aoCol = aoCol.x() * float3(0,0.9,0.5);
             }
             rgb[3 * (y * width + x) + 0] = aoCol[0];
             rgb[3 * (y * width + x) + 1] = aoCol[1];
