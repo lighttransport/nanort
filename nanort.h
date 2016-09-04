@@ -449,7 +449,7 @@ class BVHTraceOptions {
   }
 };
 
-template <typename T = float>
+template <typename T>
 class BBox {
  public:
   real3<T> bmin;
@@ -555,8 +555,9 @@ class BVHAccel {
 template <typename T = float>
 class TriangleSAHPred {
  public:
-  TriangleSAHPred(const T *vertices, const unsigned int *faces,
-                  size_t vertex_stride_bytes = 12)
+  TriangleSAHPred(
+      const T *vertices, const unsigned int *faces,
+      size_t vertex_stride_bytes)  // e.g. 12 for sizeof(float) * XYZ
       : axis_(0),
         pos_(0.0f),
         vertices_(vertices),
@@ -597,8 +598,9 @@ class TriangleSAHPred {
 template <typename T = float>
 class TriangleMesh {
  public:
-  TriangleMesh(const T *vertices, const unsigned int *faces,
-               const size_t vertex_stride_bytes = 12)
+  TriangleMesh(
+      const T *vertices, const unsigned int *faces,
+      const size_t vertex_stride_bytes)  // e.g. 12 for sizeof(float) * XYZ
       : vertices_(vertices),
         faces_(faces),
         vertex_stride_bytes_(vertex_stride_bytes) {}
@@ -658,7 +660,10 @@ template <typename T = float, class I = TriangleIntersection<T> >
 class TriangleIntersector {
  public:
   TriangleIntersector(const T *vertices, const unsigned int *faces,
-                      const size_t vertex_stride_bytes = 12)
+                      const size_t vertex_stride_bytes)  // e.g.
+                                                         // vertex_stride_bytes
+                                                         // = 12 = sizeof(float)
+                                                         // * 3
       : vertices_(vertices),
         faces_(faces),
         vertex_stride_bytes_(vertex_stride_bytes) {}
@@ -1535,7 +1540,8 @@ bool BVHAccel<P, Pred, I, T>::Build(unsigned int num_primitives,
     assert(shallow_node_infos_.size() > 0);
 
     // Build deeper tree in parallel
-    std::vector<std::vector<BVHNode<T> > > local_nodes(shallow_node_infos_.size());
+    std::vector<std::vector<BVHNode<T> > > local_nodes(
+        shallow_node_infos_.size());
     std::vector<BVHBuildStatistics> local_stats(shallow_node_infos_.size());
 
 #pragma omp parallel for

@@ -545,8 +545,8 @@ int main(int argc, char** argv)
   timerutil t;
   t.start();
 
-  nanort::TriangleMesh<float> triangle_mesh(mesh.vertices, mesh.faces);
-  nanort::TriangleSAHPred<float> triangle_pred(mesh.vertices, mesh.faces);
+  nanort::TriangleMesh<float> triangle_mesh(mesh.vertices, mesh.faces, sizeof(float) * 3);
+  nanort::TriangleSAHPred<float> triangle_pred(mesh.vertices, mesh.faces, sizeof(float) * 3);
 
   printf("num_triangles = %lu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
@@ -615,7 +615,7 @@ int main(int argc, char** argv)
       ray.max_t = kFar;
 
 #if !USE_MULTIHIT_RAY_TRAVERSAL 
-      nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces);
+      nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces, sizeof(float) * 3);
       nanort::BVHTraceOptions trace_options;
       bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
       if (hit) {

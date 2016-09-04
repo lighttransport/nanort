@@ -96,72 +96,72 @@ private:
 #endif
 };
 
-struct float3 {
-  float3() {}
-  float3(float xx, float yy, float zz) {
+struct double3 {
+  double3() {}
+  double3(double xx, double yy, double zz) {
     x = xx;
     y = yy;
     z = zz;
   }
-  float3(const float *p) {
+  double3(const double *p) {
     x = p[0];
     y = p[1];
     z = p[2];
   }
 
-  float3 operator*(float f) const { return float3(x * f, y * f, z * f); }
-  float3 operator-(const float3 &f2) const {
-    return float3(x - f2.x, y - f2.y, z - f2.z);
+  double3 operator*(double f) const { return double3(x * f, y * f, z * f); }
+  double3 operator-(const double3 &f2) const {
+    return double3(x - f2.x, y - f2.y, z - f2.z);
   }
-  float3 operator*(const float3 &f2) const {
-    return float3(x * f2.x, y * f2.y, z * f2.z);
+  double3 operator*(const double3 &f2) const {
+    return double3(x * f2.x, y * f2.y, z * f2.z);
   }
-  float3 operator+(const float3 &f2) const {
-    return float3(x + f2.x, y + f2.y, z + f2.z);
+  double3 operator+(const double3 &f2) const {
+    return double3(x + f2.x, y + f2.y, z + f2.z);
   }
-  float3 &operator+=(const float3 &f2) {
+  double3 &operator+=(const double3 &f2) {
     x += f2.x;
     y += f2.y;
     z += f2.z;
     return (*this);
   }
-  float3 operator/(const float3 &f2) const {
-    return float3(x / f2.x, y / f2.y, z / f2.z);
+  double3 operator/(const double3 &f2) const {
+    return double3(x / f2.x, y / f2.y, z / f2.z);
   }
-  float operator[](int i) const { return (&x)[i]; }
-  float &operator[](int i) { return (&x)[i]; }
+  double operator[](int i) const { return (&x)[i]; }
+  double &operator[](int i) { return (&x)[i]; }
 
-  float3 neg() { return float3(-x, -y, -z); }
+  double3 neg() { return double3(-x, -y, -z); }
 
-  float length() { return sqrtf(x * x + y * y + z * z); }
+  double length() { return sqrtf(x * x + y * y + z * z); }
 
   void normalize() {
-    float len = length();
+    double len = length();
     if (fabs(len) > 1.0e-6) {
-      float inv_len = 1.0 / len;
+      double inv_len = 1.0 / len;
       x *= inv_len;
       y *= inv_len;
       z *= inv_len;
     }
   }
 
-  float x, y, z;
-  // float pad;  // for alignment
+  double x, y, z;
+  // double pad;  // for alignment
 };
 
-//inline float3 operator*(float f, const float3 &v) {
-//  return float3(v.x * f, v.y * f, v.z * f);
+//inline double3 operator*(double f, const double3 &v) {
+//  return double3(v.x * f, v.y * f, v.z * f);
 //}
 
-inline float3 vcross(float3 a, float3 b) {
-  float3 c;
+inline double3 vcross(double3 a, double3 b) {
+  double3 c;
   c[0] = a[1] * b[2] - a[2] * b[1];
   c[1] = a[2] * b[0] - a[0] * b[2];
   c[2] = a[0] * b[1] - a[1] * b[0];
   return c;
 }
 
-//inline float vdot(float3 a, float3 b) {
+//inline double vdot(double3 a, double3 b) {
 //  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 //}
 
@@ -169,12 +169,12 @@ inline float3 vcross(float3 a, float3 b) {
 typedef struct {
   size_t num_vertices;
   size_t num_faces;
-  float *vertices;              /// [xyz] * num_vertices
-  float *facevarying_normals;   /// [xyz] * 3(triangle) * num_faces
-  float *facevarying_tangents;  /// [xyz] * 3(triangle) * num_faces
-  float *facevarying_binormals; /// [xyz] * 3(triangle) * num_faces
-  float *facevarying_uvs;       /// [xyz] * 3(triangle) * num_faces
-  float *facevarying_vertex_colors;   /// [xyz] * 3(triangle) * num_faces
+  double *vertices;              /// [xyz] * num_vertices
+  double *facevarying_normals;   /// [xyz] * 3(triangle) * num_faces
+  double *facevarying_tangents;  /// [xyz] * 3(triangle) * num_faces
+  double *facevarying_binormals; /// [xyz] * 3(triangle) * num_faces
+  double *facevarying_uvs;       /// [xyz] * 3(triangle) * num_faces
+  double *facevarying_vertex_colors;   /// [xyz] * 3(triangle) * num_faces
   unsigned int *faces;         /// triangle x num_faces
   unsigned int *material_ids;   /// index x num_faces
 } Mesh;
@@ -215,10 +215,10 @@ struct Material {
   }
 };
 
-void calcNormal(float3& N, float3 v0, float3 v1, float3 v2)
+void calcNormal(double3& N, double3 v0, double3 v1, double3 v2)
 {
-  float3 v10 = v1 - v0;
-  float3 v20 = v2 - v0;
+  double3 v10 = v1 - v0;
+  double3 v20 = v2 - v0;
 
   N = vcross(v20, v10);
   N.normalize();
@@ -264,42 +264,34 @@ void SaveImage(const char* filename, const float* rgb, int width, int height) {
   image_ptr[1] = &(images[1].at(0)); // G
   image_ptr[2] = &(images[0].at(0)); // R
 
-  EXRHeader header;
-  InitEXRHeader(&header);
-
   EXRImage image;
   InitEXRImage(&image);
 
-  header.num_channels = 3;
-  header.channels = (EXRChannelInfo *)malloc(sizeof(EXRChannelInfo) * header.num_channels);
-  // Must be (A)BGR order, since most of EXR viewers expect this channel order.
-  strncpy(header.channels[0].name, "B", 255); header.channels[0].name[strlen("B")] = '\0';
-  strncpy(header.channels[1].name, "G", 255); header.channels[1].name[strlen("G")] = '\0';
-  strncpy(header.channels[2].name, "R", 255); header.channels[2].name[strlen("R")] = '\0';
+  image.num_channels = 3;
+  const char* channel_names[] = {"B", "G", "R"}; // must be BGR order.
 
-  header.pixel_types = (int *)malloc(sizeof(int) * header.num_channels);
-  header.requested_pixel_types = (int *)malloc(sizeof(int) * header.num_channels);
-  for (int i = 0; i < header.num_channels; i++) {
-    header.pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT; // pixel type of input image
-    header.requested_pixel_types[i] = TINYEXR_PIXELTYPE_HALF; // pixel type of output image to be stored in .EXR
-  }
-
-  image.num_channels = header.num_channels;
+  image.channel_names = channel_names;
   image.images = (unsigned char**)image_ptr;
   image.width = width;
   image.height = height;
 
+  image.pixel_types = (int *)malloc(sizeof(int) * image.num_channels);
+  image.requested_pixel_types = (int *)malloc(sizeof(int) * image.num_channels);
+  for (int i = 0; i < image.num_channels; i++) {
+    image.pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT; // pixel type of input image
+    image.requested_pixel_types[i] = TINYEXR_PIXELTYPE_HALF; // pixel type of output image to be stored in .EXR
+  }
+
   const char* err;
-  int fail = SaveEXRImageToFile(&image, &header, filename, &err);
+  int fail = SaveMultiChannelEXRToFile(&image, filename, &err);
   if (fail) {
     fprintf(stderr, "Error: %s\n", err);
   } else {
     printf("Saved image to [ %s ]\n", filename);
   }
 
-  free(header.requested_pixel_types);
-  free(header.channels);
-  free(header.pixel_types);
+  free(image.pixel_types);
+  free(image.requested_pixel_types);
 
 }
 
@@ -339,13 +331,13 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
   // Shape -> Mesh
   mesh.num_faces = num_faces;
   mesh.num_vertices = num_vertices;
-  mesh.vertices = new float[num_vertices * 3];
+  mesh.vertices = new double[num_vertices * 3];
   mesh.faces = new unsigned int[num_faces * 3];
   mesh.material_ids = new unsigned int[num_faces];
   memset(mesh.material_ids, 0, sizeof(int) * num_faces);
-  mesh.facevarying_normals = new float[num_faces * 3 * 3];
-  mesh.facevarying_uvs = new float[num_faces * 3 * 2];
-  memset(mesh.facevarying_uvs, 0, sizeof(float) * 2 * 3 * num_faces);
+  mesh.facevarying_normals = new double[num_faces * 3 * 3];
+  mesh.facevarying_uvs = new double[num_faces * 3 * 2];
+  memset(mesh.facevarying_uvs, 0, sizeof(double) * 2 * 3 * num_faces);
 
   // @todo {}
   mesh.facevarying_tangents = NULL;
@@ -387,7 +379,7 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
         f1 = shapes[i].mesh.indices[3*f+1];
         f2 = shapes[i].mesh.indices[3*f+2];
 
-        float3 n0, n1, n2;
+        double3 n0, n1, n2;
 
         n0[0] = shapes[i].mesh.normals[3 * f0 + 0];
         n0[1] = shapes[i].mesh.normals[3 * f0 + 1];
@@ -422,7 +414,7 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
         f1 = shapes[i].mesh.indices[3*f+1];
         f2 = shapes[i].mesh.indices[3*f+2];
 
-        float3 v0, v1, v2;
+        double3 v0, v1, v2;
 
         v0[0] = shapes[i].mesh.positions[3 * f0 + 0];
         v0[1] = shapes[i].mesh.positions[3 * f0 + 1];
@@ -436,7 +428,7 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
         v2[1] = shapes[i].mesh.positions[3 * f2 + 1];
         v2[2] = shapes[i].mesh.positions[3 * f2 + 2];
 
-        float3 N;
+        double3 N;
         calcNormal(N, v0, v1, v2);
 
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] = N[0];
@@ -463,7 +455,7 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
         f1 = shapes[i].mesh.indices[3*f+1];
         f2 = shapes[i].mesh.indices[3*f+2];
 
-        float3 n0, n1, n2;
+        double3 n0, n1, n2;
 
         n0[0] = shapes[i].mesh.texcoords[2 * f0 + 0];
         n0[1] = shapes[i].mesh.texcoords[2 * f0 + 1];
@@ -519,8 +511,8 @@ void IdToCol(float col[3], int mid)
 
 int main(int argc, char** argv)
 {
-  int width = 512;
-  int height = 512;
+  int width = 1024;
+  int height = 1024;
 
   float scale = 1.0f;
 
@@ -543,7 +535,7 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  nanort::BVHBuildOptions<float> build_options; // Use default option
+  nanort::BVHBuildOptions<double> build_options; // Use default option
   build_options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -553,13 +545,13 @@ int main(int argc, char** argv)
   timerutil t;
   t.start();
 
-  nanort::TriangleMesh<float> triangle_mesh(mesh.vertices, mesh.faces, sizeof(float) * 3);
-  nanort::TriangleSAHPred<float> triangle_pred(mesh.vertices, mesh.faces, sizeof(float) * 3);
+  nanort::TriangleMesh<double> triangle_mesh(mesh.vertices, mesh.faces, sizeof(double) * 3);
+  nanort::TriangleSAHPred<double> triangle_pred(mesh.vertices, mesh.faces, sizeof(double) * 3);
 
   printf("num_triangles = %lu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
 
-  nanort::BVHAccel<nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<>, float> accel;
+  nanort::BVHAccel<nanort::TriangleMesh<double>, nanort::TriangleSAHPred<double>, nanort::TriangleIntersector<double>, double > accel;
   ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
   assert(ret);
 
@@ -573,14 +565,19 @@ int main(int argc, char** argv)
   printf("    # of leaf   nodes: %d\n", stats.num_leaf_nodes);
   printf("    # of branch nodes: %d\n", stats.num_branch_nodes);
   printf("  Max tree depth     : %d\n", stats.max_tree_depth);
-  float bmin[3], bmax[3];
+  double bmin[3], bmax[3];
   accel.BoundingBox(bmin, bmax);
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
  
   std::vector<float> rgb(width * height * 3, 0.0f);
 
-  t.start();
+
+  // VR panorama camera rendering.
+  // Assume .obj data is modeled in [m] and camera center is placed at (0, 0, 0)
+  // FYI, cornellbox_suzanne.obj is roughly within 10^3 [m], and floor is placed at -1.7 [m]
+
+  float ipd = 0.0635; // inter-pupil distance [m]
 
   // Shoot rays.
   #ifdef _OPENMP
@@ -589,17 +586,25 @@ int main(int argc, char** argv)
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
 
-      // Simple camera. change eye pos and direction fit to .obj model. 
+      // Upper half: left eye
+      // Lower half: right eye
+      bool is_left = (y < (height/2));
 
-      nanort::Ray<float> ray;
-      ray.org[0] = 0.0f;
-      ray.org[1] = 5.0f;
-      ray.org[2] = 20.0f;
+      float screen_y = 2.0f * (static_cast<float>(y) / static_cast<float>(height)) - 1.0f;
 
-      float3 dir;
-      dir[0] = (x / (float)width) - 0.5f;
-      dir[1] = (y / (float)height) - 0.5f;
-      dir[2] = -1.0f;
+      float theta = 2.0f * M_PI * (static_cast<float>(x) / static_cast<float>(width)); // [0, 2 pi]
+      float theta_offset = theta + ( is_left ? 0.0f : M_PI );
+      float phi = (fmodf( 2.0f * ( 0.5f * screen_y + 0.5f ) , 1.0f ) - 0.5f ) * M_PI;
+
+      nanort::Ray<double> ray;
+      ray.org[0] = 0.5f * ipd * (-cosf(theta_offset));
+      ray.org[1] = 0.0f;
+      ray.org[2] = 0.5f * ipd * (sinf(theta_offset));
+
+      double3 dir;
+      dir[0] = cosf(phi) * -sinf(theta);
+      dir[1] = sinf(phi);
+      dir[2] = cosf(phi) * -cosf(theta);
       dir.normalize();
       ray.dir[0] = dir[0];
       ray.dir[1] = dir[1];
@@ -610,12 +615,12 @@ int main(int argc, char** argv)
       ray.max_t = kFar;
 
 #if !USE_MULTIHIT_RAY_TRAVERSAL 
-      nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces, sizeof(float) * 3);
+      nanort::TriangleIntersector<double, nanort::TriangleIntersection<double> > triangle_intersector(mesh.vertices, mesh.faces, sizeof(double) * 3);
       nanort::BVHTraceOptions trace_options;
       bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
       if (hit) {
         // Write your shader here.
-        float3 normal(0.0f, 0.0f, 0.0f);
+        double3 normal(0.0f, 0.0f, 0.0f);
         unsigned int fid = triangle_intersector.intersection.prim_id;
         if (mesh.facevarying_normals) {
           normal[0] = mesh.facevarying_normals[9*fid+0];
@@ -623,9 +628,9 @@ int main(int argc, char** argv)
           normal[2] = mesh.facevarying_normals[9*fid+2];
         }
         // Flip Y
-        rgb[3 * ((height - y - 1) * width + x) + 0] = fabsf(normal[0]);
-        rgb[3 * ((height - y - 1) * width + x) + 1] = fabsf(normal[1]);
-        rgb[3 * ((height - y - 1) * width + x) + 2] = fabsf(normal[2]);
+        rgb[3 * ((height - y - 1) * width + x) + 0] = std::fabs(normal[0]);
+        rgb[3 * ((height - y - 1) * width + x) + 1] = std::fabs(normal[1]);
+        rgb[3 * ((height - y - 1) * width + x) + 2] = std::fabs(normal[2]);
       }
 #else // multi-hit ray traversal.
       nanort::StackVector<nanort::TriangleIntersector, 128> isects;
@@ -651,9 +656,6 @@ int main(int argc, char** argv)
 
     }
   }
-
-  t.end();
-  printf("Render %f secs\n", t.msec() / 1000.0);
 
   // Save image.
   SaveImage("render.exr", &rgb.at(0), width, height);
