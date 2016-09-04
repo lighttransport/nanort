@@ -322,7 +322,7 @@ float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
       ray.min_t = 0.0f;
       ray.max_t = std::numeric_limits<float>::max();
 
-      nanort::TriangleIntersector<float> isecter(triangleMesh.vertices_, triangleMesh.faces_);
+      nanort::TriangleIntersector<float> isecter(triangleMesh.vertices_, triangleMesh.faces_, sizeof(float) * 3);
       nanort::BVHTraceOptions traceOptions;
       bool hit = accel.Traverse(ray, traceOptions, isecter);
       if (hit) {
@@ -368,8 +368,8 @@ int main(int argc, char **argv) {
   timerutil t;
   t.start();
 
-  nanort::TriangleMesh<float> triangleMesh(&mesh.vertices.at(0), &mesh.faces.at(0));
-  nanort::TriangleSAHPred<float> trianglePred(&mesh.vertices.at(0), &mesh.faces.at(0));
+  nanort::TriangleMesh<float> triangleMesh(&mesh.vertices.at(0), &mesh.faces.at(0), sizeof(float) * 3);
+  nanort::TriangleSAHPred<float> trianglePred(&mesh.vertices.at(0), &mesh.faces.at(0), sizeof(float) * 3);
   nanort::BVHAccel<nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<>, float> accel;
   ret = accel.Build(mesh.faces.size() / 3, options, triangleMesh, trianglePred);
   assert(ret);
@@ -471,7 +471,7 @@ int main(int argc, char **argv) {
           ray.dir[1] = dir[1];
           ray.dir[2] = dir[2];
 
-          nanort::TriangleIntersector<> isector(triangleMesh.vertices_, triangleMesh.faces_);
+          nanort::TriangleIntersector<> isector(triangleMesh.vertices_, triangleMesh.faces_, sizeof(float) * 3);
           float tFar = 1.0e+30f;
           ray.min_t = 0.0f;
           ray.max_t = tFar;
