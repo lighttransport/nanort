@@ -447,6 +447,15 @@ class BBox {
   }
 };
 
+// Primitive reference(32bytes)
+typedef struct {
+  float bmin[3];
+  unsigned int prim_id;
+  float bmax[3];
+  unsigned int pad0;
+} PrimRef;
+
+
 template <class P, class Pred, class I>
 class BVHAccel {
  public:
@@ -532,6 +541,7 @@ class BVHAccel {
   std::vector<BVHNode> nodes_;
   std::vector<unsigned int> indices_;  // max 4G triangles.
   std::vector<BBox> bboxes_;
+  std::vector<PrimRef> prim_refs_;
   BVHBuildOptions options_;
   BVHBuildStatistics stats_;
   unsigned int pad0_;
@@ -553,13 +563,13 @@ class TriangleSAHPred {
     pos_ = pos;
   }
 
-  bool operator()(unsigned int i) const {
+  bool operator()(PrimRef& prim_ref) const {
     int axis = axis_;
     float pos = pos_;
 
-    unsigned int i0 = faces_[3 * i + 0];
-    unsigned int i1 = faces_[3 * i + 1];
-    unsigned int i2 = faces_[3 * i + 2];
+    unsigned int i0 = faces_[3 * prim_ref.prim_id + 0];
+    unsigned int i1 = faces_[3 * prim_ref.prim_id + 1];
+    unsigned int i2 = faces_[3 * prim_ref.prim_id + 2];
 
     float3 p0(get_vertex_addr(vertices_, i0, vertex_stride_bytes_));
     float3 p1(get_vertex_addr(vertices_, i1, vertex_stride_bytes_));
@@ -1381,9 +1391,9 @@ unsigned int BVHAccel<P, Pred, I>::BuildTree(BVHBuildStatistics *out_stat,
   unsigned int mid_idx = left_idx;
   int cut_axis = min_cut_axis;
   for (int axis_try = 0; axis_try < 3; axis_try++) {
-    unsigned int *begin = &indices_[left_idx];
-    unsigned int *end = &indices_[right_idx - 1] + 1;  // mimics end() iterator.
-    unsigned int *mid = 0;
+    PrimRef *begin = &prim_refs_[left_idx];
+    PrimRef *end = &prim_refs_[right_idx - 1] + 1;  // mimics end() iterator.
+    PrimRef *mid = 0;
 
     // try min_cut_axis first.
     cut_axis = (min_cut_axis + axis_try) % 3;
@@ -1458,6 +1468,25 @@ bool BVHAccel<P, Pred, I>::Build(unsigned int num_primitives,
 
   unsigned int n = num_primitives;
 
+  //
+  // 0. Setup primitive references.
+  //
+  prim_refs_.reserve(2 * n); // 2x = consider worst case senarios.
+  prim_refs_.resize(n);
+  
+  for (int i = 0; i < static_cast<int>(n); i++) {
+    BBox bbox;
+    p.BoundingBox(&(bbox.bmin), &(bbox.bmax), i);
+
+    prim_refs_[static_cast<size_t>(i)].prim_id = static_cast<unsigned int>(i);
+    prim_refs_[static_cast<size_t>(i)].bmin[0] = bbox.bmin[0];
+    prim_refs_[static_cast<size_t>(i)].bmin[1] = bbox.bmin[1];
+    prim_refs_[static_cast<size_t>(i)].bmin[2] = bbox.bmin[2];
+    prim_refs_[static_cast<size_t>(i)].bmax[0] = bbox.bmax[0];
+    prim_refs_[static_cast<size_t>(i)].bmax[1] = bbox.bmax[1];
+    prim_refs_[static_cast<size_t>(i)].bmax[2] = bbox.bmax[2];
+  }
+  
   //
   // 1. Create triangle indices(this will be permutated in BuildTree)
   //
