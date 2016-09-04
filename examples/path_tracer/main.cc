@@ -16,7 +16,8 @@
 #endif
 
 const int uMaxBounces = 10;
-const int SPP = 10000;
+//const int SPP = 10000;
+const int SPP = 100;
 
 
 namespace {
@@ -597,7 +598,7 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  nanort::BVHBuildOptions build_options; // Use default option
+  nanort::BVHBuildOptions<float> build_options; // Use default option
   build_options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -607,13 +608,13 @@ int main(int argc, char** argv)
   timerutil t;
   t.start();
 
-  nanort::TriangleMesh triangle_mesh(mesh.vertices, mesh.faces);
-  nanort::TriangleSAHPred triangle_pred(mesh.vertices, mesh.faces);
+  nanort::TriangleMesh<float> triangle_mesh(mesh.vertices, mesh.faces);
+  nanort::TriangleSAHPred<float> triangle_pred(mesh.vertices, mesh.faces);
 
   printf("num_triangles = %lu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
 
-  nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<> > accel;
+  nanort::BVHAccel<nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<>, float > accel;
   ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
   assert(ret);
 
@@ -669,7 +670,7 @@ int main(int argc, char** argv)
           }
           weight *= 1.0/rr_fac;
 
-          nanort::Ray ray;
+          nanort::Ray<float> ray;
           float kFar = 1.0e+30f;
           ray.min_t = 0.001f;
           ray.max_t = kFar;

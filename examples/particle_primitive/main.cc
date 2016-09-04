@@ -12,10 +12,10 @@ namespace {
 // http://www.pcg-random.org/
 typedef struct {
   unsigned long long state;
-  unsigned long long inc; // not used?
+  unsigned long long inc;  // not used?
 } pcg32_state_t;
 
-#define PCG32_INITIALIZER                                                      \
+#define PCG32_INITIALIZER \
   { 0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL }
 
 float pcg32_random(pcg32_state_t *rng) {
@@ -38,17 +38,14 @@ void pcg32_srandom(pcg32_state_t *rng, uint64_t initstate, uint64_t initseq) {
 
 unsigned char fclamp(float x) {
   int i = (int)(powf(x, 1.0 / 2.2) * 256.0f);
-  if (i > 255)
-    i = 255;
-  if (i < 0)
-    i = 0;
+  if (i > 255) i = 255;
+  if (i < 0) i = 0;
 
   return (unsigned char)i;
 }
 
 void SaveImagePNG(const char *filename, const float *rgb, int width,
                   int height) {
-
   std::vector<unsigned char> ldr(width * height * 3);
   for (size_t i = 0; i < (size_t)(width * height * 3); i++) {
     ldr[i] = fclamp(rgb[i]);
@@ -60,6 +57,8 @@ void SaveImagePNG(const char *filename, const float *rgb, int width,
     exit(-1);
   }
 }
+
+typedef nanort::real3<float> float3;
 
 // Predefined SAH predicator for sphere.
 class SpherePred {
@@ -76,7 +75,7 @@ class SpherePred {
     int axis = axis_;
     float pos = pos_;
 
-    nanort::float3 p0(&vertices_[3 * i]);
+    float3 p0(&vertices_[3 * i]);
 
     float center = p0[axis];
 
@@ -98,7 +97,8 @@ class SphereGeometry {
 
   /// Compute bounding box for `prim_index`th sphere.
   /// This function is called for each primitive in BVH build.
-  void BoundingBox(nanort::float3 *bmin, nanort::float3 *bmax, unsigned int prim_index) const {
+  void BoundingBox(float3 *bmin, float3 *bmax,
+                   unsigned int prim_index) const {
     (*bmin)[0] = vertices_[3 * prim_index + 0] - radiuss_[prim_index];
     (*bmin)[1] = vertices_[3 * prim_index + 1] - radiuss_[prim_index];
     (*bmin)[2] = vertices_[3 * prim_index + 2] - radiuss_[prim_index];
@@ -109,31 +109,28 @@ class SphereGeometry {
 
   const float *vertices_;
   const float *radiuss_;
-  mutable nanort::float3 ray_org_;
-  mutable nanort::float3 ray_dir_;
+  mutable float3 ray_org_;
+  mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 };
 
-class SphereIntersection
-{
+class SphereIntersection {
  public:
   SphereIntersection() {}
 
-	float u;
-	float v;
+  float u;
+  float v;
 
   // Required member variables.
-	float t;
-	unsigned int prim_id;
+  float t;
+  unsigned int prim_id;
 };
 
-template<class I>
-class SphereIntersector
-{
+template <class I>
+class SphereIntersector {
  public:
   SphereIntersector(const float *vertices, const float *radiuss)
       : vertices_(vertices), radiuss_(radiuss) {}
-
 
   /// Do ray interesection stuff for `prim_index` th primitive and return hit
   /// distance `t`,
@@ -147,10 +144,10 @@ class SphereIntersector
 
     // http://wiki.cgsociety.org/index.php/Ray_Sphere_Intersection
 
-    const nanort::float3 center(&vertices_[3 * prim_index]);
+    const float3 center(&vertices_[3 * prim_index]);
     const float radius = radiuss_[prim_index];
 
-    nanort::float3 oc = ray_org_ - center;
+    float3 oc = ray_org_ - center;
 
     float a = vdot(ray_dir_, ray_dir_);
     float b = 2.0 * vdot(ray_dir_, oc);
@@ -160,7 +157,7 @@ class SphereIntersector
 
     float t0, t1;
 
-    if (disc < 0.0) { // no roots
+    if (disc < 0.0) {  // no roots
       return false;
     } else if (disc == 0.0) {
       t0 = t1 = -0.5 * (b / a);
@@ -185,7 +182,7 @@ class SphereIntersector
       t0 = t1;
       t1 = temp;
     }
-  
+
     // if t1 is less than zero, the object is in the ray's negative direction
     // and consequently the ray misses the sphere
     if (t1 < 0) {
@@ -208,20 +205,18 @@ class SphereIntersector
     return true;
   }
 
-	/// Returns the nearest hit distance.
-	float GetT() const {
-		return intersection.t;
-	}
+  /// Returns the nearest hit distance.
+  float GetT() const { return intersection.t; }
 
-	/// Update is called when a nearest hit is found.
-	void Update(float t, unsigned int prim_idx) const {
+  /// Update is called when a nearest hit is found.
+  void Update(float t, unsigned int prim_idx) const {
     intersection.t = t;
     intersection.prim_id = prim_idx;
-	}
+  }
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
   /// This function is called only once in BVH traversal.
-  void PrepareTraversal(const nanort::Ray &ray,
+  void PrepareTraversal(const nanort::Ray<float> &ray,
                         const nanort::BVHTraceOptions &trace_options) const {
     ray_org_[0] = ray.org[0];
     ray_org_[1] = ray.org[1];
@@ -234,24 +229,24 @@ class SphereIntersector
     trace_options_ = trace_options;
   }
 
-
   /// Post BVH traversal stuff(e.g. compute intersection point information)
   /// This function is called only once in BVH traversal.
   /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray &ray, bool hit) const {
+  void PostTraversal(const nanort::Ray<float> &ray, bool hit) const {
     if (hit) {
-      nanort::float3 hitP = ray_org_ + intersection.t * ray_dir_;
-      nanort::float3 center = nanort::float3(&vertices_[3*intersection.prim_id]);
-      nanort::float3 n = vnormalize(hitP - center);
+      float3 hitP = ray_org_ + intersection.t * ray_dir_;
+      float3 center =
+          float3(&vertices_[3 * intersection.prim_id]);
+      float3 n = vnormalize(hitP - center);
       intersection.u = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
       intersection.v = acos(n[1]) / M_PI;
-    } 
+    }
   }
 
   const float *vertices_;
   const float *radiuss_;
-  mutable nanort::float3 ray_org_;
-  mutable nanort::float3 ray_dir_;
+  mutable float3 ray_org_;
+  mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 
   mutable I intersection;
@@ -259,8 +254,8 @@ class SphereIntersector
 
 // -----------------------------------------------------
 
-void GenerateRandomSpheres(float* vertices, float* radiuss, size_t n, const float bmin[3], const float bmax[3])
-{
+void GenerateRandomSpheres(float *vertices, float *radiuss, size_t n,
+                           const float bmin[3], const float bmax[3]) {
   pcg32_state_t rng;
   pcg32_srandom(&rng, 0, 1);
 
@@ -287,7 +282,7 @@ void GenerateRandomSpheres(float* vertices, float* radiuss, size_t n, const floa
   }
 }
 
-} // namespace
+}  // namespace
 
 int main(int argc, char **argv) {
   int width = 512;
@@ -300,7 +295,7 @@ int main(int argc, char **argv) {
 
   size_t n = atoi(argv[1]);
 
-  nanort::BVHBuildOptions options; // Use default option
+  nanort::BVHBuildOptions<float> options;  // Use default option
   options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -311,13 +306,15 @@ int main(int argc, char **argv) {
   std::vector<float> radiuss(n);
 
   float rbmin[3] = {-1, -1, -1};
-  float rbmax[3] = { 1,  1,  1};
-  GenerateRandomSpheres(&vertices.at(0), &radiuss.at(0), n, rbmin, rbmax); 
+  float rbmax[3] = {1, 1, 1};
+  GenerateRandomSpheres(&vertices.at(0), &radiuss.at(0), n, rbmin, rbmax);
 
   SphereGeometry sphere_geom(&vertices.at(0), &radiuss.at(0));
   SpherePred sphere_pred(&vertices.at(0));
 
-  nanort::BVHAccel<SphereGeometry, SpherePred, SphereIntersector<SphereIntersection> > accel;
+  nanort::BVHAccel<SphereGeometry, SpherePred,
+                   SphereIntersector<SphereIntersection> >
+      accel;
   bool ret = accel.Build(radiuss.size(), options, sphere_geom, sphere_pred);
   assert(ret);
 
@@ -337,15 +334,14 @@ int main(int argc, char **argv) {
   // Shoot rays.
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
+      // Simple camera. change eye pos and direction fit to your scene.
 
-      // Simple camera. change eye pos and direction fit to your scene. 
-
-      nanort::Ray ray;
+      nanort::Ray<float> ray;
       ray.org[0] = 0.0f;
       ray.org[1] = 0.0f;
       ray.org[2] = 4.0f;
 
-      nanort::float3 dir;
+      float3 dir;
       dir[0] = (x / (float)width) - 0.5f;
       dir[1] = (y / (float)height) - 0.5f;
       dir[2] = -1.0f;
@@ -359,27 +355,26 @@ int main(int argc, char **argv) {
       ray.max_t = kFar;
 
       nanort::BVHTraceOptions trace_options;
-      SphereIntersector<SphereIntersection> isecter(&vertices.at(0), &radiuss.at(0));
+      SphereIntersector<SphereIntersection> isecter(&vertices.at(0),
+                                                    &radiuss.at(0));
       bool hit = accel.Traverse(ray, trace_options, isecter);
       if (hit) {
         // Write your shader here.
-        nanort::float3 P;
-        P[0] = ray.org[0] + isecter.intersection.t * ray.dir[0]; 
-        P[1] = ray.org[1] + isecter.intersection.t * ray.dir[1]; 
-        P[2] = ray.org[2] + isecter.intersection.t * ray.dir[2]; 
+        float3 P;
+        P[0] = ray.org[0] + isecter.intersection.t * ray.dir[0];
+        P[1] = ray.org[1] + isecter.intersection.t * ray.dir[1];
+        P[2] = ray.org[2] + isecter.intersection.t * ray.dir[2];
         unsigned int pid = isecter.intersection.prim_id;
-        nanort::float3 sphere_center(&vertices[3*pid]);
-        nanort::float3 normal = vnormalize(P - sphere_center);
+        float3 sphere_center(&vertices[3 * pid]);
+        float3 normal = vnormalize(P - sphere_center);
 
         // Flip Y
         rgb[3 * ((height - y - 1) * width + x) + 0] = fabsf(normal[0]);
         rgb[3 * ((height - y - 1) * width + x) + 1] = fabsf(normal[1]);
         rgb[3 * ((height - y - 1) * width + x) + 2] = fabsf(normal[2]);
       }
-
     }
   }
-
 
   SaveImagePNG("render.png", &rgb.at(0), width, height);
 

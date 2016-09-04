@@ -46,6 +46,7 @@ THE SOFTWARE.
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cstddef>
 #include <fstream>
 #include <iostream>
 #include <map>
