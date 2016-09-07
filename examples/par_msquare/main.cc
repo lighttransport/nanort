@@ -285,7 +285,7 @@ void OrthoBasis(float3 basis[3], const float3 &n) {
 }
 
 float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
-               nanort::BVHAccel<nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<>, float> &accel, const nanort::TriangleMesh<float>& triangleMesh)
+               nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> > &accel, const nanort::TriangleMesh<float>& triangleMesh)
 {
   const int ntheta = 16;
   const int nphi = 32;
@@ -370,7 +370,7 @@ int main(int argc, char **argv) {
 
   nanort::TriangleMesh<float> triangleMesh(&mesh.vertices.at(0), &mesh.faces.at(0), sizeof(float) * 3);
   nanort::TriangleSAHPred<float> trianglePred(&mesh.vertices.at(0), &mesh.faces.at(0), sizeof(float) * 3);
-  nanort::BVHAccel<nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<>, float> accel;
+  nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> > accel;
   ret = accel.Build(mesh.faces.size() / 3, options, triangleMesh, trianglePred);
   assert(ret);
 

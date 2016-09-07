@@ -166,8 +166,8 @@ struct Texture {
 Mesh gMesh;
 std::vector<Material> gMaterials;
 std::vector<Texture> gTextures;
-nanort::BVHAccel<nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>,
-                 nanort::TriangleIntersector<>, float >
+nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>,
+                 nanort::TriangleIntersector<> >
     gAccel;
 
 const char* mmap_file(size_t* len, const char* filename) {
@@ -678,9 +678,9 @@ bool Renderer::BuildBVH() {
 
   auto t_start = std::chrono::system_clock::now();
 
-  nanort::TriangleMesh<float> triangle_mesh(gMesh.vertices.data(), gMesh.faces.data());
+  nanort::TriangleMesh<float> triangle_mesh(gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
   nanort::TriangleSAHPred<float> triangle_pred(gMesh.vertices.data(),
-                                        gMesh.faces.data());
+                                        gMesh.faces.data(), sizeof(float) * 3);
 
   printf("num_triangles = %lu\n", gMesh.num_faces);
 
@@ -777,7 +777,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
           ray.max_t = kFar;
 
           nanort::TriangleIntersector<> triangle_intersector(
-              gMesh.vertices.data(), gMesh.faces.data());
+              gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
           nanort::BVHTraceOptions trace_options;
           bool hit = gAccel.Traverse(ray, trace_options, triangle_intersector);
           if (hit) {
