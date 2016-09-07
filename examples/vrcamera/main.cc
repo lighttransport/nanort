@@ -551,7 +551,7 @@ int main(int argc, char** argv)
   printf("num_triangles = %lu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
 
-  nanort::BVHAccel<nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<>, float > accel;
+  nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> > accel;
   ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
   assert(ret);
 

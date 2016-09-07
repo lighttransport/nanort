@@ -461,7 +461,7 @@ class BBox {
   }
 };
 
-template <class P, class Pred, class I, typename T = float>
+template <typename T, class P, class Pred, class I>
 class BVHAccel {
  public:
   BVHAccel() : pad0_(0) { (void)pad0_; }
@@ -645,14 +645,14 @@ class TriangleMesh {
   const size_t vertex_stride_bytes_;
 };
 
-template <typename real = float>
+template <typename T = float>
 class TriangleIntersection {
  public:
-  real u;
-  real v;
+  T u;
+  T v;
 
   // Required member variables.
-  real t;
+  T t;
   unsigned int prim_id;
 };
 
@@ -1080,7 +1080,7 @@ inline bool FindCutFromBinBuffer(T *cut_pos,        // [out] xyz
 }
 
 #ifdef _OPENMP
-template <class P, typename T>
+template <typename T, class P>
 void ComputeBoundingBoxOMP(real3<T> *bmin, real3<T> *bmax,
                            const unsigned int *indices, unsigned int left_index,
                            unsigned int right_index, const P &p) {
@@ -1192,8 +1192,8 @@ inline void GetBoundingBox(real3<T> *bmin, real3<T> *bmax,
 //
 
 #if NANORT_ENABLE_PARALLEL_BUILD
-template <class P, class Pred, class I, typename T>
-unsigned int BVHAccel<P, Pred, I, T>::BuildShallowTree(
+template <typename T, class P, class Pred, class I>
+unsigned int BVHAccel<T, P, Pred, I>::BuildShallowTree(
     std::vector<BVHNode<T> > *out_nodes, unsigned int left_idx,
     unsigned int right_idx, unsigned int depth, unsigned int max_shallow_depth,
     const P &p, const Pred &pred) {
@@ -1336,8 +1336,8 @@ unsigned int BVHAccel<P, Pred, I, T>::BuildShallowTree(
 }
 #endif
 
-template <class P, class Pred, class I, typename T>
-unsigned int BVHAccel<P, Pred, I, T>::BuildTree(
+template <typename T, class P, class Pred, class I>
+unsigned int BVHAccel<T, P, Pred, I>::BuildTree(
     BVHBuildStatistics *out_stat, std::vector<BVHNode<T> > *out_nodes,
     unsigned int left_idx, unsigned int right_idx, unsigned int depth,
     const P &p, const Pred &pred) {
@@ -1466,8 +1466,8 @@ unsigned int BVHAccel<P, Pred, I, T>::BuildTree(
   return offset;
 }
 
-template <class P, class Pred, class I, typename T>
-bool BVHAccel<P, Pred, I, T>::Build(unsigned int num_primitives,
+template <typename T, class P, class Pred, class I>
+bool BVHAccel<T, P, Pred, I>::Build(unsigned int num_primitives,
                                     const BVHBuildOptions<T> &options,
                                     const P &p, const Pred &pred) {
   options_ = options;
@@ -1602,8 +1602,8 @@ bool BVHAccel<P, Pred, I, T>::Build(unsigned int num_primitives,
   return true;
 }
 
-template <class P, class Pred, class I, typename T>
-bool BVHAccel<P, Pred, I, T>::Dump(const char *filename) {
+template <typename T, class P, class Pred, class I>
+bool BVHAccel<T, P, Pred, I>::Dump(const char *filename) {
   FILE *fp = fopen(filename, "wb");
   if (!fp) {
     fprintf(stderr, "[BVHAccel] Cannot write a file: %s\n", filename);
@@ -1633,8 +1633,8 @@ bool BVHAccel<P, Pred, I, T>::Dump(const char *filename) {
   return true;
 }
 
-template <class P, class Pred, class I, typename T>
-bool BVHAccel<P, Pred, I, T>::Load(const char *filename) {
+template <typename T, class P, class Pred, class I>
+bool BVHAccel<T, P, Pred, I>::Load(const char *filename) {
   FILE *fp = fopen(filename, "rb");
   if (!fp) {
     fprintf(stderr, "Cannot open file: %s\n", filename);
@@ -1708,8 +1708,8 @@ inline bool IntersectRayAABB(T *tminOut,  // [out]
   return false;  // no hit
 }
 
-template <class P, class Pred, class I, typename T>
-inline bool BVHAccel<P, Pred, I, T>::TestLeafNode(const BVHNode<T> &node,
+template <typename T, class P, class Pred, class I>
+inline bool BVHAccel<T, P, Pred, I>::TestLeafNode(const BVHNode<T> &node,
                                                   const Ray<T> &ray,
                                                   const I &intersector) const {
   bool hit = false;
@@ -1748,8 +1748,8 @@ inline bool BVHAccel<P, Pred, I, T>::TestLeafNode(const BVHNode<T> &node,
 }
 
 #if 0
-template <class P, class Pred, class I>
-bool BVHAccel<P, Pred, I>::MultiHitTestLeafNode(const BVHNode &node,
+template <typename T, class P, class Pred, class I>
+bool BVHAccel<T, P, Pred, I>::MultiHitTestLeafNode(const BVHNode &node,
   const Ray &ray, int max_intersections, const I &intersector) const {
   bool hit = false;
 
@@ -1817,8 +1817,8 @@ bool BVHAccel<P, Pred, I>::MultiHitTestLeafNode(const BVHNode &node,
 }
 #endif
 
-template <class P, class Pred, class I, typename T>
-bool BVHAccel<P, Pred, I, T>::Traverse(const Ray<T> &ray,
+template <typename T, class P, class Pred, class I>
+bool BVHAccel<T, P, Pred, I>::Traverse(const Ray<T> &ray,
                                        const BVHTraceOptions &options,
                                        const I &intersector) const {
   const int kMaxStackDepth = 512;
@@ -1889,8 +1889,8 @@ bool BVHAccel<P, Pred, I, T>::Traverse(const Ray<T> &ray,
 }
 
 #if 0
-template <class P, class Pred, class I>
-bool BVHAccel<P, Pred, I>::MultiHitTraverse(const Ray &ray,
+template <typename T, class P, class Pred, class I>
+bool BVHAccel<T, P, Pred, I>::MultiHitTraverse(const Ray &ray,
                                          const BVHTraceOptions &options,
                                          int max_intersections,
                                          StackVector<I, 128> *isects) const {
