@@ -1,8 +1,14 @@
+#include <algorithm>
+#include <iostream>
+
 #define NOMINMAX
 #include "tiny_obj_loader.h"
 
 #define TINYEXR_IMPLEMENTATION
 #include "tinyexr.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 #include "nanort.h"
 
@@ -15,9 +21,8 @@
 #define M_PI 3.141592683
 #endif
 
-const int uMaxBounces = 10;
-const int SPP = 10000;
-
+const int uMaxBounces = 8;
+const int SPP = 128;
 
 namespace {
 
@@ -42,7 +47,7 @@ extern "C" {
 #endif
 
 class timerutil {
-public:
+ public:
 #ifdef _WIN32
   typedef DWORD time_t;
 
@@ -78,7 +83,7 @@ public:
     return (time_t)(t.tv_sec * 1000 + t.tv_usec);
   }
 
-#else // C timer
+#else  // C timer
   // using namespace std;
   typedef clock_t time_t;
 
@@ -93,7 +98,7 @@ public:
 #endif
 #endif
 
-private:
+ private:
 #ifdef _WIN32
   DWORD t_[2];
 #else
@@ -123,9 +128,7 @@ struct float3 {
   float3 operator-(const float3 &f2) const {
     return float3(x - f2.x, y - f2.y, z - f2.z);
   }
-  float3 operator-() const {
-    return float3(-x, -y, -z);
-  }
+  float3 operator-() const { return float3(-x, -y, -z); }
   float3 operator*(const float3 &f2) const {
     return float3(x * f2.x, y * f2.y, z * f2.z);
   }
@@ -153,7 +156,7 @@ struct float3 {
   float3 operator/(const float3 &f2) const {
     return float3(x / f2.x, y / f2.y, z / f2.z);
   }
-    float3 operator/(const float &f2) const {
+  float3 operator/(const float &f2) const {
     return float3(x / f2, y / f2, z / f2);
   }
   float operator[](int i) const { return (&x)[i]; }
@@ -199,7 +202,7 @@ inline float vdot(float3 a, float3 b) {
 }
 
 float uniformFloat(float min, float max) {
-  return min + float(rand())/RAND_MAX * (max-min);
+  return min + float(rand()) / RAND_MAX * (max - min);
 }
 
 float3 directionCosTheta(float3 normal) {
@@ -212,24 +215,24 @@ float3 directionCosTheta(float3 normal) {
   float y = r * sinf(phi);
   float z = sqrtf(1.0 - u1);
 
-  float3 xDir = fabsf(normal.x) < fabsf(normal.y) ? float3(1, 0, 0) : float3(0, 1, 0);
+  float3 xDir =
+      fabsf(normal.x) < fabsf(normal.y) ? float3(1, 0, 0) : float3(0, 1, 0);
   float3 yDir = normalize(vcross(normal, xDir));
   xDir = vcross(yDir, normal);
   return xDir * x + yDir * y + z * normal;
 }
 
-
 typedef struct {
   size_t num_vertices;
   size_t num_faces;
-  float *vertices;              /// [xyz] * num_vertices
-  float *facevarying_normals;   /// [xyz] * 3(triangle) * num_faces
-  float *facevarying_tangents;  /// [xyz] * 3(triangle) * num_faces
-  float *facevarying_binormals; /// [xyz] * 3(triangle) * num_faces
-  float *facevarying_uvs;       /// [xyz] * 3(triangle) * num_faces
-  float *facevarying_vertex_colors;   /// [xyz] * 3(triangle) * num_faces
-  unsigned int *faces;         /// triangle x num_faces
-  unsigned int *material_ids;   /// index x num_faces
+  float *vertices;                   /// [xyz] * num_vertices
+  float *facevarying_normals;        /// [xyz] * 3(triangle) * num_faces
+  float *facevarying_tangents;       /// [xyz] * 3(triangle) * num_faces
+  float *facevarying_binormals;      /// [xyz] * 3(triangle) * num_faces
+  float *facevarying_uvs;            /// [xyz] * 3(triangle) * num_faces
+  float *facevarying_vertex_colors;  /// [xyz] * 3(triangle) * num_faces
+  unsigned int *faces;               /// triangle x num_faces
+  unsigned int *material_ids;        /// index x num_faces
 } Mesh;
 
 struct Material {
@@ -242,23 +245,23 @@ struct Material {
   int reflection_texid;
   int transparency_texid;
   int bump_texid;
-  int normal_texid;     // normal map
-  int alpha_texid;      // alpha map
+  int normal_texid;  // normal map
+  int alpha_texid;   // alpha map
 
   Material() {
-	  ambient[0] = 0.0;
-	  ambient[1] = 0.0;
-	  ambient[2] = 0.0;
-	  diffuse[0] = 0.5;
-	  diffuse[1] = 0.5;
-	  diffuse[2] = 0.5;
-	  reflection[0] = 0.0;
-	  reflection[1] = 0.0;
-	  reflection[2] = 0.0;
-	  refraction[0] = 0.0;
-	  refraction[1] = 0.0;
-	  refraction[2] = 0.0;
-	  id = -1;
+    ambient[0] = 0.0;
+    ambient[1] = 0.0;
+    ambient[2] = 0.0;
+    diffuse[0] = 0.5;
+    diffuse[1] = 0.5;
+    diffuse[2] = 0.5;
+    reflection[0] = 0.0;
+    reflection[1] = 0.0;
+    reflection[2] = 0.0;
+    refraction[0] = 0.0;
+    refraction[1] = 0.0;
+    refraction[2] = 0.0;
+    id = -1;
     diffuse_texid = -1;
     reflection_texid = -1;
     transparency_texid = -1;
@@ -268,8 +271,7 @@ struct Material {
   }
 };
 
-void calcNormal(float3& N, float3 v0, float3 v1, float3 v2)
-{
+void calcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
   float3 v10 = v1 - v0;
   float3 v20 = v2 - v0;
 
@@ -277,65 +279,88 @@ void calcNormal(float3& N, float3 v0, float3 v1, float3 v2)
   N.normalize();
 }
 
-//Save in RAW headerless format, for use when exr tools are not available in system
-void SaveImageRaw(const char* filename, const float* rgb, int width, int height) {
-  std::vector<unsigned char>rawbuf;
-  rawbuf.resize(3*width*height);
-  unsigned char* raw = &rawbuf.at(0);
+// Save in RAW headerless format, for use when exr tools are not available in
+// system
+void SaveImageRaw(const char *filename, const float *rgb, int width,
+                  int height) {
+  std::vector<unsigned char> rawbuf;
+  rawbuf.resize(3 * width * height);
+  unsigned char *raw = &rawbuf.at(0);
 
   // @note { Apply gamma correction would be nice? }
   for (int i = 0; i < width * height; i++) {
-    raw[i*3] = (char)(rgb[3*i+0] * 255.0);
-    raw[i*3+1] = (char)(rgb[3*i+1] * 255.0);
-    raw[i*3+2] = (char)(rgb[3*i+2] * 255.0);
+    raw[i * 3] = (char)(rgb[3 * i + 0] * 255.0);
+    raw[i * 3 + 1] = (char)(rgb[3 * i + 1] * 255.0);
+    raw[i * 3 + 2] = (char)(rgb[3 * i + 2] * 255.0);
   }
-  FILE* f=fopen(filename, "wb");
-  if(!f){
+  FILE *f = fopen(filename, "wb");
+  if (!f) {
     printf("Error: Couldnt open output binary file %s\n", filename);
     return;
   }
-  fwrite(raw, 3*width*height, 1, f);
+  fwrite(raw, 3 * width * height, 1, f);
   fclose(f);
-  printf("Info: Saved RAW RGB image of [%dx%d] dimensions to [ %s ]\n", width, height, filename);
+  printf("Info: Saved RAW RGB image of [%dx%d] dimensions to [ %s ]\n", width,
+         height, filename);
 }
 
-void SaveImage(const char* filename, const float* rgb, int width, int height) {
+void SaveImagePNG(const char *filename, const float *rgb, int width,
+                  int height) {
+  unsigned char *bytes = new unsigned char[width * height * 3];
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      const int index = y * width + x;
+      bytes[index * 3 + 0] = (unsigned char)std::max(
+          0.0f, std::min(rgb[index * 3 + 0] * 255.0f, 255.0f));
+      bytes[index * 3 + 1] = (unsigned char)std::max(
+          0.0f, std::min(rgb[index * 3 + 1] * 255.0f, 255.0f));
+      bytes[index * 3 + 2] = (unsigned char)std::max(
+          0.0f, std::min(rgb[index * 3 + 2] * 255.0f, 255.0f));
+    }
+  }
+  stbi_write_png(filename, width, height, 3, bytes, width * 3);
+  delete[] bytes;
+}
 
-  float* image_ptr[3];
+void SaveImage(const char *filename, const float *rgb, int width, int height) {
+  float *image_ptr[3];
   std::vector<float> images[3];
   images[0].resize(width * height);
   images[1].resize(width * height);
   images[2].resize(width * height);
 
   for (int i = 0; i < width * height; i++) {
-    images[0][i] = rgb[3*i+0];
-    images[1][i] = rgb[3*i+1];
-    images[2][i] = rgb[3*i+2];
+    images[0][i] = rgb[3 * i + 0];
+    images[1][i] = rgb[3 * i + 1];
+    images[2][i] = rgb[3 * i + 2];
   }
 
-  image_ptr[0] = &(images[2].at(0)); // B
-  image_ptr[1] = &(images[1].at(0)); // G
-  image_ptr[2] = &(images[0].at(0)); // R
+  image_ptr[0] = &(images[2].at(0));  // B
+  image_ptr[1] = &(images[1].at(0));  // G
+  image_ptr[2] = &(images[0].at(0));  // R
 
   EXRImage image;
   InitEXRImage(&image);
 
   image.num_channels = 3;
-  const char* channel_names[] = {"B", "G", "R"}; // must be BGR order.
+  const char *channel_names[] = {"B", "G", "R"};  // must be BGR order.
 
   image.channel_names = channel_names;
-  image.images = (unsigned char**)image_ptr;
+  image.images = (unsigned char **)image_ptr;
   image.width = width;
   image.height = height;
 
   image.pixel_types = (int *)malloc(sizeof(int) * image.num_channels);
   image.requested_pixel_types = (int *)malloc(sizeof(int) * image.num_channels);
   for (int i = 0; i < image.num_channels; i++) {
-    image.pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT; // pixel type of input image
-    image.requested_pixel_types[i] = TINYEXR_PIXELTYPE_HALF; // pixel type of output image to be stored in .EXR
+    image.pixel_types[i] =
+        TINYEXR_PIXELTYPE_FLOAT;  // pixel type of input image
+    image.requested_pixel_types[i] =
+        TINYEXR_PIXELTYPE_HALF;  // pixel type of output image to be stored in
+                                 // .EXR
   }
 
-  const char* err;
+  const char *err;
   int fail = SaveMultiChannelEXRToFile(&image, filename, &err);
   if (fail) {
     fprintf(stderr, "Error: %s\n", err);
@@ -345,10 +370,10 @@ void SaveImage(const char* filename, const float* rgb, int width, int height) {
 
   free(image.pixel_types);
   free(image.requested_pixel_types);
-
 }
 
-bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t>& materials, const char *filename, float scale) {
+bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t> &materials,
+             const char *filename, float scale) {
   std::vector<tinyobj::shape_t> shapes;
 
   std::string err = tinyobj::LoadObj(shapes, materials, filename);
@@ -359,7 +384,8 @@ bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t>& materials, const char
   }
 
   std::cout << "[LoadOBJ] # of shapes in .obj : " << shapes.size() << std::endl;
-  std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size() << std::endl;
+  std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size()
+            << std::endl;
 
   size_t num_vertices = 0;
   size_t num_faces = 0;
@@ -398,7 +424,6 @@ bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t>& materials, const char
   size_t vertexIdxOffset = 0;
   size_t faceIdxOffset = 0;
   for (size_t i = 0; i < shapes.size(); i++) {
-
     for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
       mesh.faces[3 * (faceIdxOffset + f) + 0] =
           shapes[i].mesh.indices[3 * f + 0];
@@ -427,9 +452,9 @@ bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t>& materials, const char
       for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
         int f0, f1, f2;
 
-        f0 = shapes[i].mesh.indices[3*f+0];
-        f1 = shapes[i].mesh.indices[3*f+1];
-        f2 = shapes[i].mesh.indices[3*f+2];
+        f0 = shapes[i].mesh.indices[3 * f + 0];
+        f1 = shapes[i].mesh.indices[3 * f + 1];
+        f2 = shapes[i].mesh.indices[3 * f + 2];
 
         float3 n0, n1, n2;
 
@@ -462,9 +487,9 @@ bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t>& materials, const char
       for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
         int f0, f1, f2;
 
-        f0 = shapes[i].mesh.indices[3*f+0];
-        f1 = shapes[i].mesh.indices[3*f+1];
-        f2 = shapes[i].mesh.indices[3*f+2];
+        f0 = shapes[i].mesh.indices[3 * f + 0];
+        f1 = shapes[i].mesh.indices[3 * f + 1];
+        f2 = shapes[i].mesh.indices[3 * f + 2];
 
         float3 v0, v1, v2;
 
@@ -494,18 +519,16 @@ bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t>& materials, const char
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] = N[0];
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] = N[1];
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] = N[2];
-
       }
-
     }
 
     if (shapes[i].mesh.texcoords.size() > 0) {
       for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
         int f0, f1, f2;
 
-        f0 = shapes[i].mesh.indices[3*f+0];
-        f1 = shapes[i].mesh.indices[3*f+1];
-        f2 = shapes[i].mesh.indices[3*f+2];
+        f0 = shapes[i].mesh.indices[3 * f + 0];
+        f1 = shapes[i].mesh.indices[3 * f + 1];
+        f2 = shapes[i].mesh.indices[3 * f + 2];
 
         float3 n0, n1, n2;
 
@@ -535,37 +558,39 @@ bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t>& materials, const char
 
   return true;
 }
-} // namespace
+}  // namespace
 
-inline float sign(float f) {
-  return f < 0 ? -1 : 1;
-}
+inline float sign(float f) { return f < 0 ? -1 : 1; }
 
-inline float3 reflect(float3 I , float3 N) {
-  return I - 2*vdot(I, N) * N;
-}
+inline float3 reflect(float3 I, float3 N) { return I - 2 * vdot(I, N) * N; }
 
 inline float3 refract(float3 I, float3 N, float eta) {
   float NdotI = vdot(N, I);
   float k = 1.0f - eta * eta * (1.0f - NdotI * NdotI);
   if (k < 0.0f)
-      return float3(0, 0, 0);
+    return float3(0, 0, 0);
   else
-      return eta * I - (eta * NdotI + sqrtf(k)) * N;
+    return eta * I - (eta * NdotI + sqrtf(k)) * N;
 }
 
-inline float pow5(float val) {
-  return val * val * val * val * val;
-}
+inline float pow5(float val) { return val * val * val * val * val; }
 
 inline float fresnel_schlick(float3 H, float3 norm, float n1) {
   float r0 = n1 * n1;
-  return r0 + (1-r0)*pow5(1 - vdot(H, norm));
+  return r0 + (1 - r0) * pow5(1 - vdot(H, norm));
 }
 
+void progressBar(int tick, int total, int width = 50) {
+  float ratio = 100.0f * tick / total;
+  float count = width * tick / total;
+  std::string bar(width, ' ');
+  std::fill(bar.begin(), bar.begin() + count, '+');
+  printf("[ %6.2f %% ] [ %s ]%c", ratio, bar.c_str(),
+         tick == total ? '\n' : '\r');
+  std::fflush(stdout);
+}
 
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
   int width = 512;
   int height = 512;
 
@@ -581,11 +606,11 @@ int main(int argc, char** argv)
     scale = atof(argv[2]);
   }
 
-  #ifdef _OPENMP
+#ifdef _OPENMP
   printf("Using OpenMP: yes!\n");
-  #else
+#else
   printf("Using OpenMP: no!\n");
-  #endif
+#endif
 
   bool ret = false;
 
@@ -597,7 +622,7 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  nanort::BVHBuildOptions build_options; // Use default option
+  nanort::BVHBuildOptions build_options;  // Use default option
   build_options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -613,13 +638,15 @@ int main(int argc, char** argv)
   printf("num_triangles = %lu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
 
-  nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<> > accel;
-  ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
+  nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred,
+                   nanort::TriangleIntersector<> >
+      accel;
+  ret =
+      accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
   assert(ret);
 
   t.end();
   printf("  BVH build time: %f secs\n", t.msec() / 1000.0);
-
 
   nanort::BVHBuildStatistics stats = accel.GetStatistics();
 
@@ -631,7 +658,7 @@ int main(int argc, char** argv)
   accel.BoundingBox(bmin, bmax);
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
- 
+
   std::vector<float> rgb(width * height * 3, 0.0f);
 
   srand(0);
@@ -643,66 +670,73 @@ int main(int argc, char** argv)
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
       float3 finalColor = float3(0, 0, 0);
-      for(int i = 0; i < SPP; ++i) {
+      for (int i = 0; i < SPP; ++i) {
         float px = x + uniformFloat(-0.5, 0.5);
         float py = y + uniformFloat(-0.5, 0.5);
-        // Simple camera. change eye pos and direction fit to .obj model. 
-        
-        float3 rayDir = float3((px / (float)width) - 0.5f, (py / (float)height) - 0.5f, -1.0f);
+        // Simple camera. change eye pos and direction fit to .obj model.
+
+        float3 rayDir = float3((px / (float)width) - 0.5f,
+                               (py / (float)height) - 0.5f, -1.0f);
         rayDir.normalize();
 
         float3 rayOrg = float3(0.0f, 5.0f, 20.0f);
 
         float3 color = float3(0, 0, 0);
         float3 weight = float3(1, 1, 1);
-        for (int b = 0; b < uMaxBounces; ++b) {
 
+        int b;
+        for (b = 0; b < uMaxBounces; ++b) {
           // Russian Roulette
           float rr_fac = 1.0f;
-          if(b > 3) {
-            float rr_rand = uniformFloat(0,1);
+          if (b > 3) {
+            float rr_rand = uniformFloat(0, 1);
             float termination_probability = 0.2f;
-            if(rr_rand < termination_probability) {
+            if (rr_rand < termination_probability) {
               break;
             }
             rr_fac = 1.0 - termination_probability;
           }
-          weight *= 1.0/rr_fac;
+          weight *= 1.0 / rr_fac;
 
           nanort::Ray ray;
           float kFar = 1.0e+30f;
           ray.min_t = 0.001f;
           ray.max_t = kFar;
 
-          ray.dir[0] = rayDir[0]; ray.dir[1] = rayDir[1]; ray.dir[2] = rayDir[2];
-          ray.org[0] = rayOrg[0]; ray.org[1] = rayOrg[1]; ray.org[2] = rayOrg[2];
+          ray.dir[0] = rayDir[0];
+          ray.dir[1] = rayDir[1];
+          ray.dir[2] = rayDir[2];
+          ray.org[0] = rayOrg[0];
+          ray.org[1] = rayOrg[1];
+          ray.org[2] = rayOrg[2];
 
-          nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces);
+          nanort::TriangleIntersector<> triangle_intersector(mesh.vertices,
+                                                             mesh.faces);
           nanort::BVHTraceOptions trace_options;
           bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
 
           if (!hit) {
             break;
           }
-          
+
           unsigned int fid = triangle_intersector.intersection.prim_id;
-          float3 norm(0,0,0);
+          float3 norm(0, 0, 0);
           if (mesh.facevarying_normals) {
             float3 normals[3];
-            for(int vId = 0; vId < 3; vId++) {
-              normals[vId][0] = mesh.facevarying_normals[9*fid + 3*vId + 0];
-              normals[vId][1] = mesh.facevarying_normals[9*fid + 3*vId + 1];
-              normals[vId][2] = mesh.facevarying_normals[9*fid + 3*vId + 2];
+            for (int vId = 0; vId < 3; vId++) {
+              normals[vId][0] = mesh.facevarying_normals[9 * fid + 3 * vId + 0];
+              normals[vId][1] = mesh.facevarying_normals[9 * fid + 3 * vId + 1];
+              normals[vId][2] = mesh.facevarying_normals[9 * fid + 3 * vId + 2];
             }
-            float u =  triangle_intersector.intersection.u;
-            float v =  triangle_intersector.intersection.v;
-            norm = (1.0 - u - v) * normals[0] + u  * normals[1] + v * normals[2];
+            float u = triangle_intersector.intersection.u;
+            float v = triangle_intersector.intersection.v;
+            norm = (1.0 - u - v) * normals[0] + u * normals[1] + v * normals[2];
             norm.normalize();
           }
 
           // Flip normal torwards incoming ray for backface shading
           float3 originalNorm = norm;
-          if(vdot(norm, rayDir) > 0) {
+          if (vdot(norm, rayDir) > 0) {
             norm *= -1;
           }
 
@@ -717,28 +751,31 @@ int main(int argc, char** argv)
           float ior = mat.ior;
 
           // Calculate fresnel factor based on ior.
-          float inside = sign(vdot(rayDir, originalNorm)); // 1 for inside, -1 for outside
+          float inside =
+              sign(vdot(rayDir, originalNorm));  // 1 for inside, -1 for outside
           // Assume ior of medium outside of objects = 1.0
           float n1 = inside < 0 ? 1.0 / ior : ior;
           float n2 = 1.0 / n1;
-          
-          float fresnel = fresnel_schlick(-rayDir, norm, (n1-n2)/(n1+n2));
+
+          float fresnel = fresnel_schlick(-rayDir, norm, (n1 - n2) / (n1 + n2));
 
           // Compute probabilities for each surface interaction.
           // Specular is just regular reflectiveness * fresnel.
-          float rhoS = vdot(float3(1, 1, 1)/3.0f, specularColor) * fresnel;
-          // If we don't have a specular reflection, choose either diffuse or transmissive
+          float rhoS = vdot(float3(1, 1, 1) / 3.0f, specularColor) * fresnel;
+          // If we don't have a specular reflection, choose either diffuse or
+          // transmissive
           // Mix them based on the dissolve value of the material
-          float rhoD = vdot(float3(1, 1, 1)/3.0f, diffuseColor) * (1.0 - fresnel) * (1.0 - mat.dissolve);
-          float rhoR = vdot(float3(1, 1, 1)/3.0f, refractionColor) * (1.0 - fresnel) * mat.dissolve;
-          
-          float rhoE = vdot(float3(1, 1, 1)/3.0f, emissiveColor);
+          float rhoD = vdot(float3(1, 1, 1) / 3.0f, diffuseColor) *
+                       (1.0 - fresnel) * (1.0 - mat.dissolve);
+          float rhoR = vdot(float3(1, 1, 1) / 3.0f, refractionColor) *
+                       (1.0 - fresnel) * mat.dissolve;
 
+          float rhoE = vdot(float3(1, 1, 1) / 3.0f, emissiveColor);
 
           // Normalize probabilities so they sum to 1.0
           float totalrho = rhoS + rhoD + rhoR + rhoE;
           // No scattering event is likely, just stop here
-          if(totalrho < 0.0001) {
+          if (totalrho < 0.0001) {
             break;
           }
 
@@ -746,35 +783,33 @@ int main(int argc, char** argv)
           rhoD /= totalrho;
           rhoR /= totalrho;
           rhoE /= totalrho;
-          
+
           // Choose an interaction based on the calculated probabilities
           float rand = uniformFloat(0, 1);
           float3 outDir;
           // REFLECT glossy
-          if (rand < rhoS)
-          {
+          if (rand < rhoS) {
             outDir = reflect(rayDir, norm);
             weight *= specularColor;
           }
           // REFLECT diffuse
-          else if (rand < rhoS + rhoD)
-          {
+          else if (rand < rhoS + rhoD) {
             // Sample cosine weighted hemisphere
             outDir = directionCosTheta(norm);
             // That's why there is no cos factor in here
             weight *= diffuseColor;
           }
           // REFRACT
-          else if (rand < rhoD + rhoS + rhoR)
-          {
+          else if (rand < rhoD + rhoS + rhoR) {
             outDir = refract(rayDir, -inside * originalNorm, n1);
             weight *= refractionColor;
-          } 
+          }
           // EMIT
-          else 
-          {
-            // Weight light by cosine factor (surface emits most light in normal direction)
-            color += std::max(vdot(originalNorm, -rayDir), 0.0f) * emissiveColor * weight;
+          else {
+            // Weight light by cosine factor (surface emits most light in normal
+            // direction)
+            color += std::max(vdot(originalNorm, -rayDir), 0.0f) *
+                     emissiveColor * weight;
             break;
           }
 
@@ -786,23 +821,26 @@ int main(int argc, char** argv)
         finalColor += color;
       }
 
-      finalColor *= 1.0/SPP;
+      finalColor *= 1.0 / SPP;
 
       // Gamme Correct
-      finalColor[0] = pow(finalColor[0], 1.0/2.2);
-      finalColor[1] = pow(finalColor[1], 1.0/2.2);
-      finalColor[2] = pow(finalColor[2], 1.0/2.2);
+      finalColor[0] = pow(finalColor[0], 1.0 / 2.2);
+      finalColor[1] = pow(finalColor[1], 1.0 / 2.2);
+      finalColor[2] = pow(finalColor[2], 1.0 / 2.2);
 
       rgb[3 * ((height - y - 1) * width + x) + 0] = finalColor[0];
       rgb[3 * ((height - y - 1) * width + x) + 1] = finalColor[1];
       rgb[3 * ((height - y - 1) * width + x) + 2] = finalColor[2];
     }
+
+    progressBar(y + 1, height);
   }
 
   // Save image.
   SaveImage("render.exr", &rgb.at(0), width, height);
   // Save Raw Image that can be opened by tools like GIMP
   SaveImageRaw("render.data", &rgb.at(0), width, height);
+  SaveImagePNG("render.png", &rgb.at(0), width, height);
 
   return 0;
 }
