@@ -15,9 +15,10 @@
 #define M_PI 3.141592683
 #endif
 
-const int uMaxBounces = 10;
-const int SPP = 10000;
+const int uMaxBounces = 6;
+const int SPP = 16;
 
+typedef nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<> > Accel;
 
 namespace {
 
@@ -202,7 +203,7 @@ float uniformFloat(float min, float max) {
   return min + float(rand())/RAND_MAX * (max-min);
 }
 
-float3 directionCosTheta(float3 normal) {
+float3 directionCosTheta(float3 normal, float *pdfOmega) {
   float u1 = uniformFloat(0, 1);
   float phi = uniformFloat(0, 2 * M_PI);
 
@@ -211,6 +212,8 @@ float3 directionCosTheta(float3 normal) {
   float x = r * cosf(phi);
   float y = r * sinf(phi);
   float z = sqrtf(1.0 - u1);
+
+  *pdfOmega = 1.0f;
 
   float3 xDir = fabsf(normal.x) < fabsf(normal.y) ? float3(1, 0, 0) : float3(0, 1, 0);
   float3 yDir = normalize(vcross(normal, xDir));
@@ -350,11 +353,14 @@ void SaveImage(const char* filename, const float* rgb, int width, int height) {
 
 bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t>& materials, const char *filename, float scale) {
   std::vector<tinyobj::shape_t> shapes;
-
-  std::string err = tinyobj::LoadObj(shapes, materials, filename);
+  std::string err;
+  bool success = tinyobj::LoadObj(shapes, materials, err, filename);
 
   if (!err.empty()) {
     std::cerr << err << std::endl;
+  }
+
+  if (!success) {
     return false;
   }
 
@@ -535,6 +541,41 @@ bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t>& materials, const char
 
   return true;
 }
+
+enum VertexType {
+    Light,
+    Lens,
+    Diffuse,
+    Specular,
+    Glossy
+};
+
+struct Vertex {
+  float3 position;
+  float3 normal;
+  float3 beta;
+  float3 refl;
+  float pdf;
+  VertexType type;
+
+  float3 f(const Vertex &v) const {
+    switch (type) {
+    case Diffuse:
+      return refl / M_PI;
+      break;
+
+    case Specular:
+      return float3(1.0f, 1.0f, 1.0f);
+      break;
+
+    case Glossy:
+      return float3(1.0f, 1.0f, 1.0f);
+
+    default:
+      return float3(0.0f, 0.0f, 0.0f);
+    }
+  }
+};
 } // namespace
 
 inline float sign(float f) {
@@ -563,11 +604,562 @@ inline float fresnel_schlick(float3 H, float3 norm, float n1) {
   return r0 + (1-r0)*pow5(1 - vdot(H, norm));
 }
 
+void progressBar(int tick, int total, int width = 50) {
+    float ratio = 100.0f * tick / total;
+    float count = width * tick / total;
+    std::string bar(width, ' ');
+    std::fill(bar.begin(), bar.begin() + count, '+');
+    printf("[ %6.2f %% ] [ %s ]%c", ratio, bar.c_str(), tick == total ? '\n' : '\r');
+}
+
+void pathtrace(int x, int y, int width, int height, 
+               const Mesh &mesh, const std::vector<tinyobj::material_t> &materials, const Accel &accel,
+               std::vector<Vertex> *eyeVert) {
+    // Clear vertices.
+    eyeVert->clear();
+
+    // Simple camera. change eye pos and direction fit to .obj model.         
+    float px = x + uniformFloat(-0.5, 0.5);
+    float py = y + uniformFloat(-0.5, 0.5);
+    float3 rayDir = float3((px / (float)width) - 0.5f, (py / (float)height) - 0.5f, -1.0f);
+    rayDir.normalize();
+
+    // Camera position.
+    float3 rayOrg = float3(0.0f, 5.0f, 15.0f);
+
+    float3 throughput = float3(1.0f, 1.0f, 1.0f);
+    double pdf = 1.0;
+    for (int b = 0; b < uMaxBounces; ++b) {
+        // Intersection test.
+        nanort::Ray ray;
+        float kFar = 1.0e+30f;
+        ray.min_t = 0.001f;
+        ray.max_t = kFar;
+
+        ray.dir[0] = rayDir[0]; ray.dir[1] = rayDir[1]; ray.dir[2] = rayDir[2];
+        ray.org[0] = rayOrg[0]; ray.org[1] = rayOrg[1]; ray.org[2] = rayOrg[2];
+
+        nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces);
+        nanort::BVHTraceOptions trace_options;
+        bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
+
+        if (!hit) {
+            break;
+        }
+
+        // Russian Roulette
+        float rr_fac = 1.0f;
+        if(b > 3) {
+            float rr_rand = uniformFloat(0, 1);
+            float termination_probability = 0.2f;
+            if (rr_rand < termination_probability) {
+                break;
+            }
+            rr_fac = 1.0 - termination_probability;
+        }
+        pdf *= 1.0 / rr_fac;
+
+        // Shading normal
+        unsigned int fid = triangle_intersector.intersection.prim_id;
+        float3 norm(0,0,0);
+        if (mesh.facevarying_normals) {
+        float3 normals[3];
+        for(int vId = 0; vId < 3; vId++) {
+            normals[vId][0] = mesh.facevarying_normals[9*fid + 3*vId + 0];
+            normals[vId][1] = mesh.facevarying_normals[9*fid + 3*vId + 1];
+            normals[vId][2] = mesh.facevarying_normals[9*fid + 3*vId + 2];
+        }
+        float u =  triangle_intersector.intersection.u;
+        float v =  triangle_intersector.intersection.v;
+        norm = (1.0 - u - v) * normals[0] + u  * normals[1] + v * normals[2];
+        norm.normalize();
+        }
+
+        // Flip normal torwards incoming ray for backface shading
+        float3 originalNorm = norm;
+        if(vdot(norm, rayDir) > 0) {
+        norm *= -1;
+        }
+
+        // Get properties from the material of the hit primitive
+        unsigned int matId = mesh.material_ids[fid];
+        tinyobj::material_t mat = materials[matId];
+
+        float3 diffuseColor(mat.diffuse);
+        float3 emissiveColor(mat.emission);
+        float3 specularColor(mat.specular);
+        float3 refractionColor(mat.transmittance);
+        float ior = mat.ior;
+
+        // Calculate fresnel factor based on ior.
+        float inside = sign(vdot(rayDir, originalNorm)); // 1 for inside, -1 for outside
+        // Assume ior of medium outside of objects = 1.0
+        float n1 = inside < 0 ? 1.0 / ior : ior;
+        float n2 = 1.0 / n1;
+          
+        float fresnel = fresnel_schlick(-rayDir, norm, (n1-n2)/(n1+n2));
+
+        // Compute probabilities for each surface interaction.
+        // Specular is just regular reflectiveness * fresnel.
+        float rhoS = vdot(float3(1, 1, 1)/3.0f, specularColor) * fresnel;
+        // If we don't have a specular reflection, choose either diffuse or transmissive
+        // Mix them based on the dissolve value of the material
+        float rhoD = vdot(float3(1, 1, 1)/3.0f, diffuseColor) * (1.0 - fresnel) * (1.0 - mat.dissolve);
+        float rhoR = vdot(float3(1, 1, 1)/3.0f, refractionColor) * (1.0 - fresnel) * mat.dissolve;
+          
+        float rhoE = vdot(float3(1, 1, 1)/3.0f, emissiveColor);
+
+
+        // Normalize probabilities so they sum to 1.0
+        float totalrho = rhoS + rhoD + rhoR + rhoE;
+        // No scattering event is likely, just stop here
+        if(totalrho < 0.0001) {
+        break;
+        }
+
+        rhoS /= totalrho;
+        rhoD /= totalrho;
+        rhoR /= totalrho;
+        rhoE /= totalrho;
+          
+        // Choose an interaction based on the calculated probabilities
+        float rand = uniformFloat(0, 1);
+        float3 outDir;
+        float3 refl;
+        VertexType vtype;
+        float pdfOmega = 0.0;
+        // REFLECT glossy
+        if (rand < rhoS)
+        {
+        outDir = reflect(rayDir, norm);
+        refl = diffuseColor;
+        pdfOmega = rhoS;
+        vtype = Specular;
+        }
+        // REFLECT diffuse
+        else if (rand < rhoS + rhoD)
+        {
+        // Sample cosine weighted hemisphere
+        outDir = directionCosTheta(norm, &pdfOmega);
+        // That's why there is no cos factor in here
+        refl = diffuseColor;
+        pdfOmega *= rhoD;
+        vtype = Diffuse;
+        }
+        // REFRACT
+        else if (rand < rhoD + rhoS + rhoR)
+        {
+        outDir = refract(rayDir, -inside * originalNorm, n1);
+        refl = refractionColor;
+        pdfOmega = rhoR;
+        vtype = Specular;
+        } 
+        // EMIT
+        else 
+        {
+            // If ray hits a light, stop path tracing.
+            break;
+        }
+
+        // Convert pdf of solid angle sampling to face location sampling.
+        float dist = triangle_intersector.intersection.t;
+        float dot = std::abs(vdot(norm, rayDir));
+        pdfOmega *= dot / dist;
+        pdf *= pdfOmega;
+
+        // Calculate new ray start position and set outgoing direction.
+        rayOrg += rayDir * triangle_intersector.intersection.t;
+        rayDir = outDir;
+
+        // Add a new vertex for camera subpath.
+        Vertex vertex;
+        vertex.position = rayOrg;
+        vertex.normal = norm;
+        vertex.beta = throughput;
+        vertex.refl = refl;
+        vertex.pdf = pdf;
+        vertex.type = vtype;
+        eyeVert->push_back(vertex);
+
+        throughput *= refl;
+    }
+}
+
+void lighttrace(const Mesh &mesh, const std::vector<tinyobj::material_t> &materials, const Accel &accel,
+                std::vector<Vertex> *lightVert) {
+    // Clear vertices.
+    lightVert->clear();
+
+    // Sample light source.
+    int num_light = 0;
+    float light_area = 0.0;
+    std::vector<float> areas;
+    std::vector<int> light_ids;
+    for (int i = 0; i < mesh.num_faces; i++) {
+        int material_id = mesh.material_ids[i];
+        const float *Le = materials[material_id].emission;
+        if (std::max(Le[0], std::max(Le[1], Le[2])) <= 0.1f) continue;
+
+        float3 v[3];
+        for (int k = 0; k < 3; k++) {
+            float x = mesh.vertices[mesh.faces[i * 3 + k] * 3 + 0];
+            float y = mesh.vertices[mesh.faces[i * 3 + k] * 3 + 1];
+            float z = mesh.vertices[mesh.faces[i * 3 + k] * 3 + 2];
+            v[k] = float3(x, y, z);
+        }
+
+        light_ids.push_back(i);
+        areas.push_back(0.5f * vcross(v[2] - v[0], v[1] - v[0]).length());
+        light_area += areas[areas.size() - 1];
+    }
+
+    // Sample light.
+    float r = rand() / (float)RAND_MAX;
+    float accum = 0.0f;
+    int light_id = -1;
+    for (int i = 0; i < light_ids.size(); i++) {
+        accum += areas[i] / light_area;
+        if (accum >= r) {
+            light_id = light_ids[i];
+            break;
+        }
+    }
+
+    // Sample light position.
+    float u1 = rand() / (float)RAND_MAX;
+    float u2 = rand() / (float)RAND_MAX;
+    if (u1 + u2) {
+        u1 = 1.0f - u1;
+        u2 = 1.0f - u2;
+    }
+
+    float3 v[3], n[3];
+    for (int k = 0; k < 3; k++) {
+        float x = mesh.vertices[mesh.faces[light_id * 3 + k] * 3 + 0];
+        float y = mesh.vertices[mesh.faces[light_id * 3 + k] * 3 + 1];
+        float z = mesh.vertices[mesh.faces[light_id * 3 + k] * 3 + 2];
+        v[k] = float3(x, y, z);
+        float nx = mesh.facevarying_normals[light_id * 9 + k * 3 + 0];
+        float ny = mesh.facevarying_normals[light_id * 9 + k * 3 + 1];
+        float nz = mesh.facevarying_normals[light_id * 9 + k * 3 + 2];
+        n[k] = float3(nx, ny, nz);
+    }
+    float3 rayOrg = (1.0f - u1 - u2) * v[0] + u1 * v[1] + u2 * v[2];
+    float3 norm = (1.0f - u1 - u2) * n[0] + u1 * n[1] + u2 * n[2];
+    float pdfPos = 1.0f / light_area;
+
+    // Sample light direction.
+    float pdfDir;
+    float3 rayDir = directionCosTheta(norm, &pdfDir);
+
+    // Store vertex on light.
+    Vertex vertex;
+    vertex.position = rayOrg;
+    vertex.normal = normalize(norm);
+    vertex.beta = float3(materials[mesh.material_ids[light_id]].emission);
+    vertex.pdf = pdfPos * pdfDir;
+    vertex.type = Light;
+    lightVert->push_back(vertex);
+
+    // Light tracing.
+    const float *Le = materials[mesh.material_ids[light_id]].emission;
+    float3 throughput(Le[0], Le[1], Le[2]);
+    std::vector<Vertex> vertices;
+    double pdf = pdfPos * pdfDir;
+    for (int b = 0; b < uMaxBounces; b++) {
+        // Intersection test.
+        nanort::Ray ray;
+        float kFar = 1.0e+30f;
+        ray.min_t = 0.001f;
+        ray.max_t = kFar;
+
+        ray.dir[0] = rayDir[0]; ray.dir[1] = rayDir[1]; ray.dir[2] = rayDir[2];
+        ray.org[0] = rayOrg[0]; ray.org[1] = rayOrg[1]; ray.org[2] = rayOrg[2];
+
+        nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces);
+        nanort::BVHTraceOptions trace_options;
+        bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
+
+        if (!hit) {
+            break;
+        }
+
+        // Russian Roulette
+        float rr_fac = 1.0f;
+        if(b > 3) {
+            float rr_rand = uniformFloat(0, 1);
+            float termination_probability = 0.2f;
+            if (rr_rand < termination_probability) {
+                break;
+            }
+            rr_fac = 1.0 - termination_probability;
+        }
+        pdf *= 1.0 / rr_fac;
+
+        // Shading normal
+        unsigned int fid = triangle_intersector.intersection.prim_id;
+        float3 norm(0,0,0);
+        if (mesh.facevarying_normals) {
+        float3 normals[3];
+        for(int vId = 0; vId < 3; vId++) {
+            normals[vId][0] = mesh.facevarying_normals[9*fid + 3*vId + 0];
+            normals[vId][1] = mesh.facevarying_normals[9*fid + 3*vId + 1];
+            normals[vId][2] = mesh.facevarying_normals[9*fid + 3*vId + 2];
+        }
+        float u =  triangle_intersector.intersection.u;
+        float v =  triangle_intersector.intersection.v;
+        norm = (1.0 - u - v) * normals[0] + u  * normals[1] + v * normals[2];
+        norm.normalize();
+        }
+
+        // Flip normal torwards incoming ray for backface shading
+        float3 originalNorm = norm;
+        if(vdot(norm, rayDir) > 0) {
+        norm *= -1;
+        }
+
+        // Get properties from the material of the hit primitive
+        unsigned int matId = mesh.material_ids[fid];
+        tinyobj::material_t mat = materials[matId];
+
+        float3 diffuseColor(mat.diffuse);
+        float3 emissiveColor(mat.emission);
+        float3 specularColor(mat.specular);
+        float3 refractionColor(mat.transmittance);
+        float ior = mat.ior;
+
+        // Calculate fresnel factor based on ior.
+        float inside = sign(vdot(rayDir, originalNorm)); // 1 for inside, -1 for outside
+        // Assume ior of medium outside of objects = 1.0
+        float n1 = inside < 0 ? 1.0 / ior : ior;
+        float n2 = 1.0 / n1;
+          
+        float fresnel = fresnel_schlick(-rayDir, norm, (n1-n2)/(n1+n2));
+
+        // Compute probabilities for each surface interaction.
+        // Specular is just regular reflectiveness * fresnel.
+        float rhoS = vdot(float3(1, 1, 1)/3.0f, specularColor) * fresnel;
+        // If we don't have a specular reflection, choose either diffuse or transmissive
+        // Mix them based on the dissolve value of the material
+        float rhoD = vdot(float3(1, 1, 1)/3.0f, diffuseColor) * (1.0 - fresnel) * (1.0 - mat.dissolve);
+        float rhoR = vdot(float3(1, 1, 1)/3.0f, refractionColor) * (1.0 - fresnel) * mat.dissolve;
+          
+        float rhoE = vdot(float3(1, 1, 1)/3.0f, emissiveColor);
+
+
+        // Normalize probabilities so they sum to 1.0
+        float totalrho = rhoS + rhoD + rhoR + rhoE;
+        // No scattering event is likely, just stop here
+        if(totalrho < 0.0001) {
+        break;
+        }
+
+        rhoS /= totalrho;
+        rhoD /= totalrho;
+        rhoR /= totalrho;
+        rhoE /= totalrho;
+          
+        // Choose an interaction based on the calculated probabilities
+        float rand = uniformFloat(0, 1);
+        float3 outDir;
+        float3 refl;
+        VertexType vtype;
+        float pdfOmega = 0.0;
+        // REFLECT glossy
+        if (rand < rhoS)
+        {
+        outDir = reflect(rayDir, norm);
+        refl = specularColor;
+        pdfOmega = rhoS;
+        vtype = Specular;
+        }
+        // REFLECT diffuse
+        else if (rand < rhoS + rhoD)
+        {
+        // Sample cosine weighted hemisphere
+        outDir = directionCosTheta(norm, &pdfOmega);
+        // That's why there is no cos factor in here
+        refl = diffuseColor;
+        pdfOmega *= rhoD;
+        vtype = Diffuse;
+        }
+        // REFRACT
+        else if (rand < rhoD + rhoS + rhoR)
+        {
+        outDir = refract(rayDir, -inside * originalNorm, n1);
+        refl = refractionColor;
+        pdfOmega = rhoR;
+        vtype = Specular;
+        } 
+        // EMIT
+        else 
+        {
+            // If ray hits a light, stop tracing.
+            break;
+        }
+
+        // Convert pdf of solid angle sampling to face location sampling.
+        float dist = triangle_intersector.intersection.t;
+        float dot = std::abs(vdot(norm, rayDir));
+        pdfOmega *= dot / dist;
+        pdf *= pdfOmega;
+
+        // Calculate new ray start position and set outgoing direction.
+        rayOrg += rayDir * triangle_intersector.intersection.t;
+        rayDir = outDir;        
+
+        // Add a new vertex for camera subpath.
+        Vertex vertex;
+        vertex.position = rayOrg;
+        vertex.normal = norm;
+        vertex.beta = throughput;
+        vertex.refl = refl;
+        vertex.pdf = pdf;
+        vertex.type = vtype;
+        lightVert->push_back(vertex);
+
+        throughput *= refl;
+    }
+}
+
+float pdfAt(const std::vector<const Vertex*> &path, int prev, int curr, int next) {
+    const int pathLen = path.size();
+    if (prev < 0 || prev >= pathLen) {
+        return 1.0f;
+    }
+
+    if (next < 0 || next >= pathLen) {
+        return 1.0f;
+    }
+
+    float3 wi = path[prev]->position - path[curr]->position;
+    float3 wo = path[next]->position - path[curr]->position;
+    float dist = wo.length();
+
+    wi.normalize();
+    wo.normalize();
+
+    float pdf = 1.0f;
+    switch (path[curr]->type) {
+    case Diffuse:
+        pdf = vdot(wi, wo);
+        pdf = pdf > 0.0f ? pdf : 0.0f;
+        break;
+
+    default:
+        pdf = 1.0f;
+    }
+
+    pdf *= vdot(path[curr]->normal, wo) / dist;
+
+    if (pdf == 0.0f) pdf = 1.0f;
+    return pdf;
+}
+
+float weightMIS(const std::vector<Vertex> &eyeVert, const std::vector<Vertex> &lightVert,
+                int eyeId, int lightId, const Mesh &mesh, const Accel &accel) {
+    if (eyeId == 0 && lightId == 0) return 1.0f;
+
+    std::vector<const Vertex*> path;
+    for (int i = 0; i <= eyeId; i++) {
+        path.push_back(&eyeVert[i]);
+    }
+
+    for (int i = lightId; i >= 0; i--) {
+        path.push_back(&lightVert[i]);
+    }
+    const int pathLen = path.size();
+
+    float mis = 0.0;
+    float prob = 1.0f;
+    for (int i = eyeId; i >= 1; i--) {
+        float pdfRev = pdfAt(path, i + 2, i + 1, i);
+        float pdfFwd = pdfAt(path, i + 1, i, i - 1);
+        prob *= pdfFwd / pdfRev;
+
+        if (path[i]->type == Specular || path[i + 1]->type == Specular) continue;
+        mis += prob * prob;
+    }
+
+    prob = 1.0f;
+    for (int i = eyeId + 1; i < pathLen; i++) {
+        float pdfRev = pdfAt(path, i - 2, i - 1, i);
+        float pdfFwd = pdfAt(path, i - 1, i, i + 1);
+        prob *= pdfFwd / pdfRev;
+
+        if (path[i]->type == Specular || path[i - 1]->type == Specular) continue;
+        mis += prob * prob;
+    }
+
+    if (mis != 0.0f) {
+        mis = 1.0f / (1.0 + mis);
+    }
+    return mis;    
+}
+
+float calcG(const Vertex &v1, const Vertex &v2, const Mesh &mesh, const Accel &accel) {
+    float3 to = v2.position - v1.position;
+    float dist = to.length();
+    to = to / dist;
+
+    nanort::Ray ray;
+    ray.org[0] = v1.position[0];
+    ray.org[1] = v1.position[1];
+    ray.org[2] = v1.position[2];
+    ray.dir[0] = to[0];
+    ray.dir[1] = to[1];
+    ray.dir[2] = to[2];
+    ray.min_t = 0.001f;
+    ray.max_t = 1.0e30f;
+
+    nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces);
+    nanort::BVHTraceOptions trace_options;
+    bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
+    if (!hit) {
+        return 0.0f;
+    }
+
+    if (std::abs(dist - triangle_intersector.intersection.t) > 0.001f) {
+        return 0.0f;
+    }
+
+    float dot1 = vdot(to, v1.normal);
+    float dot2 = vdot(-to, v2.normal);
+    if (dot1 > 0.0f && dot2 > 0.0f) {
+        float ret = dot1 * dot2 / (dist * dist);
+        return ret;
+    }
+
+    return 0.0f;
+}
+
+float3 connectPath(const std::vector<Vertex> &eyeVert, const std::vector<Vertex> &lightVert,
+                   const Mesh &mesh, const Accel &accel) {
+    float3 color(0.0f, 0.0f, 0.0f);
+    for (int e = 0; e < eyeVert.size(); e++) {
+        for (int l = 0; l < lightVert.size(); l++) {
+            float3 L(0.0f, 0.0f, 0.0f);
+            const Vertex &ev = eyeVert[e];
+            const Vertex &lv = lightVert[l];
+            if (lv.pdf == 0.0f || ev.pdf == 0.0f) continue;
+
+            if (l == 0) {
+                L = ev.beta * ev.f(lv) * calcG(ev, lv, mesh, accel) * lv.beta / (lv.pdf * ev.pdf);
+            } else {
+                L = ev.beta * ev.f(lv) * calcG(ev, lv, mesh, accel) * lv.f(ev) * lv.beta / (lv.pdf * ev.pdf);
+            }
+
+            float mis = weightMIS(eyeVert, lightVert, e, l, mesh, accel);
+            color += L * mis;
+        }
+    }
+    return color;
+}
 
 int main(int argc, char** argv)
 {
-  int width = 512;
-  int height = 512;
+  int width = 256;
+  int height = 256;
 
   float scale = 1.0f;
 
@@ -589,6 +1181,7 @@ int main(int argc, char** argv)
 
   bool ret = false;
 
+  // Load scene obj file
   Mesh mesh;
   std::vector<tinyobj::material_t> materials;
   ret = LoadObj(mesh, materials, objFilename.c_str(), scale);
@@ -610,7 +1203,7 @@ int main(int argc, char** argv)
   nanort::TriangleMesh triangle_mesh(mesh.vertices, mesh.faces);
   nanort::TriangleSAHPred triangle_pred(mesh.vertices, mesh.faces);
 
-  printf("num_triangles = %lu\n", mesh.num_faces);
+  printf("num_triangles = %zu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
 
   nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<> > accel;
@@ -619,7 +1212,6 @@ int main(int argc, char** argv)
 
   t.end();
   printf("  BVH build time: %f secs\n", t.msec() / 1000.0);
-
 
   nanort::BVHBuildStatistics stats = accel.GetStatistics();
 
@@ -644,149 +1236,17 @@ int main(int argc, char** argv)
     for (int x = 0; x < width; x++) {
       float3 finalColor = float3(0, 0, 0);
       for(int i = 0; i < SPP; ++i) {
-        float px = x + uniformFloat(-0.5, 0.5);
-        float py = y + uniformFloat(-0.5, 0.5);
-        // Simple camera. change eye pos and direction fit to .obj model. 
         
-        float3 rayDir = float3((px / (float)width) - 0.5f, (py / (float)height) - 0.5f, -1.0f);
-        rayDir.normalize();
+        std::vector<Vertex> eyeVert;
+        pathtrace(x, y, width, height, mesh, materials, accel, &eyeVert); 
 
-        float3 rayOrg = float3(0.0f, 5.0f, 20.0f);
+        std::vector<Vertex> lightVert;
+        lighttrace(mesh, materials, accel, &lightVert);
 
-        float3 color = float3(0, 0, 0);
-        float3 weight = float3(1, 1, 1);
-        for (int b = 0; b < uMaxBounces; ++b) {
-
-          // Russian Roulette
-          float rr_fac = 1.0f;
-          if(b > 3) {
-            float rr_rand = uniformFloat(0,1);
-            float termination_probability = 0.2f;
-            if(rr_rand < termination_probability) {
-              break;
-            }
-            rr_fac = 1.0 - termination_probability;
-          }
-          weight *= 1.0/rr_fac;
-
-          nanort::Ray ray;
-          float kFar = 1.0e+30f;
-          ray.min_t = 0.001f;
-          ray.max_t = kFar;
-
-          ray.dir[0] = rayDir[0]; ray.dir[1] = rayDir[1]; ray.dir[2] = rayDir[2];
-          ray.org[0] = rayOrg[0]; ray.org[1] = rayOrg[1]; ray.org[2] = rayOrg[2];
-
-          nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces);
-          nanort::BVHTraceOptions trace_options;
-          bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
-
-          if (!hit) {
-            break;
-          }
-          
-          unsigned int fid = triangle_intersector.intersection.prim_id;
-          float3 norm(0,0,0);
-          if (mesh.facevarying_normals) {
-            float3 normals[3];
-            for(int vId = 0; vId < 3; vId++) {
-              normals[vId][0] = mesh.facevarying_normals[9*fid + 3*vId + 0];
-              normals[vId][1] = mesh.facevarying_normals[9*fid + 3*vId + 1];
-              normals[vId][2] = mesh.facevarying_normals[9*fid + 3*vId + 2];
-            }
-            float u =  triangle_intersector.intersection.u;
-            float v =  triangle_intersector.intersection.v;
-            norm = (1.0 - u - v) * normals[0] + u  * normals[1] + v * normals[2];
-            norm.normalize();
-          }
-
-          // Flip normal torwards incoming ray for backface shading
-          float3 originalNorm = norm;
-          if(vdot(norm, rayDir) > 0) {
-            norm *= -1;
-          }
-
-          // Get properties from the material of the hit primitive
-          unsigned int matId = mesh.material_ids[fid];
-          tinyobj::material_t mat = materials[matId];
-
-          float3 diffuseColor(mat.diffuse);
-          float3 emissiveColor(mat.emission);
-          float3 specularColor(mat.specular);
-          float3 refractionColor(mat.transmittance);
-          float ior = mat.ior;
-
-          // Calculate fresnel factor based on ior.
-          float inside = sign(vdot(rayDir, originalNorm)); // 1 for inside, -1 for outside
-          // Assume ior of medium outside of objects = 1.0
-          float n1 = inside < 0 ? 1.0 / ior : ior;
-          float n2 = 1.0 / n1;
-          
-          float fresnel = fresnel_schlick(-rayDir, norm, (n1-n2)/(n1+n2));
-
-          // Compute probabilities for each surface interaction.
-          // Specular is just regular reflectiveness * fresnel.
-          float rhoS = vdot(float3(1, 1, 1)/3.0f, specularColor) * fresnel;
-          // If we don't have a specular reflection, choose either diffuse or transmissive
-          // Mix them based on the dissolve value of the material
-          float rhoD = vdot(float3(1, 1, 1)/3.0f, diffuseColor) * (1.0 - fresnel) * (1.0 - mat.dissolve);
-          float rhoR = vdot(float3(1, 1, 1)/3.0f, refractionColor) * (1.0 - fresnel) * mat.dissolve;
-          
-          float rhoE = vdot(float3(1, 1, 1)/3.0f, emissiveColor);
-
-
-          // Normalize probabilities so they sum to 1.0
-          float totalrho = rhoS + rhoD + rhoR + rhoE;
-          // No scattering event is likely, just stop here
-          if(totalrho < 0.0001) {
-            break;
-          }
-
-          rhoS /= totalrho;
-          rhoD /= totalrho;
-          rhoR /= totalrho;
-          rhoE /= totalrho;
-          
-          // Choose an interaction based on the calculated probabilities
-          float rand = uniformFloat(0, 1);
-          float3 outDir;
-          // REFLECT glossy
-          if (rand < rhoS)
-          {
-            outDir = reflect(rayDir, norm);
-            weight *= specularColor;
-          }
-          // REFLECT diffuse
-          else if (rand < rhoS + rhoD)
-          {
-            // Sample cosine weighted hemisphere
-            outDir = directionCosTheta(norm);
-            // That's why there is no cos factor in here
-            weight *= diffuseColor;
-          }
-          // REFRACT
-          else if (rand < rhoD + rhoS + rhoR)
-          {
-            outDir = refract(rayDir, -inside * originalNorm, n1);
-            weight *= refractionColor;
-          } 
-          // EMIT
-          else 
-          {
-            // Weight light by cosine factor (surface emits most light in normal direction)
-            color += std::max(vdot(originalNorm, -rayDir), 0.0f) * emissiveColor * weight;
-            break;
-          }
-
-          // Calculate new ray start position and set outgoing direction.
-          rayOrg += rayDir * triangle_intersector.intersection.t;
-          rayDir = outDir;
-        }
-
-        finalColor += color;
+        finalColor += connectPath(eyeVert, lightVert, mesh, accel);
       }
 
-      finalColor *= 1.0/SPP;
+      finalColor *= 1.0 / SPP;
 
       // Gamme Correct
       finalColor[0] = pow(finalColor[0], 1.0/2.2);
@@ -796,7 +1256,9 @@ int main(int argc, char** argv)
       rgb[3 * ((height - y - 1) * width + x) + 0] = finalColor[0];
       rgb[3 * ((height - y - 1) * width + x) + 1] = finalColor[1];
       rgb[3 * ((height - y - 1) * width + x) + 2] = finalColor[2];
+
     }
+    progressBar(y + 1, height);
   }
 
   // Save image.
