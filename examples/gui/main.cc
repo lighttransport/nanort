@@ -43,7 +43,9 @@ THE SOFTWARE.
 #include <sys/stat.h>
 #endif
 
+#include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -51,8 +53,6 @@ THE SOFTWARE.
 #include <limits>
 #include <string>
 #include <vector>
-#include <cmath>
-#include <algorithm>
 
 #include <atomic>  // C++11
 #include <chrono>  // C++11
@@ -95,10 +95,10 @@ std::atomic<bool> gRenderCancel;
 example::RenderConfig gRenderConfig;
 std::mutex gMutex;
 
-std::vector<float> gDisplayRGBA;    // Accumurated image.
+std::vector<float> gDisplayRGBA;  // Accumurated image.
 std::vector<float> gRGBA;
 std::vector<float> gAuxRGBA;        // Auxiliary buffer
-std::vector<int>   gSampleCounts;   // Sample num counter for each pixel.
+std::vector<int> gSampleCounts;     // Sample num counter for each pixel.
 std::vector<float> gNormalRGBA;     // For visualizing normal
 std::vector<float> gPositionRGBA;   // For visualizing position
 std::vector<float> gDepthRGBA;      // For visualizing depth
@@ -145,14 +145,14 @@ void RenderThread() {
     // gRenderCancel may be set to true in main loop.
     // Render() will repeatedly check this flag inside the rendering loop.
 
-    bool ret = gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), &gSampleCounts.at(0), gCurrQuat,
-                                gRenderConfig, gRenderCancel);
+    bool ret =
+        gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), &gSampleCounts.at(0),
+                         gCurrQuat, gRenderConfig, gRenderCancel);
 
     if (ret) {
       std::lock_guard<std::mutex> guard(gMutex);
 
       gRenderConfig.pass++;
-      
     }
 
     auto endT = std::chrono::system_clock::now();
@@ -236,7 +236,6 @@ void keyboardCallback(int keycode, int state) {
 }
 
 void mouseMoveCallback(float x, float y) {
-
   if (gMouseLeftDown) {
     float w = gRenderConfig.width;
     float h = gRenderConfig.height;
@@ -257,7 +256,8 @@ void mouseMoveCallback(float x, float y) {
     } else {
       // Adjust y.
       trackball(gPrevQuat, (2.f * gMousePosX - w) / (float)w,
-                (h - 2.f * (gMousePosY - y_offset)) / (float)h, (2.f * x - w) / (float)w,
+                (h - 2.f * (gMousePosY - y_offset)) / (float)h,
+                (2.f * x - w) / (float)w,
                 (h - 2.f * (y - y_offset)) / (float)h);
       add_quats(gPrevQuat, gCurrQuat, gCurrQuat);
     }
@@ -328,17 +328,17 @@ inline float pesudoColor(float v, int ch) {
 void Display(int width, int height) {
   std::vector<float> buf(width * height * 4);
   if (gShowBufferMode == SHOW_BUFFER_COLOR) {
-    // normalize 
+    // normalize
     for (size_t i = 0; i < buf.size() / 4; i++) {
-      buf[4*i+0] = gRGBA[4*i+0]; 
-      buf[4*i+1] = gRGBA[4*i+1]; 
-      buf[4*i+2] = gRGBA[4*i+2]; 
-      buf[4*i+3] = gRGBA[4*i+3]; 
+      buf[4 * i + 0] = gRGBA[4 * i + 0];
+      buf[4 * i + 1] = gRGBA[4 * i + 1];
+      buf[4 * i + 2] = gRGBA[4 * i + 2];
+      buf[4 * i + 3] = gRGBA[4 * i + 3];
       if (gSampleCounts[i] > 0) {
-        buf[4*i+0] /= static_cast<float>(gSampleCounts[i]); 
-        buf[4*i+1] /= static_cast<float>(gSampleCounts[i]); 
-        buf[4*i+2] /= static_cast<float>(gSampleCounts[i]); 
-        buf[4*i+3] /= static_cast<float>(gSampleCounts[i]); 
+        buf[4 * i + 0] /= static_cast<float>(gSampleCounts[i]);
+        buf[4 * i + 1] /= static_cast<float>(gSampleCounts[i]);
+        buf[4 * i + 2] /= static_cast<float>(gSampleCounts[i]);
+        buf[4 * i + 3] /= static_cast<float>(gSampleCounts[i]);
       }
     }
   } else if (gShowBufferMode == SHOW_BUFFER_NORMAL) {

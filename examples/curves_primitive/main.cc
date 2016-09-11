@@ -18,14 +18,16 @@ unsigned char fclamp(float x) {
   return (unsigned char)i;
 }
 
+typedef nanort::real3<float> float3;
+
 // ---------------------------------------------------------------------------
 // Curve genrator based on Embree's hair_geometry tutorial
 //
-nanort::float3 uniformSampleSphere(const float& u, const float& v) 
+float3 uniformSampleSphere(const float& u, const float& v) 
 {
   const float phi = float(2.0f * 3.141592f) * u;
   const float cosTheta = 1.0f - 2.0f * v, sinTheta = 2.0f * sqrtf(std::max(0.f, v * (1.0f - v)));
-  return nanort::float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+  return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 }
 
 static int p[513] = { 
@@ -171,15 +173,15 @@ float noise(float x, float y, float z)
               lerp(v,lerp(u,g001,g101),lerp(u,g011,g111)));
 }
 
-nanort::float3 noise3D(const nanort::float3& p)
+float3 noise3D(const float3& p)
 {
   float x = noise(4.0f*p.x());
   float y = noise(4.0f*p.y());
   float z = noise(4.0f*p.z());
-  return p+0.2f*nanort::float3(x,y,z);
+  return p+0.2f*float3(x,y,z);
 }
 
-void genFur(std::vector<float>* cps, std::vector<float>* thicknesses, const nanort::float3& p, float r, float default_thickness)
+void genFur(std::vector<float>* cps, std::vector<float>* thicknesses, const float3& p, float r, float default_thickness)
 {
   const float pi = 3.141592f;
 
@@ -198,15 +200,15 @@ void genFur(std::vector<float>* cps, std::vector<float>* thicknesses, const nano
     {
       float fx = (float(ix)+2.0f*g2[s])/(float)(nDivX); s=(s+1)%255;
       float fy = (float(iy)+2.0f*g2[s])/(float)(nDivY); s=(s+1)%255;
-      nanort::float3 dp = uniformSampleSphere(fx,fy);
+      float3 dp = uniformSampleSphere(fx,fy);
       assert(!isnan(dp.x()));
       assert(!isnan(dp.y()));
       assert(!isnan(dp.z()));
       
-      nanort::float3 l0 = p + r*       (dp + 0.00f*dp);
-      nanort::float3 l1 = p + r*       (dp + 0.25f*dp);
-      nanort::float3 l2 = p + r*noise3D(dp + 0.50f*dp);
-      nanort::float3 l3 = p + r*noise3D(dp + 0.75f*dp);
+      float3 l0 = p + r*       (dp + 0.00f*dp);
+      float3 l1 = p + r*       (dp + 0.25f*dp);
+      float3 l2 = p + r*noise3D(dp + 0.50f*dp);
+      float3 l3 = p + r*noise3D(dp + 0.75f*dp);
       
       // Assume curve is all represented as cubic curve(4 control points)
       cps->push_back(l0.x());
@@ -236,7 +238,7 @@ void genFur(std::vector<float>* cps, std::vector<float>* thicknesses, const nano
 // ---------------------------------------------------------------------------
 // Curve intersector util functions 
 
-void GetZAlign(const nanort::float3 &o, const nanort::float3 &l, float matrix[3][3],
+void GetZAlign(const float3 &o, const float3 &l, float matrix[3][3],
                float translate[3]) {
   float dxz, lxdxz, lydxz, lzdxz;
 
@@ -273,8 +275,8 @@ void GetZAlign(const nanort::float3 &o, const nanort::float3 &l, float matrix[3]
       -(o.x() * matrix[0][2] + o.y() * matrix[1][2] + o.z() * matrix[2][2]);
 }
 
-inline nanort::float3 Xform(const nanort::float3 &p0, float matrix[3][3], float translate[3]) {
-	nanort::float3 p;
+inline float3 Xform(const float3 &p0, float matrix[3][3], float translate[3]) {
+	float3 p;
 
 	p[0] = p0.x() * matrix[0][0] + p0.y() * matrix[1][0] + p0.z() * matrix[2][0] +
 				translate[0];
@@ -286,34 +288,34 @@ inline nanort::float3 Xform(const nanort::float3 &p0, float matrix[3][3], float 
 	return p;
 }
 
-void EvaluateBezier(const nanort::float3 *v, float t, nanort::float3 *p) {
-	nanort::float3 v1[3], v2[2], v3[1];
+void EvaluateBezier(const float3 *v, float t, float3 *p) {
+	float3 v1[3], v2[2], v3[1];
 	float u;
 
 	u = 1 - t;
 
-	v1[0] = nanort::float3(v[0].x() * u + v[1].x() * t, v[0].y() * u + v[1].y() * t,
+	v1[0] = float3(v[0].x() * u + v[1].x() * t, v[0].y() * u + v[1].y() * t,
 								v[0].z() * u + v[1].z() * t);
-	v1[1] = nanort::float3(v[1].x() * u + v[2].x() * t, v[1].y() * u + v[2].y() * t,
+	v1[1] = float3(v[1].x() * u + v[2].x() * t, v[1].y() * u + v[2].y() * t,
 								v[1].z() * u + v[2].z() * t);
-	v1[2] = nanort::float3(v[2].x() * u + v[3].x() * t, v[2].y() * u + v[3].y() * t,
+	v1[2] = float3(v[2].x() * u + v[3].x() * t, v[2].y() * u + v[3].y() * t,
 								v[2].z() * u + v[3].z() * t);
 
-	v2[0] = nanort::float3(v1[0].x() * u + v1[1].x() * t, v1[0].y() * u + v1[1].y() * t,
+	v2[0] = float3(v1[0].x() * u + v1[1].x() * t, v1[0].y() * u + v1[1].y() * t,
 								v1[0].z() * u + v1[1].z() * t);
-	v2[1] = nanort::float3(v1[1].x() * u + v1[2].x() * t, v1[1].y() * u + v1[2].y() * t,
+	v2[1] = float3(v1[1].x() * u + v1[2].x() * t, v1[1].y() * u + v1[2].y() * t,
 								v1[1].z() * u + v1[2].z() * t);
 
-	v3[0] = nanort::float3(v2[0].x() * u + v2[1].x() * t, v2[0].y() * u + v2[1].y() * t,
+	v3[0] = float3(v2[0].x() * u + v2[1].x() * t, v2[0].y() * u + v2[1].y() * t,
 								v2[0].z() * u + v2[1].z() * t);
 
-	(*p) = nanort::float3(v3[0].x(), v3[0].y(), v3[0].z());
+	(*p) = float3(v3[0].x(), v3[0].y(), v3[0].z());
 }
 
-void EvaluateBezierTangent(const nanort::float3 *v, float t, nanort::float3 *dv) {
-  nanort::float3 C1 = v[3] - (3.0f * v[2]) + (3.0f * v[1]) - v[0];
-  nanort::float3 C2 = (3.0f * v[2]) - (6.0f * v[1]) + (3.0f * v[0]);
-  nanort::float3 C3 = (3.0f * v[1]) - (3.0f * v[0]);
+void EvaluateBezierTangent(const float3 *v, float t, float3 *dv) {
+  float3 C1 = v[3] - (3.0f * v[2]) + (3.0f * v[1]) - v[0];
+  float3 C2 = (3.0f * v[2]) - (6.0f * v[1]) + (3.0f * v[0]);
+  float3 C3 = (3.0f * v[1]) - (3.0f * v[0]);
 
   (*dv) = (3.0f * C1 * t * t) + (2.0f * C2 * t) + C3;
 }
@@ -353,10 +355,10 @@ class CurvePred {
     int axis = axis_;
     float pos = pos_;
 
-    nanort::float3 p0(&vertices_[3 * (4 * i + 0)]);
-    nanort::float3 p1(&vertices_[3 * (4 * i + 1)]);
-    nanort::float3 p2(&vertices_[3 * (4 * i + 2)]);
-    nanort::float3 p3(&vertices_[3 * (4 * i + 3)]);
+    float3 p0(&vertices_[3 * (4 * i + 0)]);
+    float3 p1(&vertices_[3 * (4 * i + 1)]);
+    float3 p2(&vertices_[3 * (4 * i + 2)]);
+    float3 p3(&vertices_[3 * (4 * i + 3)]);
 
     float center = (p0[axis] + p1[axis] + p2[axis] + p3[axis]) / 4.0f;
 
@@ -379,7 +381,7 @@ class CurveGeometry {
   /// Compute bounding box for `prim_index`th bezier curve.
   /// Since Bezier curve has convex property, we can simply compute bounding box from control points
   /// This function is called for each primitive in BVH build.
-  void BoundingBox(nanort::float3 *bmin, nanort::float3 *bmax, unsigned int prim_index) const {
+  void BoundingBox(float3 *bmin, float3 *bmax, unsigned int prim_index) const {
     (*bmin)[0] = vertices_[3 * (4 * prim_index + 0) + 0] - radiuss_[4 * prim_index];
     (*bmin)[1] = vertices_[3 * (4 * prim_index + 0) + 1] - radiuss_[4 * prim_index];
     (*bmin)[2] = vertices_[3 * (4 * prim_index + 0) + 2] - radiuss_[4 * prim_index];
@@ -398,8 +400,8 @@ class CurveGeometry {
 
   const float *vertices_;
   const float *radiuss_;
-  mutable nanort::float3 ray_org_;
-  mutable nanort::float3 ray_dir_;
+  mutable float3 ray_org_;
+  mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 };
 
@@ -415,8 +417,8 @@ class CurveIntersection
   // Additional custom intersection properties
 	float u;
 	float v;
-  nanort::float3 tangent; // curve direction 
-  nanort::float3 normal; // perpendicular to the curve
+  float3 tangent; // curve direction 
+  float3 normal; // perpendicular to the curve
 };
 
 template<class I>
@@ -443,8 +445,8 @@ class CurveIntersector
     float T[3];		 // trans
     GetZAlign(ray_org_, ray_dir_, R, T);
 
-    nanort::float3 cps[4];	// projected control points.
-    nanort::float3 ocps[4]; // original control points.
+    float3 cps[4];	// projected control points.
+    float3 ocps[4]; // original control points.
 
     float radius[2]; // Radius at begin point and end point. Do not consider intermediate radius currently.
     radius[0] = radiuss_[4 * prim_index + 0];
@@ -484,7 +486,7 @@ class CurveIntersector
     int n = num_subdivisions_;
     const float inv_n = 1.0f / static_cast<float>(n);
     for (int s = 0; s < n; s++ ) {
-      nanort::float3 p[2];
+      float3 p[2];
 
       float t0 = s / static_cast<float>(n);
       float t1 = (s+1) / static_cast<float>(n);
@@ -570,7 +572,7 @@ class CurveIntersector
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
   /// This function is called only once in BVH traversal.
-  void PrepareTraversal(const nanort::Ray &ray,
+  void PrepareTraversal(const nanort::Ray<float> &ray,
                         const nanort::BVHTraceOptions &trace_options) const {
     ray_org_[0] = ray.org[0];
     ray_org_[1] = ray.org[1];
@@ -587,10 +589,10 @@ class CurveIntersector
   /// Post BVH traversal stuff(e.g. compute intersection point information)
   /// This function is called only once in BVH traversal.
   /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray &ray, bool hit) const {
+  void PostTraversal(const nanort::Ray<float> &ray, bool hit) const {
     if (hit) {
 
-      nanort::float3 cps[4];
+      float3 cps[4];
 
       unsigned int prim_index = intersection.prim_id;
 
@@ -611,7 +613,7 @@ class CurveIntersector
       cps[3][2] = vertices_[12 * prim_index + 11];
 
       // Compute tangent
-      nanort::float3 Dv;
+      float3 Dv;
       EvaluateBezierTangent(cps, intersection.u, &Dv);
       intersection.tangent = vnormalize(Dv);
 
@@ -622,8 +624,8 @@ class CurveIntersector
   const float *vertices_;
   const float *radiuss_;
   const int    num_subdivisions_;
-  mutable nanort::float3 ray_org_;
-  mutable nanort::float3 ray_dir_;
+  mutable float3 ray_org_;
+  mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 
   mutable I intersection;
@@ -639,7 +641,7 @@ int main(int argc, char **argv) {
   int width = 1024;
   int height = 1024;
 
-  nanort::float3 p(0.0f, 0.0f, 0.0f);
+  float3 p(0.0f, 0.0f, 0.0f);
   float sphere_radius = 4.0;
   float thickness = 0.01;
 
@@ -647,7 +649,7 @@ int main(int argc, char **argv) {
     thickness = atof(argv[1]);
   }
   
-  nanort::BVHBuildOptions options; // Use default option
+  nanort::BVHBuildOptions<float> options; // Use default option
   options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -687,12 +689,12 @@ int main(int argc, char **argv) {
 
       // Simple camera. change eye pos and direction fit to your scene. 
 
-      nanort::Ray ray;
+      nanort::Ray<float> ray;
       ray.org[0] = 0.0f;
       ray.org[1] = 0.0f;
       ray.org[2] = 20.0f;
 
-      nanort::float3 dir;
+      float3 dir;
       dir[0] = (x / (float)width) - 0.5f;
       dir[1] = (y / (float)height) - 0.5f;
       dir[2] = -1.0f;
@@ -710,9 +712,9 @@ int main(int argc, char **argv) {
       bool hit = accel.Traverse(ray, trace_options, isector);
       if (hit) {
         // Write your shader here.
-        nanort::float3 P;
-        nanort::float3 v = isector.intersection.normal;
-        //nanort::float3 v;
+        float3 P;
+        float3 v = isector.intersection.normal;
+        //float3 v;
         //v[0] = isector.intersection.u;
         //v[1] = isector.intersection.u;
         //v[2] = isector.intersection.u;
