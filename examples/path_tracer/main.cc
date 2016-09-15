@@ -7,6 +7,9 @@
 #define TINYEXR_IMPLEMENTATION
 #include "tinyexr.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 #include "nanort.h"
 
 #define USE_MULTIHIT_RAY_TRAVERSAL (0)
@@ -15,8 +18,8 @@
 #define M_PI 3.141592683
 #endif
 
-const int uMaxBounces = 10;
-const int SPP = 16;
+const int uMaxBounces = 8;
+const int SPP = 128;
 
 
 namespace {
@@ -299,6 +302,21 @@ void SaveImageRaw(const char* filename, const float* rgb, int width, int height)
   printf("Info: Saved RAW RGB image of [%dx%d] dimensions to [ %s ]\n", width, height, filename);
 }
 
+void SaveImagePNG(const char *filename, const float *rgb, int width, int height) {
+    unsigned char *bytes = new unsigned char[width * height * 3];
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            const int index = y * width + x;
+            bytes[index * 3 + 0] = (unsigned char)std::max(0.0f, std::min(rgb[index * 3 + 0] * 255.0f, 255.0f));          
+            bytes[index * 3 + 1] = (unsigned char)std::max(0.0f, std::min(rgb[index * 3 + 1] * 255.0f, 255.0f));          
+            bytes[index * 3 + 2] = (unsigned char)std::max(0.0f, std::min(rgb[index * 3 + 2] * 255.0f, 255.0f));          
+        }
+    }
+    stbi_write_png(filename, width, height, 3, bytes, width * 3);
+    delete[] bytes;
+}
+    
+
 void SaveImage(const char* filename, const float* rgb, int width, int height) {
 
   float* image_ptr[3];
@@ -563,6 +581,14 @@ inline float fresnel_schlick(float3 H, float3 norm, float n1) {
   return r0 + (1-r0)*pow5(1 - vdot(H, norm));
 }
 
+void progressBar(int tick, int total, int width = 50) {
+    float ratio = 100.0f * tick / total;
+    float count = width * tick / total;
+    std::string bar(width, ' ');
+    std::fill(bar.begin(), bar.begin() + count, '+');
+    printf("[ %6.2f %% ] [ %s ]%c", ratio, bar.c_str(), tick == total ? '\n' : '\r');
+    std::fflush(stdout);
+}
 
 int main(int argc, char** argv)
 {
@@ -655,7 +681,9 @@ int main(int argc, char** argv)
 
         float3 color = float3(0, 0, 0);
         float3 weight = float3(1, 1, 1);
-        for (int b = 0; b < uMaxBounces; ++b) {
+
+        int b;
+        for (b = 0; b < uMaxBounces; ++b) {
 
           // Russian Roulette
           float rr_fac = 1.0f;
@@ -797,12 +825,15 @@ int main(int argc, char** argv)
       rgb[3 * ((height - y - 1) * width + x) + 1] = finalColor[1];
       rgb[3 * ((height - y - 1) * width + x) + 2] = finalColor[2];
     }
+
+    progressBar(y + 1, height);
   }
 
   // Save image.
   SaveImage("render.exr", &rgb.at(0), width, height);
   // Save Raw Image that can be opened by tools like GIMP
   SaveImageRaw("render.data", &rgb.at(0), width, height);
+  SaveImagePNG("render.png", &rgb.at(0), width, height);
 
   return 0;
 }
