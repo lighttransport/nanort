@@ -54,7 +54,7 @@ Path tracing example contributed by https://github.com/daseyb
 
 ```
 template<typename T>
-classt {
+class {
   T org[3];        // [in] must set
   T dir[3];        // [in] must set
   T min_t;         // [in] must set
