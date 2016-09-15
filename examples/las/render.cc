@@ -78,6 +78,8 @@ typedef struct {
   std::vector<float> radiuss;
 } Particles;
 
+typedef nanort::real3<float> float3;
+
 // Predefined SAH predicator for sphere.
 class SpherePred {
  public:
@@ -93,7 +95,7 @@ class SpherePred {
     int axis = axis_;
     float pos = pos_;
 
-    nanort::float3 p0(&vertices_[3 * i]);
+    float3 p0(&vertices_[3 * i]);
 
     float center = p0[axis];
 
@@ -113,7 +115,7 @@ class SphereGeometry {
 
   /// Compute bounding box for `prim_index`th sphere.
   /// This function is called for each primitive in BVH build.
-  void BoundingBox(nanort::float3 *bmin, nanort::float3 *bmax, unsigned int prim_index) const {
+  void BoundingBox(float3 *bmin, float3 *bmax, unsigned int prim_index) const {
     (*bmin)[0] = vertices_[3 * prim_index + 0] - radiuss_[prim_index];
     (*bmin)[1] = vertices_[3 * prim_index + 1] - radiuss_[prim_index];
     (*bmin)[2] = vertices_[3 * prim_index + 2] - radiuss_[prim_index];
@@ -124,8 +126,8 @@ class SphereGeometry {
 
   const float *vertices_;
   const float *radiuss_;
-  mutable nanort::float3 ray_org_;
-  mutable nanort::float3 ray_dir_;
+  mutable float3 ray_org_;
+  mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 };
 
@@ -162,10 +164,10 @@ class SphereIntersector
 
     // http://wiki.cgsociety.org/index.php/Ray_Sphere_Intersection
 
-    const nanort::float3 center(&vertices_[3 * prim_index]);
+    const float3 center(&vertices_[3 * prim_index]);
     const float radius = radiuss_[prim_index];
 
-    nanort::float3 oc = ray_org_ - center;
+    float3 oc = ray_org_ - center;
 
     float a = vdot(ray_dir_, ray_dir_);
     float b = 2.0 * vdot(ray_dir_, oc);
@@ -236,7 +238,7 @@ class SphereIntersector
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
   /// This function is called only once in BVH traversal.
-  void PrepareTraversal(const nanort::Ray &ray,
+  void PrepareTraversal(const nanort::Ray<float> &ray,
                         const nanort::BVHTraceOptions &trace_options) const {
     ray_org_[0] = ray.org[0];
     ray_org_[1] = ray.org[1];
@@ -253,11 +255,11 @@ class SphereIntersector
   /// Post BVH traversal stuff(e.g. compute intersection point information)
   /// This function is called only once in BVH traversal.
   /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray &ray, bool hit) const {
+  void PostTraversal(const nanort::Ray<float> &ray, bool hit) const {
     if (hit) {
-      nanort::float3 hitP = ray_org_ + intersection.t * ray_dir_;
-      nanort::float3 center = nanort::float3(&vertices_[3*intersection.prim_id]);
-      nanort::float3 n = vnormalize(hitP - center);
+      float3 hitP = ray_org_ + intersection.t * ray_dir_;
+      float3 center = float3(&vertices_[3*intersection.prim_id]);
+      float3 n = vnormalize(hitP - center);
       intersection.u = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
       intersection.v = acos(n[1]) / M_PI;
     } 
@@ -265,8 +267,8 @@ class SphereIntersector
 
   const float *vertices_;
   const float *radiuss_;
-  mutable nanort::float3 ray_org_;
-  mutable nanort::float3 ray_dir_;
+  mutable float3 ray_org_;
+  mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 
   mutable I intersection;
@@ -278,22 +280,22 @@ nanort::BVHAccel<SphereGeometry, SpherePred,
                  SphereIntersector<SphereIntersection> >
     gAccel;
 
-inline nanort::float3 Lerp3(nanort::float3 v0, nanort::float3 v1,
-                            nanort::float3 v2, float u, float v) {
+inline float3 Lerp3(float3 v0, float3 v1,
+                            float3 v2, float u, float v) {
   return (1.0f - u - v) * v0 + u * v1 + v * v2;
 }
 
-inline void CalcNormal(nanort::float3& N, nanort::float3 v0, nanort::float3 v1,
-                       nanort::float3 v2) {
-  nanort::float3 v10 = v1 - v0;
-  nanort::float3 v20 = v2 - v0;
+inline void CalcNormal(float3& N, float3 v0, float3 v1,
+                       float3 v2) {
+  float3 v10 = v1 - v0;
+  float3 v20 = v2 - v0;
 
   N = vcross(v20, v10);
   N = vnormalize(N);
 }
 
-void BuildCameraFrame(nanort::float3* origin, nanort::float3* corner,
-                      nanort::float3* u, nanort::float3* v, float quat[4],
+void BuildCameraFrame(float3* origin, float3* corner,
+                      float3* u, float3* v, float quat[4],
                       float eye[3], float lookat[3], float up[3], float fov,
                       int width, int height) {
   float e[4][4];
@@ -303,7 +305,7 @@ void BuildCameraFrame(nanort::float3* origin, nanort::float3* corner,
   float r[4][4];
   build_rotmatrix(r, quat);
 
-  nanort::float3 lo;
+  float3 lo;
   lo[0] = lookat[0] - eye[0];
   lo[1] = lookat[1] - eye[1];
   lo[2] = lookat[2] - eye[2];
@@ -344,12 +346,12 @@ void BuildCameraFrame(nanort::float3* origin, nanort::float3* corner,
   float lookat1d[3];
   dir[2] = -dir[2];
   Matrix::MultV(lookat1d, m, dir);
-  nanort::float3 lookat1(lookat1d[0], lookat1d[1], lookat1d[2]);
+  float3 lookat1(lookat1d[0], lookat1d[1], lookat1d[2]);
 
   float up1d[3];
   Matrix::MultV(up1d, m, up);
 
-  nanort::float3 up1(up1d[0], up1d[1], up1d[2]);
+  float3 up1(up1d[0], up1d[1], up1d[2]);
 
   // absolute -> relative
   up1[0] -= eye1[0];
@@ -365,7 +367,7 @@ void BuildCameraFrame(nanort::float3* origin, nanort::float3* corner,
   {
     float flen =
         (0.5f * (float)height / tanf(0.5f * (float)(fov * kPI / 180.0f)));
-    nanort::float3 look1;
+    float3 look1;
     look1[0] = lookat1[0] - eye1[0];
     look1[1] = lookat1[1] - eye1[1];
     look1[2] = lookat1[2] - eye1[2];
@@ -391,19 +393,19 @@ void BuildCameraFrame(nanort::float3* origin, nanort::float3* corner,
   }
 }
 
-nanort::Ray GenerateRay(const nanort::float3& origin,
-                        const nanort::float3& corner, const nanort::float3& du,
-                        const nanort::float3& dv, float u, float v) {
-  nanort::float3 dir;
+nanort::Ray<float> GenerateRay(const float3& origin,
+                        const float3& corner, const float3& du,
+                        const float3& dv, float u, float v) {
+  float3 dir;
 
   dir[0] = (corner[0] + u * du[0] + v * dv[0]) - origin[0];
   dir[1] = (corner[1] + u * du[1] + v * dv[1]) - origin[1];
   dir[2] = (corner[2] + u * du[2] + v * dv[2]) - origin[2];
   dir = vnormalize(dir);
 
-  nanort::float3 org;
+  float3 org;
 
-  nanort::Ray ray;
+  nanort::Ray<float> ray;
   ray.org[0] = origin[0];
   ray.org[1] = origin[1];
   ray.org[2] = origin[2];
@@ -515,7 +517,7 @@ bool Renderer::BuildBVH() {
 
   std::cout << "[Build BVH] " << std::endl;
 
-  nanort::BVHBuildOptions build_options;  // Use default option
+  nanort::BVHBuildOptions<float> build_options;  // Use default option
   build_options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -564,7 +566,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
   float look_at[3] = {config.look_at[0], config.look_at[1], config.look_at[2]};
   float up[3] = {config.up[0], config.up[1], config.up[2]};
   float fov = config.fov;
-  nanort::float3 origin, corner, u, v;
+  float3 origin, corner, u, v;
   BuildCameraFrame(&origin, &corner, &u, &v, quat, eye, look_at, up, fov, width,
                    height);
 
@@ -598,7 +600,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
         }
 
         for (int x = 0; x < config.width; x++) {
-          nanort::Ray ray;
+          nanort::Ray<float> ray;
           ray.org[0] = origin[0];
           ray.org[1] = origin[1];
           ray.org[2] = origin[2];
@@ -606,7 +608,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
           float u0 = pcg32_random(&rng);
           float u1 = pcg32_random(&rng);
 
-          nanort::float3 dir;
+          float3 dir;
           dir = corner + (float(x) + u0) * u +
                 (float(config.height - y - 1) + u1) * v;
           dir = vnormalize(dir);
@@ -623,7 +625,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
           nanort::BVHTraceOptions trace_options;
           bool hit = gAccel.Traverse(ray, trace_options, sphere_intersector);
           if (hit) {
-            nanort::float3 p;
+            float3 p;
             p[0] =
                 ray.org[0] + sphere_intersector.intersection.t * ray.dir[0];
             p[1] =
@@ -645,8 +647,8 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
 
             unsigned int prim_id = sphere_intersector.intersection.prim_id;
 
-            nanort::float3 sphere_center(&gParticles.vertices[3*prim_id]);
-            nanort::float3 N = vnormalize(p - sphere_center);
+            float3 sphere_center(&gParticles.vertices[3*prim_id]);
+            float3 N = vnormalize(p - sphere_center);
 
             layer->normal[4 * (y * config.width + x) + 0] = 0.5 * N[0] + 0.5;
             layer->normal[4 * (y * config.width + x) + 1] = 0.5 * N[1] + 0.5;

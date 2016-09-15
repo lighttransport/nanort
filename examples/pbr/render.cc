@@ -166,7 +166,7 @@ struct Texture {
 Mesh gMesh;
 std::vector<Material> gMaterials;
 std::vector<Texture> gTextures;
-nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred,
+nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>,
                  nanort::TriangleIntersector<> >
     gAccel;
 
@@ -235,22 +235,24 @@ const char* mmap_file(size_t* len, const char* filename) {
 #endif
 }
 
-inline nanort::float3 Lerp3(nanort::float3 v0, nanort::float3 v1,
-                            nanort::float3 v2, float u, float v) {
+typedef nanort::real3<float> float3;
+
+inline float3 Lerp3(float3 v0, float3 v1,
+                            float3 v2, float u, float v) {
   return (1.0f - u - v) * v0 + u * v1 + v * v2;
 }
 
-inline void CalcNormal(nanort::float3& N, nanort::float3 v0, nanort::float3 v1,
-                       nanort::float3 v2) {
-  nanort::float3 v10 = v1 - v0;
-  nanort::float3 v20 = v2 - v0;
+inline void CalcNormal(float3& N, float3 v0, float3 v1,
+                       float3 v2) {
+  float3 v10 = v1 - v0;
+  float3 v20 = v2 - v0;
 
   N = vcross(v20, v10);
   N = vnormalize(N);
 }
 
-void BuildCameraFrame(nanort::float3* origin, nanort::float3* corner,
-                      nanort::float3* u, nanort::float3* v, float quat[4],
+void BuildCameraFrame(float3* origin, float3* corner,
+                      float3* u, float3* v, float quat[4],
                       float eye[3], float lookat[3], float up[3], float fov,
                       int width, int height) {
   float e[4][4];
@@ -260,7 +262,7 @@ void BuildCameraFrame(nanort::float3* origin, nanort::float3* corner,
   float r[4][4];
   build_rotmatrix(r, quat);
 
-  nanort::float3 lo;
+  float3 lo;
   lo[0] = lookat[0] - eye[0];
   lo[1] = lookat[1] - eye[1];
   lo[2] = lookat[2] - eye[2];
@@ -301,12 +303,12 @@ void BuildCameraFrame(nanort::float3* origin, nanort::float3* corner,
   float lookat1d[3];
   dir[2] = -dir[2];
   Matrix::MultV(lookat1d, m, dir);
-  nanort::float3 lookat1(lookat1d[0], lookat1d[1], lookat1d[2]);
+  float3 lookat1(lookat1d[0], lookat1d[1], lookat1d[2]);
 
   float up1d[3];
   Matrix::MultV(up1d, m, up);
 
-  nanort::float3 up1(up1d[0], up1d[1], up1d[2]);
+  float3 up1(up1d[0], up1d[1], up1d[2]);
 
   // absolute -> relative
   up1[0] -= eye1[0];
@@ -322,7 +324,7 @@ void BuildCameraFrame(nanort::float3* origin, nanort::float3* corner,
   {
     float flen =
         (0.5f * (float)height / tanf(0.5f * (float)(fov * kPI / 180.0f)));
-    nanort::float3 look1;
+    float3 look1;
     look1[0] = lookat1[0] - eye1[0];
     look1[1] = lookat1[1] - eye1[1];
     look1[2] = lookat1[2] - eye1[2];
@@ -348,19 +350,19 @@ void BuildCameraFrame(nanort::float3* origin, nanort::float3* corner,
   }
 }
 
-nanort::Ray GenerateRay(const nanort::float3& origin,
-                        const nanort::float3& corner, const nanort::float3& du,
-                        const nanort::float3& dv, float u, float v) {
-  nanort::float3 dir;
+nanort::Ray<float> GenerateRay(const float3& origin,
+                        const float3& corner, const float3& du,
+                        const float3& dv, float u, float v) {
+  float3 dir;
 
   dir[0] = (corner[0] + u * du[0] + v * dv[0]) - origin[0];
   dir[1] = (corner[1] + u * du[1] + v * dv[1]) - origin[1];
   dir[2] = (corner[2] + u * du[2] + v * dv[2]) - origin[2];
   dir = vnormalize(dir);
 
-  nanort::float3 org;
+  float3 org;
 
-  nanort::Ray ray;
+  nanort::Ray<float> ray;
   ray.org[0] = origin[0];
   ray.org[1] = origin[1];
   ray.org[2] = origin[2];
@@ -501,7 +503,7 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale, int num_threads,
       f2 = attrib.indices[3 * f + 2].normal_index;
 
       if (f0 > 0 && f1 > 0 && f2 > 0) {
-        nanort::float3 n0, n1, n2;
+        float3 n0, n1, n2;
 
         n0[0] = attrib.normals[3 * f0 + 0];
         n0[1] = attrib.normals[3 * f0 + 1];
@@ -531,7 +533,7 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale, int num_threads,
         f1 = attrib.indices[3 * f + 1].vertex_index;
         f2 = attrib.indices[3 * f + 2].vertex_index;
 
-        nanort::float3 v0, v1, v2;
+        float3 v0, v1, v2;
 
         v0[0] = attrib.vertices[3 * f0 + 0];
         v0[1] = attrib.vertices[3 * f0 + 1];
@@ -545,7 +547,7 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale, int num_threads,
         v2[1] = attrib.vertices[3 * f2 + 1];
         v2[2] = attrib.vertices[3 * f2 + 2];
 
-        nanort::float3 N;
+        float3 N;
         CalcNormal(N, v0, v1, v2);
 
         mesh.facevarying_normals[3 * (3 * f + 0) + 0] = N[0];
@@ -570,7 +572,7 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale, int num_threads,
       f1 = attrib.indices[3 * f + 1].vertex_index;
       f2 = attrib.indices[3 * f + 2].vertex_index;
 
-      nanort::float3 v0, v1, v2;
+      float3 v0, v1, v2;
 
       v0[0] = attrib.vertices[3 * f0 + 0];
       v0[1] = attrib.vertices[3 * f0 + 1];
@@ -584,7 +586,7 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale, int num_threads,
       v2[1] = attrib.vertices[3 * f2 + 1];
       v2[2] = attrib.vertices[3 * f2 + 2];
 
-      nanort::float3 N;
+      float3 N;
       CalcNormal(N, v0, v1, v2);
 
       mesh.facevarying_normals[3 * (3 * f + 0) + 0] = N[0];
@@ -610,7 +612,7 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale, int num_threads,
       f2 = attrib.indices[3 * f + 2].texcoord_index;
 
       if (f0 > 0 && f1 > 0 && f2 > 0) {
-        nanort::float3 n0, n1, n2;
+        float3 n0, n1, n2;
 
         n0[0] = attrib.texcoords[2 * f0 + 0];
         n0[1] = attrib.texcoords[2 * f0 + 1];
@@ -667,7 +669,7 @@ bool Renderer::BuildBVH() {
 
   std::cout << "[Build BVH] " << std::endl;
 
-  nanort::BVHBuildOptions build_options;  // Use default option
+  nanort::BVHBuildOptions<float> build_options;  // Use default option
   build_options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -676,9 +678,9 @@ bool Renderer::BuildBVH() {
 
   auto t_start = std::chrono::system_clock::now();
 
-  nanort::TriangleMesh triangle_mesh(gMesh.vertices.data(), gMesh.faces.data());
-  nanort::TriangleSAHPred triangle_pred(gMesh.vertices.data(),
-                                        gMesh.faces.data());
+  nanort::TriangleMesh<float> triangle_mesh(gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
+  nanort::TriangleSAHPred<float> triangle_pred(gMesh.vertices.data(),
+                                        gMesh.faces.data(), sizeof(float) * 3);
 
   printf("num_triangles = %lu\n", gMesh.num_faces);
 
@@ -720,7 +722,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
   float look_at[3] = {config.look_at[0], config.look_at[1], config.look_at[2]};
   float up[3] = {config.up[0], config.up[1], config.up[2]};
   float fov = config.fov;
-  nanort::float3 origin, corner, u, v;
+  float3 origin, corner, u, v;
   BuildCameraFrame(&origin, &corner, &u, &v, quat, eye, look_at, up, fov, width,
                    height);
 
@@ -754,7 +756,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
         }
 
         for (int x = 0; x < config.width; x++) {
-          nanort::Ray ray;
+          nanort::Ray<float> ray;
           ray.org[0] = origin[0];
           ray.org[1] = origin[1];
           ray.org[2] = origin[2];
@@ -762,7 +764,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
           float u0 = pcg32_random(&rng);
           float u1 = pcg32_random(&rng);
 
-          nanort::float3 dir;
+          float3 dir;
           dir = corner + (float(x) + u0) * u +
                 (float(config.height - y - 1) + u1) * v;
           dir = vnormalize(dir);
@@ -775,11 +777,11 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
           ray.max_t = kFar;
 
           nanort::TriangleIntersector<> triangle_intersector(
-              gMesh.vertices.data(), gMesh.faces.data());
+              gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
           nanort::BVHTraceOptions trace_options;
           bool hit = gAccel.Traverse(ray, trace_options, triangle_intersector);
           if (hit) {
-            nanort::float3 p;
+            float3 p;
             p[0] =
                 ray.org[0] + triangle_intersector.intersection.t * ray.dir[0];
             p[1] =
@@ -801,9 +803,9 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
 
             unsigned int prim_id = triangle_intersector.intersection.prim_id;
 
-            nanort::float3 N;
+            float3 N;
             if (gMesh.facevarying_normals.size() > 0) {
-              nanort::float3 n0, n1, n2;
+              float3 n0, n1, n2;
               n0[0] = gMesh.facevarying_normals[9 * prim_id + 0];
               n0[1] = gMesh.facevarying_normals[9 * prim_id + 1];
               n0[2] = gMesh.facevarying_normals[9 * prim_id + 2];
@@ -821,7 +823,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
               f1 = gMesh.faces[3 * prim_id + 1];
               f2 = gMesh.faces[3 * prim_id + 2];
 
-              nanort::float3 v0, v1, v2;
+              float3 v0, v1, v2;
               v0[0] = gMesh.vertices[3 * f0 + 0];
               v0[1] = gMesh.vertices[3 * f0 + 1];
               v0[2] = gMesh.vertices[3 * f0 + 2];
@@ -847,9 +849,9 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
                 triangle_intersector.intersection.t;
             layer->depth[4 * (y * config.width + x) + 3] = 1.0f;
 
-            nanort::float3 UV;
+            float3 UV;
             if (gMesh.facevarying_uvs.size() > 0) {
-              nanort::float3 uv0, uv1, uv2;
+              float3 uv0, uv1, uv2;
               uv0[0] = gMesh.facevarying_uvs[6 * prim_id + 0];
               uv0[1] = gMesh.facevarying_uvs[6 * prim_id + 1];
               uv1[0] = gMesh.facevarying_uvs[6 * prim_id + 2];

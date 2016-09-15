@@ -8,13 +8,12 @@ Path tracing example contributed by https://github.com/daseyb
 
 `NanoRT` is simple single header only ray tracing kernel.
 
-`NanoRT` BVH traversal is based on mallie renderer: https://github.com/lighttransport/mallie
-
 ## Features
 
 * Portable C++
   * Only use C++-03 features.
   * (Some example applications use C++-11 feature, though)
+  * There is experimental C89 port of NanoRT in `c89` branch https://github.com/lighttransport/nanort/tree/c89
 * BVH spatial data structure for efficient ray intersection finding.
   * Should be able to handle ~10M triangles scene efficiently with moderate memory consumption
 * Custom geometry & intersection
@@ -54,12 +53,13 @@ Path tracing example contributed by https://github.com/daseyb
 `nanort::BVHTraceOptions` specifies ray traverse/intersection options.
 
 ```
-typedef struct {
-  float org[3];    // [in] must set
-  float dir[3];    // [in] must set
-  float min_t;     // [in] must set
-  float max_t;     // [in] must set
-  float inv_dir[3];// filled internally
+template<typename T>
+classt {
+  T org[3];        // [in] must set
+  T dir[3];        // [in] must set
+  T min_t;         // [in] must set
+  T max_t;         // [in] must set
+  T inv_dir[3];    // filled internally
   int dir_sign[3]; // filled internally
 } Ray;
 
@@ -75,18 +75,22 @@ nanort::BVHBuildOptions options; // BVH build option
 const float *vertices = ...;
 const unsigned int *faces = ...;
 
-nanort::TriangleMesh triangle_mesh(vertices, faces);
-nanort::TriangleSAHPred triangle_pred(vertices, faces);
+// Need to specify stride bytes for `vertices`. 
+// When vertex is stored XYZXYZXYZ... in float type, stride become 12(= sizeof(float) * 3).
+nanort::TriangleMesh<float> triangle_mesh(vertices, faces, /* stride */sizeof(float) * 3);
+nanort::TriangleSAHPred<float> triangle_pred(vertices, faces, /* stride */sizeof(float) * 3);
 
-nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<> > accel;
+nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> > accel;
 ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
 
-nanort::TriangleIntersector<> triangle_intersecter(vertices, faces);
+nanort::TriangleIntersector<> triangle_intersecter(vertices, faces, /* stride */sizeof(float) * 3);
+
+nanort::Ray<float> ray;
+// fill ray org and ray dir.
+...
+// fill minimum and maximum hit distance.
 ray.min_t = 0.0f;
 ray.max_t = 1.0e+30f;
-
-nanort::Ray ray;
-// fill ray org and ray dir.
 
 // Returns nearest hit point(if exists)
 BVHTraceOptions trace_options;
@@ -97,8 +101,9 @@ Application must prepare geometric information and store it in linear array.
 
 For a builtin Triangle intersector,
 
-* `vertices` : The array of triangle vertices(xyz * numVertices)
+* `vertices` : The array of triangle vertices(e.g. xyz * numVertices)
 * `faces` : The array of triangle face indices(3 * numFaces)
+* `stride` : Byte stride of each vertex data
 
 are required attributes.
 
@@ -111,12 +116,12 @@ are required attributes.
     Mesh mesh;
     // load mesh data...
 
-    nanort::BVHBuildOptions options; // Use default option
+    nanort::BVHBuildOptions<float> options; // Use default option
 
-    nanort::TriangleMesh triangle_mesh(mesh.vertices, mesh.faces);
-    nanort::TriangleSAHPred triangle_pred(mesh.vertices, mesh.faces);
+    nanort::TriangleMesh<float> triangle_mesh(mesh.vertices, mesh.faces, /* stride */sizeof(float) * 3);
+    nanort::TriangleSAHPred<float> triangle_pred(mesh.vertices, mesh.faces, /* stride */sizeof(float) * 3);
 
-    nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred> accel;
+    nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> > accel;
     ret = accel.Build(mesh.vertices, mesh.faces, mesh.num_faces, options);
     assert(ret);
 
@@ -142,7 +147,7 @@ are required attributes.
 
         // Simple camera. change eye pos and direction fit to .obj model. 
 
-        nanort::Ray ray;
+        nanort::Ray<float> ray;
         ray.min_t = 0.0f;
         ray.max_t = tFar;
         ray.org[0] = 0.0f;
@@ -158,7 +163,7 @@ are required attributes.
         ray.dir[1] = dir[1];
         ray.dir[2] = dir[2];
 
-        nanort::TriangleIntersector<> triangle_intersecter(mesh.vertices, mesh.faces);
+        nanort::TriangleIntersector<> triangle_intersecter(mesh.vertices, mesh.faces, /* stride */sizeof(float) * 3);
         bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
         if (hit) {
           // Write your shader here.
@@ -186,6 +191,7 @@ See `examples` directory for example renderer using `NanoRT`.
 * [x] [examples/objrender](examples/objrender) Render wavefront .obj model using NanoRT.
 * [x] [examples/par_msquare](examples/par_msquare) Render heightfield by converting it to meshes using par_msquare(marching squares)
 * [x] [examples/las](examples/las) Visualize LiDAR(LAS) point cloud as sphere geometry.
+* [x] [examples/double_precision](examples/double_precision) Double precision triangle geometry and BVH.
 
 ### Custom geometry
 
@@ -217,6 +223,8 @@ PR are always welcome!
 
 * [ ] Optimize ray tracing kernel
   * [ ] Efficient Ray Tracing Kernels for Modern CPU Architectures http://jcgt.org/published/0004/04/05/
+  * [ ] ARM NEON SIMD
+  * [ ] Intel SSE SIMD
 * [ ] Scene graph support.
   * [ ] Instancing support.
 * [ ] Fix multi-hit ray traversal.
@@ -227,9 +235,11 @@ PR are always welcome!
   * [x] Double sided on/off.
   * [ ] Ray offset.
   * [ ] Avoid self-intersection.
-  * [x] Custom intersection filter.
+  * [x] Custom intersection filter through C++ template.
 * [ ] Fast BVH build
   * [ ] Bonsai: Rapid Bounding Volume Hierarchy Generation using Mini Trees http://jcgt.org/published/0004/03/02/
+* [ ] Efficient BVH
+  * [ ] Spatial split BVH
 * [ ] Motion blur
 * [ ] Accurate ray curve intersection
 * [ ] Example bi-directional path tracing renderer.
