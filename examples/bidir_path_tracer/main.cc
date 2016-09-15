@@ -21,11 +21,12 @@ static const float kInf = 1.0e30f;
 static const float kPi = 4.0f * std::atan(1.0f);
 
 static const int uMaxBounces = 8;
-static const int SPP = 1000;
+//static const int SPP = 1000;
+static const int SPP = 100;
 
-typedef nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred,
-                         nanort::TriangleIntersector<> >
-    Accel;
+typedef nanort::BVHAccel<float, nanort::TriangleMesh<float>,
+                         nanort::TriangleSAHPred<float>,
+                         nanort::TriangleIntersector<> > Accel;
 
 namespace {
 
@@ -905,7 +906,7 @@ void raytrace(const Mesh &mesh, const Accel &accel,
   float pdfFwd = pdf, pdfRev = 0.0f;
   for (int b = 0; b < uMaxBounces; ++b) {
     // Intersection test.
-    nanort::Ray ray;
+    nanort::Ray<float> ray;
     ray.min_t = kEps;
     ray.max_t = kInf;
 
@@ -917,7 +918,8 @@ void raytrace(const Mesh &mesh, const Accel &accel,
     ray.org[2] = rayOrg[2];
 
     nanort::TriangleIntersector<> triangle_intersector(mesh.vertices,
-                                                       mesh.faces);
+                                                       mesh.faces,
+                                                       sizeof(float) * 3);
     nanort::BVHTraceOptions trace_options;
     bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
 
@@ -1219,7 +1221,7 @@ float calcG(const Vertex &v1, const Vertex &v2, const Mesh &mesh,
   float dist = to.length();
   to = to / dist;
 
-  nanort::Ray ray;
+  nanort::Ray<float> ray;
   ray.org[0] = v1.position[0];
   ray.org[1] = v1.position[1];
   ray.org[2] = v1.position[2];
@@ -1229,7 +1231,7 @@ float calcG(const Vertex &v1, const Vertex &v2, const Mesh &mesh,
   ray.min_t = kEps;
   ray.max_t = kInf;
 
-  nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces);
+  nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces, sizeof(float) * 3);
   nanort::BVHTraceOptions trace_options;
   bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
   if (!hit) {
@@ -1323,7 +1325,7 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  nanort::BVHBuildOptions build_options;  // Use default option
+  nanort::BVHBuildOptions<float> build_options;  // Use default option
   build_options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -1333,15 +1335,15 @@ int main(int argc, char **argv) {
   Timer t;
   t.start();
 
-  nanort::TriangleMesh triangle_mesh(mesh.vertices, mesh.faces);
-  nanort::TriangleSAHPred triangle_pred(mesh.vertices, mesh.faces);
+  nanort::TriangleMesh<float> triangle_mesh(mesh.vertices, mesh.faces,
+                                            sizeof(float) * 3);
+  nanort::TriangleSAHPred<float> triangle_pred(mesh.vertices, mesh.faces,
+                                               sizeof(float) * 3);
 
   printf("num_triangles = %zu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
 
-  nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred,
-                   nanort::TriangleIntersector<> >
-      accel;
+  Accel accel;
   ret =
       accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
   assert(ret);
