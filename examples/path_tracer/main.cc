@@ -12,17 +12,15 @@
 
 #include "nanort.h"
 
-#include <iostream>
-#include <algorithm>
-
 #define USE_MULTIHIT_RAY_TRAVERSAL (0)
 
 #ifndef M_PI
 #define M_PI 3.141592683
 #endif
 
-const int uMaxBounces = 8;
-const int SPP = 128;
+const int uMaxBounces = 10;
+//const int SPP = 10000;
+const int SPP = 100;
 
 namespace {
 
@@ -622,7 +620,7 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  nanort::BVHBuildOptions build_options;  // Use default option
+  nanort::BVHBuildOptions<float> build_options; // Use default option
   build_options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -632,17 +630,15 @@ int main(int argc, char **argv) {
   timerutil t;
   t.start();
 
-  nanort::TriangleMesh triangle_mesh(mesh.vertices, mesh.faces);
-  nanort::TriangleSAHPred triangle_pred(mesh.vertices, mesh.faces);
+  nanort::TriangleMesh<float> triangle_mesh(mesh.vertices, mesh.faces, sizeof(float) * 3);
+  nanort::TriangleSAHPred<float> triangle_pred(mesh.vertices, mesh.faces, sizeof(float) * 3);
 
   printf("num_triangles = %lu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
 
-  nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred,
-                   nanort::TriangleIntersector<> >
-      accel;
-  ret =
-      accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
+
+  nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> > accel;
+  ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
   assert(ret);
 
   t.end();
@@ -698,7 +694,7 @@ int main(int argc, char **argv) {
           }
           weight *= 1.0 / rr_fac;
 
-          nanort::Ray ray;
+          nanort::Ray<float> ray;
           float kFar = 1.0e+30f;
           ray.min_t = 0.001f;
           ray.max_t = kFar;
@@ -710,8 +706,7 @@ int main(int argc, char **argv) {
           ray.org[1] = rayOrg[1];
           ray.org[2] = rayOrg[2];
 
-          nanort::TriangleIntersector<> triangle_intersector(mesh.vertices,
-                                                             mesh.faces);
+          nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces, sizeof(float) * 3);
           nanort::BVHTraceOptions trace_options;
           bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
 
