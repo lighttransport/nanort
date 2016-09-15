@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cmath>
 #include <ctime>
+#include <climits>
 #include <iostream>
 #include <vector>
 
@@ -41,6 +42,8 @@ inline double to_duration(TypeType start, TimeType end) {
          100.0;
 }
 #else
+#define nullptr NULL
+
 typedef clock_t TimeType;
 inline TimeType tick() { return clock(); }
 inline double to_duration(TimeType start, TimeType end) {
