@@ -21,7 +21,7 @@ static const float kInf = 1.0e30f;
 static const float kPi  = 4.0f * std::atan(1.0f);
 
 static const int uMaxBounces = 8;
-static const int SPP = 100;
+static const int SPP = 1000;
 
 typedef nanort::BVHAccel<nanort::TriangleMesh, nanort::TriangleSAHPred, nanort::TriangleIntersector<> > Accel;
 
@@ -1078,24 +1078,26 @@ float weightMIS(const LightSampler &light, const std::vector<Vertex> &eyeVert, c
                 int numEyeVert, int numLightVert, const Mesh &mesh, const Accel &accel) {
     if (numEyeVert <= 2 && numLightVert == 0) return 1.0f;
 
-    std::vector<Vertex> path;
+    const int length = numEyeVert + numLightVert;
+    std::vector<std::pair<float, float> > path(numEyeVert + numLightVert);
     for (int i = 0; i < numEyeVert; i++) {
-        path.push_back(eyeVert[i]);
+        path[i].first  = eyeVert[i].pdfFwd;
+        path[i].second = eyeVert[i].pdfRev;
     }
     
     for (int i = numLightVert - 1; i >= 0; i--) {
-        path.push_back(lightVert[i]);
+        path[numEyeVert + (numLightVert - i - 1)].first  = lightVert[i].pdfFwd;
+        path[numEyeVert + (numLightVert - i - 1)].second = lightVert[i].pdfRev;
     }
-    const int pathLen = path.size();
 
-    Vertex *ve = numEyeVert - 1 >= 0 ? &path[numEyeVert - 1] : nullptr;
-    Vertex *vl = numEyeVert < pathLen ? &path[numEyeVert] : nullptr;
-    Vertex *veMinus = numEyeVert - 2 >= 0 ? &path[numEyeVert - 2] : nullptr;
-    Vertex *vlMinus = numEyeVert + 1 < pathLen ? &path[numEyeVert + 1] : nullptr;
+    const Vertex *ve = numEyeVert - 1 >= 0 ? &eyeVert[numEyeVert - 1] : nullptr;
+    const Vertex *vl = numLightVert - 1 >= 0 ? &lightVert[numLightVert - 1] : nullptr;
+    const Vertex *veMinus = numEyeVert - 2 >= 0 ? &eyeVert[numEyeVert - 2] : nullptr;
+    const Vertex *vlMinus = numLightVert - 2 >= 0 ? &lightVert[numLightVert - 2] : nullptr;
 
     if (ve) {
         if (numLightVert == 0) {
-            ve->pdfRev = 1.0f / light.totalArea();
+            path[numEyeVert - 1].second = 1.0f / light.totalArea();
         } else if (numLightVert == 1) {
             float3 to = ve->position - vl->position;
             float dist = to.length();
@@ -1103,7 +1105,7 @@ float weightMIS(const LightSampler &light, const std::vector<Vertex> &eyeVert, c
             float pdfDir = std::max(0.0f, vdot(vl->norm, to));
 
             float dot = vdot(vl->norm, to);
-            ve->pdfRev = pdfDir * dot / (dist * dist);
+            path[numEyeVert - 1].second = pdfDir * dot / (dist * dist);
         } else {
             float3 wi = vlMinus->position - vl->position;
             float3 wo = ve->position - vl->position;
@@ -1112,7 +1114,7 @@ float weightMIS(const LightSampler &light, const std::vector<Vertex> &eyeVert, c
             wi.normalize();
             wo.normalize();
             float pdfOmega = pdfBRDF(vl->mat, wi, wo, vl->originalNorm, vl->norm);
-            ve->pdfRev = pdfOmega * std::abs(vdot(vl->norm, wo)) / (dist * dist);
+            path[numEyeVert - 1].second = pdfOmega * std::abs(vdot(vl->norm, wo)) / (dist * dist);
         }
     }
 
@@ -1128,7 +1130,7 @@ float weightMIS(const LightSampler &light, const std::vector<Vertex> &eyeVert, c
             wi.normalize();
             wo.normalize();
             float pdfOmega = pdfBRDF(ve->mat, wi, wo, ve->originalNorm, ve->norm);
-            vl->pdfRev = pdfOmega * std::abs(vdot(ve->norm, wo)) / (dist * dist);
+            path[numEyeVert].second = pdfOmega * std::abs(vdot(ve->norm, wo)) / (dist * dist);
         }
     }
 
@@ -1140,7 +1142,7 @@ float weightMIS(const LightSampler &light, const std::vector<Vertex> &eyeVert, c
             float pdfDir = std::max(0.0f, vdot(ve->norm, to));
 
             float dot = vdot(ve->norm, to);
-            veMinus->pdfRev = pdfDir * dot / (dist * dist);
+            path[numEyeVert - 2].second = pdfDir * dot / (dist * dist);
         } else {
             float3 wi = vl->position - ve->position;
             float3 wo = veMinus->position - ve->position;
@@ -1149,7 +1151,7 @@ float weightMIS(const LightSampler &light, const std::vector<Vertex> &eyeVert, c
             wi.normalize();
             wo.normalize();
             float pdfOmega = pdfBRDF(ve->mat, wi, wo, ve->originalNorm, ve->norm);
-            veMinus->pdfRev = pdfOmega * std::abs(vdot(ve->norm, wo)) / (dist * dist);
+            path[numEyeVert - 2].second = pdfOmega * std::abs(vdot(ve->norm, wo)) / (dist * dist);
         }
     }
 
@@ -1165,28 +1167,28 @@ float weightMIS(const LightSampler &light, const std::vector<Vertex> &eyeVert, c
             wi.normalize();
             wo.normalize();
             float pdfOmega = pdfBRDF(vl->mat, wi, wo, vl->originalNorm, vl->norm);
-            vlMinus->pdfRev = pdfOmega * std::abs(vdot(vl->norm, wo)) / (dist * dist);
+            path[numEyeVert + 1].second = pdfOmega * std::abs(vdot(vl->norm, wo)) / (dist * dist);
         }
     }
     
     float mis = 0.0;
     float prob = 1.0f;
     for (int i = numEyeVert - 1; i >= 2; i--) {
-        float pdfFwd = path[i].pdfFwd == 0.0f ? 1.0f : path[i].pdfFwd;
-        float pdfRev = path[i].pdfRev == 0.0f ? 1.0f : path[i].pdfRev;
+        float pdfFwd = path[i].first == 0.0f ? 1.0f : path[i].first;
+        float pdfRev = path[i].second == 0.0f ? 1.0f : path[i].second;
         prob *= pdfRev / pdfFwd;
         
-        if (path[i].isDelta() || path[i - 1].isDelta()) continue;
+        if (eyeVert[i].isDelta() || eyeVert[i - 1].isDelta()) continue;
         mis += prob * prob;
     }
     
     prob = 1.0f;
-    for (int i = numEyeVert; i < pathLen; i++) {
-        float pdfFwd = path[i].pdfFwd == 0.0f ? 1.0f : path[i].pdfFwd;
-        float pdfRev = path[i].pdfRev == 0.0f ? 1.0f : path[i].pdfRev;
+    for (int i = numEyeVert; i < length; i++) {
+        float pdfFwd = path[i].first == 0.0f ? 1.0f : path[i].first;
+        float pdfRev = path[i].second == 0.0f ? 1.0f : path[i].second;
         prob *= pdfRev / pdfFwd;
         
-        if (path[i].isDelta() || (i + 1 < pathLen && path[i + 1].isDelta())) continue;
+        if (lightVert[length - i - 1].isDelta() || (i + 1 < length && lightVert[length - i - 2].isDelta())) continue;
         mis += prob * prob;
     }
 
