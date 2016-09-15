@@ -41,6 +41,7 @@ Path tracing example contributed by https://github.com/daseyb
 ## Projects using NanoRT
 
 * lightmetrica https://github.com/hi2p-perim/lightmetrica-v2
+* OSPRay NanoRT module https://github.com/jeffamstutz/module_nanort/
 
 ## API
 
