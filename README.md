@@ -19,7 +19,7 @@ Path tracing example contributed by https://github.com/daseyb
 * Custom geometry & intersection
   * Built-in triangle mesh gemetry & intersector is provided.
 * Cross platform
-  * MacOSX, Linux, Windows, iOS, Android, ARM, x86, SPARC, (maybe)MIPS, etc.
+  * MacOSX, Linux, Windows, iOS, Android, ARM, x86, SPARC, (maybe)MIPS, (will be)RISC-V, etc.
   * For example, NanoRT works finely on Raspberry Pi 2(arm 32bit) and Raspberrry Pi 3!(AARCH64 kernel)
 * GPU effient data structure
   * Built BVH tree from `NanoRT` is a linear array and does not have pointers, thus it is suited for GPU raytracing(GPU ray traversal).
