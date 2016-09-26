@@ -401,6 +401,9 @@ struct BVHBuildOptions {
   unsigned int shallow_depth;
   unsigned int min_primitives_for_parallel_build;
 
+  // SBVH parameter([0, 1]). 0: regular BVH, 1: full SBVH
+  float sbvh_alpha;
+
   // Cache bounding box computation.
   // Requires more memory, but BVHbuild can be faster.
   bool cache_bbox;
@@ -459,16 +462,101 @@ class BBox {
     bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<T>::max();
     bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<T>::max();
   }
+
 };
 
-// Primitive reference(32bytes)
-typedef struct {
-  float bmin[3];
-  unsigned int prim_id;
-  float bmax[3];
-  unsigned int pad0;
-} PrimRef;
+template<typename T>
+inline BBox<T> BBoxExtend(const BBox<T>& a, const real3<T>& b)
+{
+  BBox<T> c;
+  c.bmin[0] = std::min(a.bmin[0], b[0]);
+  c.bmin[1] = std::min(a.bmin[1], b[1]);
+  c.bmin[2] = std::min(a.bmin[2], b[2]);
 
+  c.bmax[0] = std::max(a.bmax[0], b[0]);
+  c.bmax[1] = std::max(a.bmax[1], b[1]);
+  c.bmax[2] = std::max(a.bmax[2], b[2]);
+
+  return c;
+}
+
+template<typename T>
+inline BBox<T> BBoxIntersect(const BBox<T>& a, const BBox<T>& b)
+{
+  BBox<T> c;
+  c.bmin[0] = std::max(a.bmin[0], b.bmin[0]);
+  c.bmin[1] = std::max(a.bmin[1], b.bmin[1]);
+  c.bmin[2] = std::max(a.bmin[2], b.bmin[2]);
+
+  c.bmax[0] = std::min(a.bmax[0], b.bmax[0]);
+  c.bmax[1] = std::min(a.bmax[1], b.bmax[1]);
+  c.bmax[2] = std::min(a.bmax[2], b.bmax[2]);
+
+  return c;
+}
+
+// Primitive reference(32bytes when T = float)
+template<typename T>
+class PrimRef {
+public:
+  T bmin[3];
+  unsigned int prim_id;
+  T bmax[3];
+  unsigned int pad0;
+};
+
+//
+// Clip the triangle by the split plane and update left and right bbox.
+// See Embree code for more details.
+//
+template<typename T>
+void ClipTriangle(
+  PrimRef<T>* left,
+  PrimRef<T>* right,
+  const real3<T> v[3],
+  int axis, T pos)
+{
+    BBox<T> left_bbox, right_bbox;
+
+    /* clip triangle to left and right box by processing all edges */
+    real3<T> v1 = v[2];
+    for (size_t i=0; i<3; i++)
+    {
+      real3<T> v0 = v1; v1 = v[i];
+      T v0d = v0[axis], v1d = v1[axis];
+
+      if (v0d <= pos) left_bbox = BBoxExtend(left_bbox, v0); // this point is on left side
+      if (v0d >= pos) right_bbox = BBoxExtend(right_bbox, v0); // this point is on right side
+
+      if ((v0d < pos && pos < v1d) || (v1d < pos && pos < v0d)) // the edge crosses the splitting location
+      {
+        assert((v1d-v0d) != 0.0);
+        real3<T> c = v0 + (pos-v0d)/(v1d-v0d)*(v1-v0);
+        left_bbox = BBoxExtend(left_bbox, c);
+        right_bbox = BBoxExtend(right_bbox, c);
+      }
+    }  
+
+    /* clip against current bounds */
+    BBox<T> bounds;
+    BBox<T> left_o, right_o;
+    left_o  = BBoxIntersect(left_bbox,bounds);
+    right_o = BBoxIntersect(right_bbox,bounds);
+
+    left->bmin[0] = left_o.bmin[0];
+    left->bmin[1] = left_o.bmin[1];
+    left->bmin[2] = left_o.bmin[2];
+    left->bmax[0] = left_o.bmax[0];
+    left->bmax[1] = left_o.bmax[1];
+    left->bmax[2] = left_o.bmax[2];
+
+    right->bmin[0] = right_o.bmin[0];
+    right->bmin[1] = right_o.bmin[1];
+    right->bmin[2] = right_o.bmin[2];
+    right->bmax[0] = right_o.bmax[0];
+    right->bmax[1] = right_o.bmax[1];
+    right->bmax[2] = right_o.bmax[2];
+}
 
 template <typename T, class P, class Pred, class I>
 class BVHAccel {
@@ -555,7 +643,7 @@ class BVHAccel {
   std::vector<BVHNode<T> > nodes_;
   std::vector<unsigned int> indices_;  // max 4G triangles.
   std::vector<BBox<T> > bboxes_;
-  std::vector<PrimRef> prim_refs_;
+  std::vector<PrimRef<T> > prim_refs_;
   BVHBuildOptions<T> options_;
   BVHBuildStatistics stats_;
   unsigned int pad0_;
@@ -579,7 +667,7 @@ class TriangleSAHPred {
     pos_ = pos;
   }
 
-  bool operator()(PrimRef& prim_ref) const {
+  bool operator()(PrimRef<T>& prim_ref) const {
     int axis = axis_;
     T pos = pos_;
 
@@ -614,6 +702,24 @@ class TriangleMesh {
       : vertices_(vertices),
         faces_(faces),
         vertex_stride_bytes_(vertex_stride_bytes) {}
+
+  /// Compute primitive center.
+  real3<T> PrimitiveCenter(unsigned int prim_index) const {
+
+    const T *p0_ptr = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
+                                 vertex_stride_bytes_);
+    const T *p1_ptr = get_vertex_addr(vertices_, faces_[3 * prim_index + 1],
+                                 vertex_stride_bytes_);
+    const T *p2_ptr = get_vertex_addr(vertices_, faces_[3 * prim_index + 2],
+                                 vertex_stride_bytes_);
+
+    const T x = (p0_ptr[0] + p1_ptr[0] + p2_ptr[0]) / 3.0;
+    const T y = (p0_ptr[1] + p1_ptr[1] + p2_ptr[1]) / 3.0;
+    const T z = (p0_ptr[2] + p1_ptr[2] + p2_ptr[2]) / 3.0;
+
+    return real3<T>(x, y, z);
+
+  }
 
   /// Compute bounding box for `prim_index`th triangle.
   /// This function is called for each primitive in BVH build.
@@ -1413,9 +1519,9 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTree(
   unsigned int mid_idx = left_idx;
   int cut_axis = min_cut_axis;
   for (int axis_try = 0; axis_try < 3; axis_try++) {
-    PrimRef *begin = &prim_refs_[left_idx];
-    PrimRef *end = &prim_refs_[right_idx - 1] + 1;  // mimics end() iterator.
-    PrimRef *mid = 0;
+    PrimRef<T> *begin = &prim_refs_[left_idx];
+    PrimRef<T> *end = &prim_refs_[right_idx - 1] + 1;  // mimics end() iterator.
+    PrimRef<T> *mid = 0;
 
     // try min_cut_axis first.
     cut_axis = (min_cut_axis + axis_try) % 3;
