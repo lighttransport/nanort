@@ -19,7 +19,7 @@ Path tracing example contributed by https://github.com/daseyb
 * Custom geometry & intersection
   * Built-in triangle mesh gemetry & intersector is provided.
 * Cross platform
-  * MacOSX, Linux, Windows, iOS, Android, ARM, x86, SPARC, (maybe)MIPS, etc.
+  * MacOSX, Linux, Windows, iOS, Android, ARM, x86, SPARC, (maybe)MIPS, (will be)RISC-V, etc.
   * For example, NanoRT works finely on Raspberry Pi 2(arm 32bit) and Raspberrry Pi 3!(AARCH64 kernel)
 * GPU effient data structure
   * Built BVH tree from `NanoRT` is a linear array and does not have pointers, thus it is suited for GPU raytracing(GPU ray traversal).
@@ -41,6 +41,7 @@ Path tracing example contributed by https://github.com/daseyb
 ## Projects using NanoRT
 
 * lightmetrica https://github.com/hi2p-perim/lightmetrica-v2
+* OSPRay NanoRT module https://github.com/jeffamstutz/module_nanort/
 
 ## API
 
@@ -54,7 +55,7 @@ Path tracing example contributed by https://github.com/daseyb
 
 ```
 template<typename T>
-classt {
+class {
   T org[3];        // [in] must set
   T dir[3];        // [in] must set
   T min_t;         // [in] must set
@@ -186,6 +187,7 @@ are required attributes.
 See `examples` directory for example renderer using `NanoRT`.
 
 * [x] [examples/path_tracer](examples/path_tracer) Path tracer example by https://github.com/daseyb 
+* [x] [examples/bidir_path_tracer](examples/bidir_path_tracer) Bi-directional path tracer example by https://github.com/tatsy
 * [x] [examples/gui](examples/gui) Simple renderer with GUI(using ImGui)
 * [x] [examples/vrcamera](examples/vrcamera) Stereo VR Camera 
 * [x] [examples/objrender](examples/objrender) Render wavefront .obj model using NanoRT.
@@ -242,5 +244,5 @@ PR are always welcome!
   * [ ] Spatial split BVH
 * [ ] Motion blur
 * [ ] Accurate ray curve intersection
-* [ ] Example bi-directional path tracing renderer.
+* [x] Example bi-directional path tracing renderer by @tatsy.
 

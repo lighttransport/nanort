@@ -1,9 +1,14 @@
 #include <algorithm>
 #include <cassert>
+#include <climits>
 #include <cmath>
 #include <ctime>
 #include <iostream>
 #include <vector>
+
+#if __cplusplus > 199711L
+#include <chrono>
+#endif
 
 #define NOMINMAX
 #include "tiny_obj_loader.h"
@@ -38,21 +43,23 @@ static const int SPP = 100;
 
 typedef nanort::BVHAccel<float, nanort::TriangleMesh<float>,
                          nanort::TriangleSAHPred<float>,
-                         nanort::TriangleIntersector<> > Accel;
+                         nanort::TriangleIntersector<> >
+    Accel;
 
 namespace {
 
 #if __cplusplus > 199711L
-#include <chrono>
 typedef std::chrono::time_point<std::chrono::system_clock> TimeType;
-inline TimeType tick() { return std::chrono::sytem_clock::now(); }
+inline TimeType tick() { return std::chrono::system_clock::now(); }
 
-inline double to_duration(TypeType start, TimeType end) {
+inline double to_duration(TimeType start, TimeType end) {
   return std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
              .count() /
          100.0;
 }
 #else
+#define nullptr NULL
+
 typedef clock_t TimeType;
 inline TimeType tick() { return clock(); }
 inline double to_duration(TimeType start, TimeType end) {
@@ -74,7 +81,7 @@ inline double to_duration(TimeType start, TimeType end) {
 
 #ifndef NDEBUG
 #define Assertion(PREDICATE, ...)                                        \
-                                                                         \
+  \
 do {                                                                     \
     if (!(PREDICATE)) {                                                  \
       std::cerr << "Asssertion \"" << #PREDICATE << "\" failed in "      \
@@ -85,8 +92,8 @@ do {                                                                     \
       std::cerr << std::endl;                                            \
       std::abort();                                                      \
     }                                                                    \
-                                                                         \
-}                                                                        \
+  \
+}                                                                   \
   while (false)
 #else  // NDEBUG
 #define Assertion(PREDICATE, ...) \
@@ -935,9 +942,8 @@ void raytrace(const Mesh &mesh, const Accel &accel,
     ray.org[1] = rayOrg[1];
     ray.org[2] = rayOrg[2];
 
-    nanort::TriangleIntersector<> triangle_intersector(mesh.vertices,
-                                                       mesh.faces,
-                                                       sizeof(float) * 3);
+    nanort::TriangleIntersector<> triangle_intersector(
+        mesh.vertices, mesh.faces, sizeof(float) * 3);
     nanort::BVHTraceOptions trace_options;
     bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
 
@@ -1250,7 +1256,8 @@ float calcG(const Vertex &v1, const Vertex &v2, const Mesh &mesh,
   ray.min_t = kEps;
   ray.max_t = kInf;
 
-  nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces, sizeof(float) * 3);
+  nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces,
+                                                     sizeof(float) * 3);
   nanort::BVHTraceOptions trace_options;
   bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
   if (!hit) {
@@ -1389,10 +1396,10 @@ int main(int argc, char **argv) {
   // Construct light sampler.
   LightSampler lights(mesh, materials);
 
-  // Shoot rays.
-  #ifdef _OPENMP
-  #pragma omp parallel for schedule(dynamic, 1)
-  #endif
+// Shoot rays.
+#ifdef _OPENMP
+#pragma omp parallel for schedule(dynamic, 1)
+#endif
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
       float3 finalColor = float3(0, 0, 0);
