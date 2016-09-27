@@ -19,13 +19,26 @@
 #define TINYEXR_IMPLEMENTATION
 #include "tinyexr.h"
 
+// Floating point exception for MSVC.
+#define ENABLE_FP_EXCEPTION 0
+#if ENABLE_FP_EXCEPTION
+#include <float.h>
+void setupFPExceptions() {
+  unsigned int cw, newcw;
+  _controlfp_s(&cw, 0, 0);
+  newcw = ~(_EM_INVALID | _EM_DENORMAL | _EM_ZERODIVIDE | _EM_OVERFLOW |
+            _EM_UNDERFLOW);
+  _controlfp_s(&cw, newcw, _MCW_EM);
+}
+#endif
+
 #include "nanort.h"
 
 static const float kEps = 0.001f;
 static const float kInf = 1.0e30f;
 static const float kPi = 4.0f * std::atan(1.0f);
 
-static const int uMaxBounces = 8;
+static const int uMaxBounces = 10;
 // static const int SPP = 1000;
 static const int SPP = 100;
 
@@ -138,8 +151,6 @@ class Random {
  private:
   unsigned int seed_[4];
 };
-
-// static Random rnd((unsigned long)time(0));
 
 // ----------------------------------------------------------------------------
 // 3D vector class
@@ -504,6 +515,10 @@ bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t> &materials,
         n2[1] = shapes[i].mesh.normals[3 * f2 + 1];
         n2[2] = shapes[i].mesh.normals[3 * f2 + 2];
 
+        n0.normalize();
+        n1.normalize();
+        n2.normalize();
+
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] = n0[0];
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] = n0[1];
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] = n0[2];
@@ -711,6 +726,7 @@ class LightSampler {
                const std::vector<tinyobj::material_t> &materials) {
     // Collect light mesh.
     std::vector<std::pair<float, int> > temp;
+    totalArea_ = 0.0f;
     for (int i = 0; i < mesh.num_faces; i++) {
       int material_id = mesh.material_ids[i];
       const float3 Le(materials[material_id].emission);
@@ -823,15 +839,17 @@ float3 sampleBRDF(const tinyobj::material_t &mat, const float3 &wo,
   rhoR /= totalrho;
 
   // Choose an interaction based on the calculated probabilities
-  float3 f(1.0f, 1.0f, 1.0f);
+  float3 f(0.0f, 0.0f, 0.0f);
   float rand = rng.nextReal();
-  *pdf = 1.0f;
+  *pdf = 0.0f;
   if (rand < rhoS) {
     // Specular reflection
     *wi = reflect(-wo, norm);
-    *pdf = rhoS;
     float cosTheta = std::abs(vdot(*wi, norm));
-    f = rhoS * specularColor / cosTheta;
+    if (cosTheta >= kEps) {
+      *pdf = rhoS;
+      f = rhoS * specularColor / cosTheta;
+    }
   } else if (rand < rhoS + rhoD) {
     // Sample cosine weighted hemisphere
     *wi = directionCosTheta(norm, rng.nextReal(), rng.nextReal(), pdf);
@@ -839,9 +857,11 @@ float3 sampleBRDF(const tinyobj::material_t &mat, const float3 &wo,
     f = rhoD * diffuseColor / kPi;
   } else if (rand < rhoD + rhoS + rhoR) {
     *wi = refract(-wo, -inside * origNorm, n1);
-    *pdf = rhoR;
     float cosTheta = std::abs(vdot(*wi, norm));
-    f *= rhoR * refractionColor / cosTheta;
+    if (cosTheta >= kEps) {
+      *pdf = rhoR;
+      f = rhoR * refractionColor / cosTheta;
+    }
   }
 
   return f;
@@ -1292,14 +1312,18 @@ float3 connectPath(const std::vector<Vertex> &eyeVert,
 
       float mis = weightMIS(light, eyeVert, lightVert, e, l, mesh, accel);
       color += mis * L;
-      Assertion(color.isValid(), "Either of color elements takes nan or inf!!");
     }
   }
 
+  Assertion(color.isValid(), "Either of color elements takes NaN or inf!!");
   return color;
 }
 
 int main(int argc, char **argv) {
+#if ENABLE_FP_EXCEPTION
+  setupFPExceptions();
+#endif
+
   int width = 512;
   int height = 512;
 
@@ -1393,12 +1417,15 @@ int main(int argc, char **argv) {
 
         finalColor += connectPath(eyeVert, lightVert, mesh, accel, lights);
       }
-      finalColor *= 1.0 / SPP;
+      finalColor *= 1.0f / SPP;
 
       // Gamme Correct
-      finalColor[0] = pow(finalColor[0], 1.0 / 2.2);
-      finalColor[1] = pow(finalColor[1], 1.0 / 2.2);
-      finalColor[2] = pow(finalColor[2], 1.0 / 2.2);
+      finalColor[0] =
+          std::pow(std::max(0.0f, std::min(finalColor[0], 1.0f)), 1.0 / 2.2);
+      finalColor[1] =
+          std::pow(std::max(0.0f, std::min(finalColor[1], 1.0f)), 1.0 / 2.2);
+      finalColor[2] =
+          std::pow(std::max(0.0f, std::min(finalColor[2], 1.0f)), 1.0 / 2.2);
 
       rgb[3 * ((height - y - 1) * width + x) + 0] = finalColor[0];
       rgb[3 * ((height - y - 1) * width + x) + 1] = finalColor[1];
