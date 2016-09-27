@@ -19,7 +19,7 @@
 #endif
 
 const int uMaxBounces = 10;
-// const int SPP = 10000;
+//const int SPP = 10000;
 const int SPP = 100;
 
 namespace {

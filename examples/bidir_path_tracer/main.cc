@@ -665,6 +665,7 @@ struct Vertex {
   float3 f(const Vertex &v) const {
     float3 wi = v.position - position;
     bool reflect = vdot(wi, norm) * vdot(wo, norm) > 0.0f;
+
     float3 diffuseColor(mat.diffuse);
     float3 specularColor(mat.specular);
     float3 refractionColor(mat.transmittance);
@@ -1019,7 +1020,6 @@ void raytrace(const Mesh &mesh, const Accel &accel,
     // Convert measure of pdfFwd.
     float3 to = vertex.position - prev.position;
     float dist = to.length();
-
     to = to / dist;
     vertex.pdfFwd *= vdot(to, prev.norm) / (dist * dist);
 
