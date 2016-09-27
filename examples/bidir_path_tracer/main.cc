@@ -26,7 +26,8 @@
 void setupFPExceptions() {
   unsigned int cw, newcw;
   _controlfp_s(&cw, 0, 0);
-  newcw = ~(_EM_INVALID | _EM_DENORMAL | _EM_ZERODIVIDE | _EM_OVERFLOW | _EM_UNDERFLOW);
+  newcw = ~(_EM_INVALID | _EM_DENORMAL | _EM_ZERODIVIDE | _EM_OVERFLOW |
+            _EM_UNDERFLOW);
   _controlfp_s(&cw, newcw, _MCW_EM);
 }
 #endif
@@ -38,7 +39,7 @@ static const float kInf = 1.0e30f;
 static const float kPi = 4.0f * std::atan(1.0f);
 
 static const int uMaxBounces = 10;
-//static const int SPP = 1000;
+// static const int SPP = 1000;
 static const int SPP = 100;
 
 typedef nanort::BVHAccel<float, nanort::TriangleMesh<float>,
@@ -845,8 +846,8 @@ float3 sampleBRDF(const tinyobj::material_t &mat, const float3 &wo,
     *wi = reflect(-wo, norm);
     float cosTheta = std::abs(vdot(*wi, norm));
     if (cosTheta >= kEps) {
-        *pdf = rhoS;
-        f = rhoS * specularColor / cosTheta;
+      *pdf = rhoS;
+      f = rhoS * specularColor / cosTheta;
     }
   } else if (rand < rhoS + rhoD) {
     // Sample cosine weighted hemisphere
@@ -857,8 +858,8 @@ float3 sampleBRDF(const tinyobj::material_t &mat, const float3 &wo,
     *wi = refract(-wo, -inside * origNorm, n1);
     float cosTheta = std::abs(vdot(*wi, norm));
     if (cosTheta >= kEps) {
-        *pdf = rhoR;
-        f = rhoR * refractionColor / cosTheta;
+      *pdf = rhoR;
+      f = rhoR * refractionColor / cosTheta;
     }
   }
 
@@ -1319,9 +1320,9 @@ float3 connectPath(const std::vector<Vertex> &eyeVert,
 }
 
 int main(int argc, char **argv) {
-  #if ENABLE_FP_EXCEPTION
+#if ENABLE_FP_EXCEPTION
   setupFPExceptions();
-  #endif
+#endif
 
   int width = 512;
   int height = 512;
@@ -1419,9 +1420,12 @@ int main(int argc, char **argv) {
       finalColor *= 1.0f / SPP;
 
       // Gamme Correct
-      finalColor[0] = std::pow(std::max(0.0f, std::min(finalColor[0], 1.0f)), 1.0 / 2.2);
-      finalColor[1] = std::pow(std::max(0.0f, std::min(finalColor[1], 1.0f)), 1.0 / 2.2);
-      finalColor[2] = std::pow(std::max(0.0f, std::min(finalColor[2], 1.0f)), 1.0 / 2.2);
+      finalColor[0] =
+          std::pow(std::max(0.0f, std::min(finalColor[0], 1.0f)), 1.0 / 2.2);
+      finalColor[1] =
+          std::pow(std::max(0.0f, std::min(finalColor[1], 1.0f)), 1.0 / 2.2);
+      finalColor[2] =
+          std::pow(std::max(0.0f, std::min(finalColor[2], 1.0f)), 1.0 / 2.2);
 
       rgb[3 * ((height - y - 1) * width + x) + 0] = finalColor[0];
       rgb[3 * ((height - y - 1) * width + x) + 1] = finalColor[1];

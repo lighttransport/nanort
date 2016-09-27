@@ -19,7 +19,7 @@
 #endif
 
 const int uMaxBounces = 10;
-//const int SPP = 10000;
+// const int SPP = 10000;
 const int SPP = 100;
 
 namespace {
@@ -30,8 +30,8 @@ namespace {
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <windows.h>
 #include <mmsystem.h>
+#include <windows.h>
 #ifdef __cplusplus
 }
 #endif
@@ -620,7 +620,7 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  nanort::BVHBuildOptions<float> build_options; // Use default option
+  nanort::BVHBuildOptions<float> build_options;  // Use default option
   build_options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -630,15 +630,20 @@ int main(int argc, char **argv) {
   timerutil t;
   t.start();
 
-  nanort::TriangleMesh<float> triangle_mesh(mesh.vertices, mesh.faces, sizeof(float) * 3);
-  nanort::TriangleSAHPred<float> triangle_pred(mesh.vertices, mesh.faces, sizeof(float) * 3);
+  nanort::TriangleMesh<float> triangle_mesh(mesh.vertices, mesh.faces,
+                                            sizeof(float) * 3);
+  nanort::TriangleSAHPred<float> triangle_pred(mesh.vertices, mesh.faces,
+                                               sizeof(float) * 3);
 
   printf("num_triangles = %lu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
 
-
-  nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> > accel;
-  ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
+  nanort::BVHAccel<float, nanort::TriangleMesh<float>,
+                   nanort::TriangleSAHPred<float>,
+                   nanort::TriangleIntersector<> >
+      accel;
+  ret =
+      accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
   assert(ret);
 
   t.end();
@@ -659,10 +664,10 @@ int main(int argc, char **argv) {
 
   srand(0);
 
-  // Shoot rays.
-  #ifdef _OPENMP
-  #pragma omp parallel for schedule(dynamic, 1)
-  #endif
+// Shoot rays.
+#ifdef _OPENMP
+#pragma omp parallel for schedule(dynamic, 1)
+#endif
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
       float3 finalColor = float3(0, 0, 0);
@@ -706,7 +711,8 @@ int main(int argc, char **argv) {
           ray.org[1] = rayOrg[1];
           ray.org[2] = rayOrg[2];
 
-          nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces, sizeof(float) * 3);
+          nanort::TriangleIntersector<> triangle_intersector(
+              mesh.vertices, mesh.faces, sizeof(float) * 3);
           nanort::BVHTraceOptions trace_options;
           bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
 
