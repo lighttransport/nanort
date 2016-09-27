@@ -1841,9 +1841,9 @@ bool BVHAccel<T, P, Pred, I>::Traverse(const Ray<T> &ray,
 
   // @fixme { Check edge case; i.e., 1/0 }
   real3<T> ray_inv_dir;
-  ray_inv_dir[0] = 1.0f / ray.dir[0];
-  ray_inv_dir[1] = 1.0f / ray.dir[1];
-  ray_inv_dir[2] = 1.0f / ray.dir[2];
+  ray_inv_dir[0] = 1.0f / (ray.dir[0] + 1.0e-12f);
+  ray_inv_dir[1] = 1.0f / (ray.dir[1] + 1.0e-12f);
+  ray_inv_dir[2] = 1.0f / (ray.dir[2] + 1.0e-12f);
 
   real3<T> ray_org;
   ray_org[0] = ray.org[0];
