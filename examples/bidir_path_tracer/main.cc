@@ -144,8 +144,6 @@ class Random {
   unsigned int seed_[4];
 };
 
-// static Random rnd((unsigned long)time(0));
-
 // ----------------------------------------------------------------------------
 // 3D vector class
 // ----------------------------------------------------------------------------
@@ -659,7 +657,6 @@ struct Vertex {
   float3 f(const Vertex &v) const {
     float3 wi = v.position - position;
     bool reflect = vdot(wi, norm) * vdot(wo, norm) > 0.0f;
-
     float3 diffuseColor(mat.diffuse);
     float3 specularColor(mat.specular);
     float3 refractionColor(mat.transmittance);
