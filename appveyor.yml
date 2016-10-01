@@ -9,4 +9,4 @@ before_build:
 
 build:
   parallel: true
-  project: C:\projects\nanort\build\tinyexr.sln
+  project: C:\projects\nanort\build\nanort.sln
