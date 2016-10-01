@@ -312,7 +312,7 @@ int main(int argc, char **argv) {
   SphereGeometry sphere_geom(&vertices.at(0), &radiuss.at(0));
   SpherePred sphere_pred(&vertices.at(0));
 
-  nanort::BVHAccel<SphereGeometry, SpherePred,
+  nanort::BVHAccel<float, SphereGeometry, SpherePred,
                    SphereIntersector<SphereIntersection> >
       accel;
   bool ret = accel.Build(radiuss.size(), options, sphere_geom, sphere_pred);

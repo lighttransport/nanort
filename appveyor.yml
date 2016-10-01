@@ -1,0 +1,12 @@
+version: 0.9.{build}
+
+platform: x64
+configuration: Release
+
+before_build:
+  - echo running cmake...
+  - cmake -G "Visual Studio 12 Win64" -Bbuild -H.
+
+build:
+  parallel: true
+  project: C:\projects\nanort\build\tinyexr.sln

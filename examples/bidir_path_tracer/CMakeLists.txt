@@ -1,6 +1,7 @@
 set(BUILD_TARGET "bidir_path_tracer")
 
 include_directories(${CMAKE_SOURCE_DIR})
+include_directories("../common")
 
 file(GLOB SOURCES "*.cc" "*.h")
 add_executable(${BUILD_TARGET} ${SOURCES})

@@ -666,7 +666,7 @@ int main(int argc, char **argv) {
 
   unsigned int num_curves = thicknesses.size() / 4;
 
-  nanort::BVHAccel<CurveGeometry, CurvePred, CurveIntersector<CurveIntersection> > accel;
+  nanort::BVHAccel<float, CurveGeometry, CurvePred, CurveIntersector<CurveIntersection> > accel;
   bool ret = accel.Build(num_curves, options, curves_geom, curves_pred);
   assert(ret);
 

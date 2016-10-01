@@ -445,7 +445,7 @@ int main(int argc, char **argv) {
   CylinderGeometry cylinder_geom(&vertices.at(0), &radiuss.at(0));
   CylinderPred cylinder_pred(&vertices.at(0));
 
-  nanort::BVHAccel<CylinderGeometry, CylinderPred,
+  nanort::BVHAccel<float, CylinderGeometry, CylinderPred,
                    CylinderIntersector<CylinderIntersection> >
       accel;
   bool ret = accel.Build(n, options, cylinder_geom, cylinder_pred);

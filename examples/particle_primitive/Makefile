@@ -1,2 +1,2 @@
 all:
-	g++ -O2 -g -o particle_render -I../../ -I. main.cc
+	g++ -O2 -g -o particle_render -I../../ -I../common/ -I. main.cc

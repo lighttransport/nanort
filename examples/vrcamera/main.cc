@@ -248,58 +248,19 @@ void SaveImageRaw(const char* filename, const float* rgb, int width, int height)
 
 void SaveImage(const char* filename, const float* rgb, int width, int height) {
 
-  float* image_ptr[3];
-  std::vector<float> images[3];
-  images[0].resize(width * height);
-  images[1].resize(width * height);
-  images[2].resize(width * height);
-
-  for (int i = 0; i < width * height; i++) {
-    images[0][i] = rgb[3*i+0];
-    images[1][i] = rgb[3*i+1];
-    images[2][i] = rgb[3*i+2];
-  }
-
-  image_ptr[0] = &(images[2].at(0)); // B
-  image_ptr[1] = &(images[1].at(0)); // G
-  image_ptr[2] = &(images[0].at(0)); // R
-
-  EXRImage image;
-  InitEXRImage(&image);
-
-  image.num_channels = 3;
-  const char* channel_names[] = {"B", "G", "R"}; // must be BGR order.
-
-  image.channel_names = channel_names;
-  image.images = (unsigned char**)image_ptr;
-  image.width = width;
-  image.height = height;
-
-  image.pixel_types = (int *)malloc(sizeof(int) * image.num_channels);
-  image.requested_pixel_types = (int *)malloc(sizeof(int) * image.num_channels);
-  for (int i = 0; i < image.num_channels; i++) {
-    image.pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT; // pixel type of input image
-    image.requested_pixel_types[i] = TINYEXR_PIXELTYPE_HALF; // pixel type of output image to be stored in .EXR
-  }
-
-  const char* err;
-  int fail = SaveMultiChannelEXRToFile(&image, filename, &err);
-  if (fail) {
-    fprintf(stderr, "Error: %s\n", err);
+  int ret = SaveEXR(rgb, width, height, /* RGB */3, filename);
+  if (ret != TINYEXR_SUCCESS) {
+    fprintf(stderr, "Error: %d\n", ret);
   } else {
     printf("Saved image to [ %s ]\n", filename);
   }
-
-  free(image.pixel_types);
-  free(image.requested_pixel_types);
-
 }
 
-bool LoadObj(Mesh &mesh, const char *filename, float scale) {
+bool LoadObj(Mesh &mesh, const char *filename, float scale, const char* mtl_path) {
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
 
-  std::string err = tinyobj::LoadObj(shapes, materials, filename);
+  std::string err = tinyobj::LoadObj(shapes, materials, filename, mtl_path);
 
   if (!err.empty()) {
     std::cerr << err << std::endl;
@@ -511,12 +472,13 @@ void IdToCol(float col[3], int mid)
 
 int main(int argc, char** argv)
 {
-  int width = 4096;
-  int height = 4096;
+  int width = 512;
+  int height = 512;
 
   float scale = 1.0f;
 
-  std::string objFilename = "cornellbox_suzanne.obj";
+  std::string objFilename = "cornellbox_suzanne_vr.obj";
+  std::string mtlPath = "./";
 
   if (argc > 1) {
     objFilename = std::string(argv[1]);
@@ -526,10 +488,14 @@ int main(int argc, char** argv)
     scale = atof(argv[2]);
   }
 
+  if (argc > 3) {
+    mtlPath = std::string(argv[3]);
+  }
+
   bool ret = false;
 
   Mesh mesh;
-  ret = LoadObj(mesh, objFilename.c_str(), scale);
+  ret = LoadObj(mesh, objFilename.c_str(), scale, mtlPath.c_str());
   if (!ret) {
     fprintf(stderr, "Failed to load [ %s ]\n", objFilename.c_str());
     return -1;
