@@ -1,6 +1,7 @@
 # NanoRT, single header only modern ray tracing kernel.
 
-[![Build Status](https://travis-ci.org/lighttransport/nanort.svg)](https://travis-ci.org/lighttransport/nanort)
+[![Travis Build Status](https://travis-ci.org/lighttransport/nanort.svg)](https://travis-ci.org/lighttransport/nanort)
+[![AppVeyor Build status](https://ci.appveyor.com/api/projects/status/k7j5d9v81qjm69j6?svg=true)](https://ci.appveyor.com/project/syoyo/nanort)
 
 ![](images/render_path_traced.png)
 
