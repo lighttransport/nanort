@@ -1,14 +1,19 @@
 #include <algorithm>
+#include <cassert>
+#include <climits>
+#include <cmath>
+#include <ctime>
 #include <iostream>
+#include <vector>
 
 #define NOMINMAX
 #include "tiny_obj_loader.h"
 
-#define TINYEXR_IMPLEMENTATION
-#include "tinyexr.h"
-
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
+#define TINYEXR_IMPLEMENTATION
+#include "tinyexr.h"
 
 #include "nanort.h"
 
@@ -22,15 +27,10 @@ const int uMaxBounces = 10;
 //const int SPP = 10000;
 const int SPP = 100;
 
-namespace {
-
-// This class is NOT thread-safe timer!
-
 #ifdef _WIN32
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <mmsystem.h>
 #include <windows.h>
 #ifdef __cplusplus
 }
@@ -44,6 +44,9 @@ extern "C" {
 #endif
 #endif
 
+namespace {
+
+// This class is NOT thread-safe timer!
 class timerutil {
  public:
 #ifdef _WIN32
