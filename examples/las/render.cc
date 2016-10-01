@@ -276,7 +276,7 @@ class SphereIntersector
 
 // @fixme { Do not defined as global variable } 
 Particles gParticles; 
-nanort::BVHAccel<SphereGeometry, SpherePred,
+nanort::BVHAccel<float, SphereGeometry, SpherePred,
                  SphereIntersector<SphereIntersection> >
     gAccel;
 

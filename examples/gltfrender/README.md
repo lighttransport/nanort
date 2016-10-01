@@ -52,3 +52,5 @@ Edit `config.json`, then
 * ImGui : MIT license.
 * stb : Public domain. See stb_*.h for more details.
 
+See ../common for more details.
+

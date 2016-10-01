@@ -299,6 +299,12 @@ void FetchTexture(int tex_idx, float u, float v, float* col) {
   col[2] = texture.image[idx_offset + 2] / 255.f;
 }
 
+static std::string GetBaseDir(const std::string &filepath) {
+  if (filepath.find_last_of("/\\") != std::string::npos)
+    return filepath.substr(0, filepath.find_last_of("/\\"));
+  return "";
+}
+
 int LoadTexture(const std::string& filename) {
   if (filename.empty()) return -1;
 
@@ -332,10 +338,14 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   std::vector<tinyobj::material_t> materials;
   std::string err;
 
+  std::string basedir = GetBaseDir(filename) + "/";
+  const char* basepath = (basedir.compare("/") == 0) ? NULL : basedir.c_str();
+
   auto t_start = std::chrono::system_clock::now();
 
+
   bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename,
-                              /*basepath*/ NULL, /* triangulate */ true);
+                              basepath, /* triangulate */ true);
 
   auto t_end = std::chrono::system_clock::now();
   std::chrono::duration<double, std::milli> ms = t_end - t_start;

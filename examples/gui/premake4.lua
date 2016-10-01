@@ -7,11 +7,11 @@ sources = {
    "main.cc",
    "render.cc",
    "render-config.cc",
-   "trackball.cc",
+   "../common/trackball.cc",
    "matrix.cc",
-   "imgui.cpp",
-   "imgui_draw.cpp",
-   "imgui_impl_btgui.cpp",
+   "../common/imgui/imgui.cpp",
+   "../common/imgui/imgui_draw.cpp",
+   "../common/imgui/imgui_impl_btgui.cpp",
    }
 
 -- premake4.lua
@@ -25,8 +25,9 @@ solution "ViewerSolution"
    end
 
 
-   projectRootDir = os.getcwd() .. "/"
-   dofile ("findOpenGLGlewGlut.lua")
+   -- RootDir for OpenGLWindow
+   projectRootDir = os.getcwd() .. "/../common/"
+   dofile ("../common/findOpenGLGlewGlut.lua")
    initOpenGL()
    initGlew()
 
@@ -40,31 +41,33 @@ solution "ViewerSolution"
       files { sources }
 
       includedirs { "./", "../../" }
-      includedirs { "nativefiledialog/src/include" }
+      includedirs { "../common" }
+      includedirs { "../common/imgui" }
+      includedirs { "../common/nativefiledialog/src/include" }
 
       if os.is("Windows") then
          defines { "NOMINMAX" }
          defines { "USE_NATIVEFILEDIALOG" }
          buildoptions { "/W4" } -- raise compile error level.
          files{
-            "OpenGLWindow/Win32OpenGLWindow.cpp",
-            "OpenGLWindow/Win32OpenGLWindow.h",
-            "OpenGLWindow/Win32Window.cpp",
-            "OpenGLWindow/Win32Window.h",
+            "../common/OpenGLWindow/Win32OpenGLWindow.cpp",
+            "../common/OpenGLWindow/Win32OpenGLWindow.h",
+            "../common/OpenGLWindow/Win32Window.cpp",
+            "../common/OpenGLWindow/Win32Window.h",
             }
-         files { "nativefiledialog/src/nfd_win.cpp" }
+         files { "../common/nativefiledialog/src/nfd_win.cpp" }
       end
       if os.is("Linux") then
          files {
-            "OpenGLWindow/X11OpenGLWindow.cpp",
-            "OpenGLWindow/X11OpenGLWindows.h"
+            "../common/OpenGLWindow/X11OpenGLWindow.cpp",
+            "../common/OpenGLWindow/X11OpenGLWindows.h"
             }
          links {"X11", "pthread", "dl"}
          if _OPTIONS["with-gtk3nfd"] then
             defines { "USE_NATIVEFILEDIALOG" }
-            includedirs { "./nativefiledialog/src/include" }
-            files { "nativefiledialog/src/nfd_gtk.c",
-                    "nativefiledialog/src/nfd_common.c"
+            includedirs { "./../common/nativefiledialog/src/include" }
+            files { "../common/nativefiledialog/src/nfd_gtk.c",
+                    "../common/nativefiledialog/src/nfd_common.c"
                   }
             buildoptions { "`pkg-config --cflags gtk+-3.0`" }
             linkoptions { "`pkg-config --libs gtk+-3.0`" }
@@ -74,10 +77,10 @@ solution "ViewerSolution"
          defines { "USE_NATIVEFILEDIALOG" }
          links {"Cocoa.framework"}
          files {
-                "OpenGLWindow/MacOpenGLWindow.h",
-                "OpenGLWindow/MacOpenGLWindow.mm",
+                "../common/OpenGLWindow/MacOpenGLWindow.h",
+                "../common/OpenGLWindow/MacOpenGLWindow.mm",
                }
-         files { "nativefiledialog/src/nfd_cocoa.m" }
+         files { "../common/nativefiledialog/src/nfd_cocoa.m" }
       end
 
       configuration "Debug"

@@ -86,8 +86,8 @@ typedef struct {
 } Mesh;
 
 Mesh gMesh;
-nanort::BVHAccel<nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>,
-                 nanort::TriangleIntersector<>, float >
+nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>,
+                 nanort::TriangleIntersector<> >
     gAccel;
 
 typedef nanort::real3<float> float3;

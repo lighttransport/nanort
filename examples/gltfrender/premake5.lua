@@ -2,11 +2,11 @@ sources = {
    "main.cc",
    "render.cc",
    "render-config.cc",
-   "trackball.cc",
-   "matrix.cc",
-   "imgui.cpp",
-   "imgui_draw.cpp",
-   "imgui_impl_btgui.cpp",
+   "../common/trackball.cc",
+   "../common/matrix.cc",
+   "../common/imgui/imgui.cpp",
+   "../common/imgui/imgui_draw.cpp",
+   "../common/imgui/imgui_impl_btgui.cpp",
    }
 
 -- premake5.lua
@@ -20,8 +20,8 @@ solution "glTFRenderSolution"
    end
 
 
-   projectRootDir = os.getcwd() .. "/"
-   dofile ("findOpenGLGlewGlut.lua")
+   projectRootDir = os.getcwd() .. "/../common/"
+   dofile ("../common/findOpenGLGlewGlut.lua")
    initOpenGL()
    initGlew()
    
@@ -35,30 +35,32 @@ solution "glTFRenderSolution"
       files { sources }
 
       includedirs { "./", "../../" }
+      includedirs { "../common/" }
+      includedirs { "../common/imgui/" }
 
       if os.is("Windows") then
          defines { "NOMINMAX" }
          buildoptions { "/openmp" } -- Assume vs2013 or later
          buildoptions { "/W4" } -- raise compile error level.
          files{
-            "OpenGLWindow/Win32OpenGLWindow.cpp",
-            "OpenGLWindow/Win32OpenGLWindow.h",
-            "OpenGLWindow/Win32Window.cpp",
-            "OpenGLWindow/Win32Window.h",
+            "../common/OpenGLWindow/Win32OpenGLWindow.cpp",
+            "../common/OpenGLWindow/Win32OpenGLWindow.h",
+            "../common/OpenGLWindow/Win32Window.cpp",
+            "../common/OpenGLWindow/Win32Window.h",
             }
       end
       if os.is("Linux") then
          files {
-            "OpenGLWindow/X11OpenGLWindow.cpp",
-            "OpenGLWindow/X11OpenGLWindows.h"
+            "../common/OpenGLWindow/X11OpenGLWindow.cpp",
+            "../common/OpenGLWindow/X11OpenGLWindows.h"
             }
          links {"X11", "pthread", "dl"}
       end
       if os.is("MacOSX") then
          links {"Cocoa.framework"}
          files {
-                "OpenGLWindow/MacOpenGLWindow.h",
-                "OpenGLWindow/MacOpenGLWindow.mm",
+                "../common/OpenGLWindow/MacOpenGLWindow.h",
+                "../common/OpenGLWindow/MacOpenGLWindow.mm",
                }
       end
 
