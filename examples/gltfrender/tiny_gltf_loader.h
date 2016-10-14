@@ -78,7 +78,7 @@ namespace tinygltf {
 
 #define TINYGLTF_TEXTURE_WRAP_RPEAT (10497)
 #define TINYGLTF_TEXTURE_WRAP_CLAMP_TO_EDGE (33071)
-#define TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT (33071)
+#define TINYGLTF_TEXTURE_WRAP_MIRRORED_REPEAT (33648)
 
 // Redeclarations of the above for technique.parameters.
 #define TINYGLTF_PARAMETER_TYPE_BYTE (5120)
@@ -346,8 +346,7 @@ class Scene {
   Asset asset;
 };
 
-enum SectionCheck
-{
+enum SectionCheck {
   NO_REQUIRE = 0x00,
   REQUIRE_SCENE = 0x01,
   REQUIRE_SCENES = 0x02,
@@ -937,14 +936,20 @@ static bool ParseNumberArrayProperty(std::vector<double> *ret, std::string *err,
   return true;
 }
 
-static bool ParseStringProperty(std::string *ret, std::string *err,
-                                const picojson::object &o,
-                                const std::string &property, bool required) {
+static bool ParseStringProperty(
+    std::string *ret, std::string *err, const picojson::object &o,
+    const std::string &property, bool required,
+    const std::string &parent_node = std::string()) {
   picojson::object::const_iterator it = o.find(property);
   if (it == o.end()) {
     if (required) {
       if (err) {
-        (*err) += "'" + property + "' property is missing.\n";
+        (*err) += "'" + property + "' property is missing";
+        if (parent_node.empty()) {
+          (*err) += ".\n";
+        } else {
+          (*err) += " in `" + parent_node + "'.\n";
+        }
       }
     }
     return false;
@@ -1480,7 +1485,8 @@ static bool ParseAccessor(Accessor *accessor, std::string *err,
 
 static bool ParsePrimitive(Primitive *primitive, std::string *err,
                            const picojson::object &o) {
-  if (!ParseStringProperty(&primitive->material, err, o, "material", true)) {
+  if (!ParseStringProperty(&primitive->material, err, o, "material", true,
+                           "mesh.primitive")) {
     return false;
   }
 
@@ -1501,10 +1507,7 @@ static bool ParsePrimitive(Primitive *primitive, std::string *err,
   primitive->indices = "";
   ParseStringProperty(&primitive->indices, err, o, "indices", false);
 
-  if (!ParseStringMapProperty(&primitive->attributes, err, o, "attributes",
-                              true)) {
-    return false;
-  }
+  ParseStringMapProperty(&primitive->attributes, err, o, "attributes", false);
 
   return true;
 }
@@ -1671,7 +1674,7 @@ static bool ParseShader(Shader *shader, std::string *err,
     }
   } else {
     // Load shader source from data uri
-    // TODO: Support ascii or utf-8 data uris.
+    // TODO(syoyo): Support ascii or utf-8 data uris.
     if (IsDataURI(uri)) {
       if (!DecodeDataURI(&shader->source, uri, 0, false)) {
         if (err) {
@@ -2328,7 +2331,6 @@ bool TinyGLTFLoader::LoadASCIIFromFile(Scene *scene, std::string *err,
                                  static_cast<unsigned int>(buf.size()), basedir,
                                  check_sections);
 
-
   return ret;
 }
 
@@ -2401,7 +2403,7 @@ bool TinyGLTFLoader::LoadBinaryFromFile(Scene *scene, std::string *err,
                                         unsigned int check_sections) {
   std::stringstream ss;
 
-  std::ifstream f(filename.c_str());
+  std::ifstream f(filename.c_str(), std::ios::binary);
   if (!f) {
     ss << "Failed to open file: " << filename << std::endl;
     if (err) {

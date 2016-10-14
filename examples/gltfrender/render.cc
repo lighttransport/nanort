@@ -287,13 +287,16 @@ bool LoadGLTF(Mesh& mesh, const char* filename, float scale) {
 
         // @todo { Support multiple primitives. }
         if (it->first.compare("POSITION") == 0) {
-          std::cout << accessor.bufferView << std::endl;
+          std::cout << "POSITION: " << accessor.bufferView << std::endl;
           const tinygltf::BufferView& vertexBufferView = scene.bufferViews[accessor.bufferView];
           const tinygltf::Buffer &vertexBuffer = scene.buffers[vertexBufferView.buffer];
 
           assert(accessor.type == TINYGLTF_TYPE_VEC3);
           assert(accessor.componentType == TINYGLTF_COMPONENT_TYPE_FLOAT);
           assert(accessor.count > 0);
+          assert(accessor.byteStride > 0); // Don't allow byteStride == 0 for now.
+          std::cout << "  count " << accessor.count << std::endl;
+          std::cout << "  byteStride " << accessor.byteStride << std::endl;
 
           const unsigned char* vertexData = vertexBuffer.data.data() + vertexBufferView.byteOffset + accessor.byteOffset;
           mesh.vertices.resize(accessor.count * accessor.byteStride);
@@ -357,6 +360,11 @@ bool Renderer::LoadGLTFMesh(const char* gltf_filename, float scene_scale) {
 bool Renderer::BuildBVH() {
   if (gMesh.num_faces < 1) {
     std::cout << "num_faces == 0" << std::endl;
+    return false;
+  }
+
+  if (gMesh.vertices.size() < 3) {
+    std::cout << "vertices == 0" << std::endl;
     return false;
   }
 
