@@ -256,11 +256,11 @@ void SaveImage(const char* filename, const float* rgb, int width, int height) {
   }
 }
 
-bool LoadObj(Mesh &mesh, const char *filename, float scale) {
+bool LoadObj(Mesh &mesh, const char *filename, float scale, const char* mtl_path) {
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
 
-  std::string err = tinyobj::LoadObj(shapes, materials, filename);
+  std::string err = tinyobj::LoadObj(shapes, materials, filename, mtl_path);
 
   if (!err.empty()) {
     std::cerr << err << std::endl;
@@ -495,7 +495,7 @@ int main(int argc, char** argv)
   bool ret = false;
 
   Mesh mesh;
-  ret = LoadObj(mesh, objFilename.c_str(), scale, /* mtl path*/);
+  ret = LoadObj(mesh, objFilename.c_str(), scale, mtlPath.c_str());
   if (!ret) {
     fprintf(stderr, "Failed to load [ %s ]\n", objFilename.c_str());
     return -1;
