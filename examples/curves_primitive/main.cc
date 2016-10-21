@@ -340,7 +340,7 @@ void SaveImagePNG(const char *filename, const float *rgb, int width,
   }
 }
 
-// Predefined SAH predicator for sphere.
+// Predefined SAH predicator for curve.
 class CurvePred {
  public:
   CurvePred(const float *vertices)
