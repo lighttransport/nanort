@@ -13,7 +13,8 @@ class Renderer {
   ~Renderer() {}
 
   /// Loads CyHair(.hair) curves.
-  bool LoadCyHair(const char* cyhair_filename, float scene_scale);
+  bool LoadCyHair(const char* cyhair_filename, const float scene_scale[3],
+                  const float scene_translate[3], const int max_strands = -1);
 
   /// Builds bvh.
   bool BuildBVH();

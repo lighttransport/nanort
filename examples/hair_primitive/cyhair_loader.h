@@ -71,10 +71,17 @@ class CyHair {
   /// Convert to cubic bezier curves.
   /// 4(cubic) * 3(xyz) * num_curves = vertices.size()
   /// 4(cubic) * num_curves = radiuss.size()
+  /// `max_strands` limits the number of strands to convert. -1 = convert all
+  /// strands.
+  /// `thickness` overwrites strand thickness if it have positive value.
+  /// Apply `vertex_translate` after `vertex_scale`.
   /// TODO(syoyo) return strand/segment information
   bool ToCubicBezierCurves(std::vector<float> *vertices,
                            std::vector<float> *radiuss,
-                           const float vertex_scale_factor = 1.0f);
+                           const float vertex_scale[3],
+                           const float vertex_translate[3],
+                           const int max_strands = -1,
+                           const float thickness = -1.0f);
 
   CyHairHeader header_;
 
@@ -87,13 +94,13 @@ class CyHair {
   unsigned int flags_;
   unsigned int num_strands_;
   unsigned int total_points_;
-
-  // Processed CyHair values
-  std::vector<unsigned int> strand_offsets_;
   int default_segments_;
   float default_thickness_;
   float default_transparency_;
   float default_color_[3];
+
+  // Processed CyHair values
+  std::vector<unsigned int> strand_offsets_;
 };
 
 }  // namespace example

@@ -223,7 +223,9 @@ bool CyHair::Load(const char *filename) {
 
 bool CyHair::ToCubicBezierCurves(std::vector<float> *vertices,
                                  std::vector<float> *radiuss,
-                                 const float vertex_scale) {
+                                 const float vertex_scale[3],
+                                 const float vertex_translate[3],
+                                 const int max_strands, const float thickness) {
   if (points_.empty() || strand_offsets_.empty()) {
     return false;
   }
@@ -231,8 +233,18 @@ bool CyHair::ToCubicBezierCurves(std::vector<float> *vertices,
   vertices->clear();
   radiuss->clear();
 
+  int num_strands = num_strands_;
+
+  if ((max_strands > 0) && (max_strands < num_strands)) {
+    num_strands = max_strands;
+  }
+
+  std::cout << "[Hair] Convert first " << num_strands << " strands from "
+            << max_strands << " strands in the original hair data."
+            << std::endl;
+
   // Assume input points are CatmullRom spline.
-  for (size_t i = 0; i < num_strands_; i++) {
+  for (size_t i = 0; i < num_strands; i++) {
     if ((i % 1000) == 0) {
       std::cout << i << " / " << num_strands_ << std::endl;
     }
@@ -244,9 +256,10 @@ bool CyHair::ToCubicBezierCurves(std::vector<float> *vertices,
 
     std::vector<real3> segment_points;
     for (size_t k = 0; k < num_segments; k++) {
-      real3 p(points_[3 * strand_offsets_[i] + 0],
-              points_[3 * strand_offsets_[i] + 1],
-              points_[3 * strand_offsets_[i] + 2]);
+      // Zup -> Yup
+      real3 p(points_[3 * (strand_offsets_[i] + k) + 0],
+              points_[3 * (strand_offsets_[i] + k) + 2],
+              points_[3 * (strand_offsets_[i] + k) + 1]);
       segment_points.push_back(p);
     }
 
@@ -256,21 +269,27 @@ bool CyHair::ToCubicBezierCurves(std::vector<float> *vertices,
       real3 q[4];
       CamullRomToCubicBezier(q, segment_points.data(), num_segments, seg_idx);
 
-      vertices->push_back(vertex_scale * q[0].x);
-      vertices->push_back(vertex_scale * q[0].y);
-      vertices->push_back(vertex_scale * q[0].z);
-      vertices->push_back(vertex_scale * q[1].x);
-      vertices->push_back(vertex_scale * q[1].y);
-      vertices->push_back(vertex_scale * q[1].z);
-      vertices->push_back(vertex_scale * q[2].x);
-      vertices->push_back(vertex_scale * q[2].y);
-      vertices->push_back(vertex_scale * q[2].z);
-      vertices->push_back(vertex_scale * q[3].x);
-      vertices->push_back(vertex_scale * q[3].y);
-      vertices->push_back(vertex_scale * q[3].z);
+      vertices->push_back(vertex_scale[0] * q[0].x + vertex_translate[0]);
+      vertices->push_back(vertex_scale[1] * q[0].y + vertex_translate[1]);
+      vertices->push_back(vertex_scale[2] * q[0].z + vertex_translate[2]);
+      vertices->push_back(vertex_scale[0] * q[1].x + vertex_translate[0]);
+      vertices->push_back(vertex_scale[1] * q[1].y + vertex_translate[1]);
+      vertices->push_back(vertex_scale[2] * q[1].z + vertex_translate[2]);
+      vertices->push_back(vertex_scale[0] * q[2].x + vertex_translate[0]);
+      vertices->push_back(vertex_scale[1] * q[2].y + vertex_translate[1]);
+      vertices->push_back(vertex_scale[2] * q[2].z + vertex_translate[2]);
+      vertices->push_back(vertex_scale[0] * q[3].x + vertex_translate[0]);
+      vertices->push_back(vertex_scale[1] * q[3].y + vertex_translate[1]);
+      vertices->push_back(vertex_scale[2] * q[3].z + vertex_translate[2]);
 
-      // TODO(syoyo) Support per point/segment thickness
-      {
+      if (thickness > 0) {
+        // Use user supplied thickness.
+        radiuss->push_back(thickness);
+        radiuss->push_back(thickness);
+        radiuss->push_back(thickness);
+        radiuss->push_back(thickness);
+      } else {
+        // TODO(syoyo) Support per point/segment thickness
         radiuss->push_back(default_thickness_);
         radiuss->push_back(default_thickness_);
         radiuss->push_back(default_thickness_);

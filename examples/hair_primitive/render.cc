@@ -529,6 +529,8 @@ class CurveIntersector {
       float3 Dv;
       EvaluateBezierTangent(cps, intersection.u, &Dv);
       intersection.tangent = vnormalize(Dv);
+      // printf("Dv = %f, %f, %f\n", intersection.tangent[0],
+      // intersection.tangent[1], intersection.tangent[2]);
 
       intersection.normal = vnormalize(
           vcross(vcross(ray_dir_, intersection.tangent), intersection.tangent));
@@ -717,7 +719,9 @@ int LoadTexture(const std::string &filename) {
 }
 
 bool Renderer::LoadCyHair(const char *cyhair_filename,
-                          const float scene_scale) {
+                          const float scene_scale[3],
+                          const float scene_translate[3],
+                          const int max_strands) {
   CyHair cyhair;
   bool ret = cyhair.Load(cyhair_filename);
   if (!ret) {
@@ -729,7 +733,7 @@ bool Renderer::LoadCyHair(const char *cyhair_filename,
   std::cout << "  # of points  : " << cyhair.total_points_ << std::endl;
 
   ret = cyhair.ToCubicBezierCurves(&gCurves.vertices, &gCurves.radiuss,
-                                   scene_scale);
+                                   scene_scale, scene_translate, max_strands);
 
   return ret;
 }
@@ -855,68 +859,43 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
           ray.min_t = 0.0f;
           ray.max_t = kFar;
 
-          // nanort::TriangleIntersector<> triangle_intersector(
-          //    gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
           nanort::BVHTraceOptions trace_options;
-          // bool hit = gAccel.Traverse(ray, trace_options,
-          // triangle_intersector);
-          bool hit = false;
+          CurveIntersector<CurveIntersection> isector(&gCurves.vertices.at(0),
+                                                      &gCurves.radiuss.at(0));
+          bool hit = gAccel.Traverse(ray, trace_options, isector);
           if (hit) {
-#if 0
             float3 p;
-            p[0] =
-                ray.org[0] + triangle_intersector.intersection.t * ray.dir[0];
-            p[1] =
-                ray.org[1] + triangle_intersector.intersection.t * ray.dir[1];
-            p[2] =
-                ray.org[2] + triangle_intersector.intersection.t * ray.dir[2];
+            p[0] = ray.org[0] + isector.intersection.t * ray.dir[0];
+            p[1] = ray.org[1] + isector.intersection.t * ray.dir[1];
+            p[2] = ray.org[2] + isector.intersection.t * ray.dir[2];
 
             config.positionImage[4 * (y * config.width + x) + 0] = p.x();
             config.positionImage[4 * (y * config.width + x) + 1] = p.y();
             config.positionImage[4 * (y * config.width + x) + 2] = p.z();
             config.positionImage[4 * (y * config.width + x) + 3] = 1.0f;
 
-            config.varycoordImage[4 * (y * config.width + x) + 0] =
-                triangle_intersector.intersection.u;
-            config.varycoordImage[4 * (y * config.width + x) + 1] =
-                triangle_intersector.intersection.v;
-            config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
-            config.varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
+            config.uparamImage[4 * (y * config.width + x) + 0] =
+                isector.intersection.u;
+            config.uparamImage[4 * (y * config.width + x) + 1] =
+                isector.intersection.u;
+            config.uparamImage[4 * (y * config.width + x) + 2] =
+                isector.intersection.u;
+            config.uparamImage[4 * (y * config.width + x) + 3] = 1.0f;
 
-            unsigned int prim_id = triangle_intersector.intersection.prim_id;
+            config.vparamImage[4 * (y * config.width + x) + 0] =
+                isector.intersection.v;
+            config.vparamImage[4 * (y * config.width + x) + 1] =
+                isector.intersection.v;
+            config.vparamImage[4 * (y * config.width + x) + 2] =
+                isector.intersection.v;
+            config.vparamImage[4 * (y * config.width + x) + 3] = 1.0f;
+
+            unsigned int prim_id = isector.intersection.prim_id;
 
             float3 N;
-            if (gMesh.facevarying_normals.size() > 0) {
-              float3 n0, n1, n2;
-              n0[0] = gMesh.facevarying_normals[9 * prim_id + 0];
-              n0[1] = gMesh.facevarying_normals[9 * prim_id + 1];
-              n0[2] = gMesh.facevarying_normals[9 * prim_id + 2];
-              n1[0] = gMesh.facevarying_normals[9 * prim_id + 3];
-              n1[1] = gMesh.facevarying_normals[9 * prim_id + 4];
-              n1[2] = gMesh.facevarying_normals[9 * prim_id + 5];
-              n2[0] = gMesh.facevarying_normals[9 * prim_id + 6];
-              n2[1] = gMesh.facevarying_normals[9 * prim_id + 7];
-              n2[2] = gMesh.facevarying_normals[9 * prim_id + 8];
-              N = Lerp3(n0, n1, n2, triangle_intersector.intersection.u,
-                        triangle_intersector.intersection.v);
-            } else {
-              unsigned int f0, f1, f2;
-              f0 = gMesh.faces[3 * prim_id + 0];
-              f1 = gMesh.faces[3 * prim_id + 1];
-              f2 = gMesh.faces[3 * prim_id + 2];
-
-              float3 v0, v1, v2;
-              v0[0] = gMesh.vertices[3 * f0 + 0];
-              v0[1] = gMesh.vertices[3 * f0 + 1];
-              v0[2] = gMesh.vertices[3 * f0 + 2];
-              v1[0] = gMesh.vertices[3 * f1 + 0];
-              v1[1] = gMesh.vertices[3 * f1 + 1];
-              v1[2] = gMesh.vertices[3 * f1 + 2];
-              v2[0] = gMesh.vertices[3 * f2 + 0];
-              v2[1] = gMesh.vertices[3 * f2 + 1];
-              v2[2] = gMesh.vertices[3 * f2 + 2];
-              CalcNormal(N, v0, v1, v2);
-            }
+            N[0] = isector.intersection.normal[0];
+            N[1] = isector.intersection.normal[1];
+            N[2] = isector.intersection.normal[2];
 
             config.normalImage[4 * (y * config.width + x) + 0] =
                 0.5 * N[0] + 0.5;
@@ -926,57 +905,26 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
                 0.5 * N[2] + 0.5;
             config.normalImage[4 * (y * config.width + x) + 3] = 1.0f;
 
+            config.tangentImage[4 * (y * config.width + x) + 0] =
+                0.5 * isector.intersection.tangent[0] + 0.5;
+            config.tangentImage[4 * (y * config.width + x) + 1] =
+                0.5 * isector.intersection.tangent[1] + 0.5;
+            config.tangentImage[4 * (y * config.width + x) + 2] =
+                0.5 * isector.intersection.tangent[2] + 0.5;
+            config.tangentImage[4 * (y * config.width + x) + 3] = 1.0f;
+
             config.depthImage[4 * (y * config.width + x) + 0] =
-                triangle_intersector.intersection.t;
+                isector.intersection.t;
             config.depthImage[4 * (y * config.width + x) + 1] =
-                triangle_intersector.intersection.t;
+                isector.intersection.t;
             config.depthImage[4 * (y * config.width + x) + 2] =
-                triangle_intersector.intersection.t;
+                isector.intersection.t;
             config.depthImage[4 * (y * config.width + x) + 3] = 1.0f;
-
-            float3 UV;
-            if (gMesh.facevarying_uvs.size() > 0) {
-              float3 uv0, uv1, uv2;
-              uv0[0] = gMesh.facevarying_uvs[6 * prim_id + 0];
-              uv0[1] = gMesh.facevarying_uvs[6 * prim_id + 1];
-              uv1[0] = gMesh.facevarying_uvs[6 * prim_id + 2];
-              uv1[1] = gMesh.facevarying_uvs[6 * prim_id + 3];
-              uv2[0] = gMesh.facevarying_uvs[6 * prim_id + 4];
-              uv2[1] = gMesh.facevarying_uvs[6 * prim_id + 5];
-
-              UV = Lerp3(uv0, uv1, uv2, triangle_intersector.intersection.u,
-                         triangle_intersector.intersection.v);
-
-              config.texcoordImage[4 * (y * config.width + x) + 0] = UV[0];
-              config.texcoordImage[4 * (y * config.width + x) + 1] = UV[1];
-            }
-
-            // Fetch texture
-            unsigned int material_id =
-                gMesh.material_ids[triangle_intersector.intersection.prim_id];
-
-            float diffuse_col[3];
-            int diffuse_texid = gMaterials[material_id].diffuse_texid;
-            if (diffuse_texid >= 0) {
-              FetchTexture(diffuse_texid, UV[0], UV[1], diffuse_col);
-            } else {
-              diffuse_col[0] = gMaterials[material_id].diffuse[0];
-              diffuse_col[1] = gMaterials[material_id].diffuse[1];
-              diffuse_col[2] = gMaterials[material_id].diffuse[2];
-            }
-
-            float specular_col[3];
-            int specular_texid = gMaterials[material_id].specular_texid;
-            if (specular_texid >= 0) {
-              FetchTexture(specular_texid, UV[0], UV[1], specular_col);
-            } else {
-              specular_col[0] = gMaterials[material_id].specular[0];
-              specular_col[1] = gMaterials[material_id].specular[1];
-              specular_col[2] = gMaterials[material_id].specular[2];
-            }
 
             // Simple shading
             float NdotV = fabsf(vdot(N, dir));
+
+            float diffuse_col[3] = {0.5, 0.5, 0.5};
 
             if (config.pass == 0) {
               rgba[4 * (y * config.width + x) + 0] = NdotV * diffuse_col[0];
@@ -992,7 +940,6 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
               rgba[4 * (y * config.width + x) + 3] += 1.0f;
               sample_counts[y * config.width + x]++;
             }
-#endif
           } else {
             {
               if (config.pass == 0) {
@@ -1016,6 +963,10 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
               config.normalImage[4 * (y * config.width + x) + 1] = 0.0f;
               config.normalImage[4 * (y * config.width + x) + 2] = 0.0f;
               config.normalImage[4 * (y * config.width + x) + 3] = 0.0f;
+              config.tangentImage[4 * (y * config.width + x) + 0] = 0.0f;
+              config.tangentImage[4 * (y * config.width + x) + 1] = 0.0f;
+              config.tangentImage[4 * (y * config.width + x) + 2] = 0.0f;
+              config.tangentImage[4 * (y * config.width + x) + 3] = 0.0f;
               config.positionImage[4 * (y * config.width + x) + 0] = 0.0f;
               config.positionImage[4 * (y * config.width + x) + 1] = 0.0f;
               config.positionImage[4 * (y * config.width + x) + 2] = 0.0f;
@@ -1028,10 +979,14 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
               config.texcoordImage[4 * (y * config.width + x) + 1] = 0.0f;
               config.texcoordImage[4 * (y * config.width + x) + 2] = 0.0f;
               config.texcoordImage[4 * (y * config.width + x) + 3] = 0.0f;
-              config.varycoordImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.varycoordImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.varycoordImage[4 * (y * config.width + x) + 3] = 0.0f;
+              config.uparamImage[4 * (y * config.width + x) + 0] = 0.0f;
+              config.uparamImage[4 * (y * config.width + x) + 1] = 0.0f;
+              config.uparamImage[4 * (y * config.width + x) + 2] = 0.0f;
+              config.uparamImage[4 * (y * config.width + x) + 3] = 0.0f;
+              config.vparamImage[4 * (y * config.width + x) + 0] = 0.0f;
+              config.vparamImage[4 * (y * config.width + x) + 1] = 0.0f;
+              config.vparamImage[4 * (y * config.width + x) + 2] = 0.0f;
+              config.vparamImage[4 * (y * config.width + x) + 3] = 0.0f;
             }
           }
         }

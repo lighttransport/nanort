@@ -22,16 +22,19 @@ typedef struct {
 
   // For debugging. Array size = width * height * 4.
   float *normalImage;
+  float *tangentImage;
   float *positionImage;
   float *depthImage;
   float *texcoordImage;
-  float *varycoordImage;
+  float *uparamImage;
+  float *vparamImage;
 
   // Scene input info
   std::string cyhair_filename;
-  float scene_scale;
-	int max_strands;								// -1 = read all strands
-
+  float scene_scale[3];
+  float scene_translate[3];
+  int max_strands;  // -1 = read all strands
+  float thickness;  // -1 = use thickness in cyhair file.
 
 } RenderConfig;
 

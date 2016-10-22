@@ -35,10 +35,31 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
-  config->scene_scale = 1.0f;
+  config->scene_scale[0] = 0.0f;
+  config->scene_scale[1] = 0.0f;
+  config->scene_scale[2] = 0.0f;
   if (o.find("scene_scale") != o.end()) {
-    if (o["scene_scale"].is<double>()) {
-      config->scene_scale = static_cast<float>(o["scene_scale"].get<double>());
+    if (o["scene_scale"].is<picojson::array>()) {
+      picojson::array arr = o["scene_scale"].get<picojson::array>();
+      if (arr.size() == 3) {
+        config->scene_scale[0] = arr[0].get<double>();
+        config->scene_scale[1] = arr[1].get<double>();
+        config->scene_scale[2] = arr[2].get<double>();
+      }
+    }
+  }
+
+  config->scene_translate[0] = 0.0f;
+  config->scene_translate[1] = 0.0f;
+  config->scene_translate[2] = 0.0f;
+  if (o.find("scene_translate") != o.end()) {
+    if (o["scene_translate"].is<picojson::array>()) {
+      picojson::array arr = o["scene_translate"].get<picojson::array>();
+      if (arr.size() == 3) {
+        config->scene_translate[0] = arr[0].get<double>();
+        config->scene_translate[1] = arr[1].get<double>();
+        config->scene_translate[2] = arr[2].get<double>();
+      }
     }
   }
 
@@ -112,6 +133,12 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
+  config->max_passes = 1;
+  if (o.find("max_passes") != o.end()) {
+    if (o["max_passes"].is<double>()) {
+      config->max_passes = static_cast<int>(o["max_passes"].get<double>());
+    }
+  }
 
   return true;
 }

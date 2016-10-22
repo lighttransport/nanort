@@ -66,12 +66,16 @@ THE SOFTWARE.
 #include "render.h"
 #include "trackball.h"
 
-#define SHOW_BUFFER_COLOR (0)
-#define SHOW_BUFFER_NORMAL (1)
-#define SHOW_BUFFER_POSITION (2)
-#define SHOW_BUFFER_DEPTH (3)
-#define SHOW_BUFFER_TEXCOORD (4)
-#define SHOW_BUFFER_VARYCOORD (5)
+enum {
+  SHOW_BUFFER_COLOR = 0,
+  SHOW_BUFFER_NORMAL,
+  SHOW_BUFFER_TANGENT,
+  SHOW_BUFFER_POSITION,
+  SHOW_BUFFER_DEPTH,
+  SHOW_BUFFER_TEXCOORD,
+  SHOW_BUFFER_UPARAM,
+  SHOW_BUFFER_VPARAM,
+} ShowBufferMode;
 
 b3gDefaultOpenGLWindow* window = 0;
 int gWidth = 512;
@@ -86,6 +90,7 @@ float gShowDepthRange[2] = {10.0f, 20.f};
 bool gShowDepthPeseudoColor = true;
 float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+float gVParamScale = 1.0f;  // Usually 1/thickness
 
 example::Renderer gRenderer;
 
@@ -97,13 +102,17 @@ std::mutex gMutex;
 
 std::vector<float> gDisplayRGBA;  // Accumurated image.
 std::vector<float> gRGBA;
-std::vector<float> gAuxRGBA;        // Auxiliary buffer
-std::vector<int> gSampleCounts;     // Sample num counter for each pixel.
-std::vector<float> gNormalRGBA;     // For visualizing normal
-std::vector<float> gPositionRGBA;   // For visualizing position
-std::vector<float> gDepthRGBA;      // For visualizing depth
-std::vector<float> gTexCoordRGBA;   // For visualizing texcoord
-std::vector<float> gVaryCoordRGBA;  // For visualizing varycentric coord
+std::vector<float> gAuxRGBA;       // Auxiliary buffer
+std::vector<int> gSampleCounts;    // Sample num counter for each pixel.
+std::vector<float> gNormalRGBA;    // For visualizing normal
+std::vector<float> gTangentRGBA;   // For visualizing hair tangent
+std::vector<float> gPositionRGBA;  // For visualizing position
+std::vector<float> gDepthRGBA;     // For visualizing depth
+std::vector<float> gTexCoordRGBA;  // For visualizing texcoord
+std::vector<float>
+    gUParamRGBA;  // For visualizing `u` parameter of curve intersection point
+std::vector<float>
+    gVParamRGBA;  // For visualizing `v` parameter of curve intersection point
 
 void RequestRender() {
   {
@@ -183,6 +192,9 @@ void InitRender(example::RenderConfig* rc) {
   gNormalRGBA.resize(rc->width * rc->height * 4);
   std::fill(gNormalRGBA.begin(), gNormalRGBA.end(), 0.0);
 
+  gTangentRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gTangentRGBA.begin(), gTangentRGBA.end(), 0.0);
+
   gPositionRGBA.resize(rc->width * rc->height * 4);
   std::fill(gPositionRGBA.begin(), gPositionRGBA.end(), 0.0);
 
@@ -192,14 +204,19 @@ void InitRender(example::RenderConfig* rc) {
   gTexCoordRGBA.resize(rc->width * rc->height * 4);
   std::fill(gTexCoordRGBA.begin(), gTexCoordRGBA.end(), 0.0);
 
-  gVaryCoordRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gVaryCoordRGBA.begin(), gVaryCoordRGBA.end(), 0.0);
+  gUParamRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gUParamRGBA.begin(), gUParamRGBA.end(), 0.0);
+
+  gVParamRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gVParamRGBA.begin(), gVParamRGBA.end(), 0.0);
 
   rc->normalImage = &gNormalRGBA.at(0);
+  rc->tangentImage = &gTangentRGBA.at(0);
   rc->positionImage = &gPositionRGBA.at(0);
   rc->depthImage = &gDepthRGBA.at(0);
   rc->texcoordImage = &gTexCoordRGBA.at(0);
-  rc->varycoordImage = &gVaryCoordRGBA.at(0);
+  rc->uparamImage = &gUParamRGBA.at(0);
+  rc->vparamImage = &gVParamRGBA.at(0);
 
   trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
@@ -213,8 +230,8 @@ void checkErrors(std::string desc) {
 }
 
 void keyboardCallback(int keycode, int state) {
-  printf("hello key %d, state %d(ctrl %d)\n", keycode, state,
-         window->isModifierKeyPressed(B3G_CONTROL));
+  // printf("hello key %d, state %d(ctrl %d)\n", keycode, state,
+  //       window->isModifierKeyPressed(B3G_CONTROL));
   // if (keycode == 'q' && window && window->isModifierKeyPressed(B3G_SHIFT)) {
   if (keycode == 27) {
     if (window) window->setRequestExit();
@@ -345,6 +362,10 @@ void Display(int width, int height) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gNormalRGBA[i];
     }
+  } else if (gShowBufferMode == SHOW_BUFFER_TANGENT) {
+    for (size_t i = 0; i < buf.size(); i++) {
+      buf[i] = gTangentRGBA[i];
+    }
   } else if (gShowBufferMode == SHOW_BUFFER_POSITION) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gPositionRGBA[i] * gShowPositionScale;
@@ -365,9 +386,16 @@ void Display(int width, int height) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gTexCoordRGBA[i];
     }
-  } else if (gShowBufferMode == SHOW_BUFFER_VARYCOORD) {
+  } else if (gShowBufferMode == SHOW_BUFFER_UPARAM) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gVaryCoordRGBA[i];
+      buf[i] = gUParamRGBA[i];
+    }
+  } else if (gShowBufferMode == SHOW_BUFFER_VPARAM) {
+    for (size_t i = 0; i < buf.size() / 4; i++) {
+      buf[4 * i + 0] = gVParamScale * gVParamRGBA[4 * i + 0];
+      buf[4 * i + 1] = gVParamScale * gVParamRGBA[4 * i + 1];
+      buf[4 * i + 2] = gVParamScale * gVParamRGBA[4 * i + 2];
+      buf[4 * i + 3] = 1.0f;
     }
   }
 
@@ -394,8 +422,9 @@ int main(int argc, char** argv) {
   }
 
   {
-    bool ret = gRenderer.LoadCyHair(gRenderConfig.cyhair_filename.c_str(),
-                                    gRenderConfig.scene_scale);
+    bool ret = gRenderer.LoadCyHair(
+        gRenderConfig.cyhair_filename.c_str(), gRenderConfig.scene_scale,
+        gRenderConfig.scene_translate, gRenderConfig.max_strands);
     if (!ret) {
       std::cerr << "Failed to load cyhair : " << gRenderConfig.cyhair_filename
                 << std::endl;
@@ -490,15 +519,21 @@ int main(int argc, char** argv) {
       ImGui::SameLine();
       ImGui::RadioButton("normal", &gShowBufferMode, SHOW_BUFFER_NORMAL);
       ImGui::SameLine();
+      ImGui::RadioButton("tangent", &gShowBufferMode, SHOW_BUFFER_TANGENT);
+      ImGui::SameLine();
       ImGui::RadioButton("position", &gShowBufferMode, SHOW_BUFFER_POSITION);
       ImGui::SameLine();
       ImGui::RadioButton("depth", &gShowBufferMode, SHOW_BUFFER_DEPTH);
       ImGui::SameLine();
       ImGui::RadioButton("texcoord", &gShowBufferMode, SHOW_BUFFER_TEXCOORD);
       ImGui::SameLine();
-      ImGui::RadioButton("varycoord", &gShowBufferMode, SHOW_BUFFER_VARYCOORD);
+      ImGui::RadioButton("u", &gShowBufferMode, SHOW_BUFFER_UPARAM);
+      ImGui::SameLine();
+      ImGui::RadioButton("v", &gShowBufferMode, SHOW_BUFFER_VPARAM);
 
       ImGui::InputFloat("show pos scale", &gShowPositionScale);
+
+      ImGui::InputFloat("show v scalee", &gVParamScale);
 
       ImGui::InputFloat2("show depth range", gShowDepthRange);
       ImGui::Checkbox("show depth pesudo color", &gShowDepthPeseudoColor);
@@ -524,7 +559,7 @@ int main(int argc, char** argv) {
     std::this_thread::sleep_for(std::chrono::milliseconds(16));
   }
 
-  printf("quit\n");
+  printf("quiting...\n");
   {
     gRenderCancel = true;
     gRenderQuit = true;
@@ -534,5 +569,6 @@ int main(int argc, char** argv) {
   ImGui_ImplBtGui_Shutdown();
   delete window;
 
+  printf("finish\n");
   return EXIT_SUCCESS;
 }
