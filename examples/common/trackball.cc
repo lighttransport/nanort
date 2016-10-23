@@ -52,6 +52,13 @@
 #include <math.h>
 #include "trackball.h"
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wconversion"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#endif
+
 /*
  * This size should really be based on the distance from the center of
  * rotation to the point on the object underneath the mouse.  That
@@ -101,7 +108,7 @@ static void vcross(const float *v1, const float *v2, float *cross) {
 }
 
 static float vlength(const float *v) {
-  return sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+  return sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 
 static void vscale(float *v, float div) {
@@ -110,7 +117,7 @@ static void vscale(float *v, float div) {
   v[2] *= div;
 }
 
-static void vnormal(float *v) { vscale(v, 1.0 / vlength(v)); }
+static void vnormal(float *v) { vscale(v, 1.0f / vlength(v)); }
 
 static float vdot(const float *v1, const float *v2) {
   return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
@@ -140,7 +147,7 @@ void trackball(float q[4], float p1x, float p1y, float p2x, float p2y) {
   float p1[3], p2[3], d[3];
   float t;
 
-  if (p1x == p2x && p1y == p2y) {
+  if ((fabsf(p1x - p2x) == 0) && (fabsf(p1y - p2y) == 0)) {
     /* Zero rotation */
     vzero(q);
     q[3] = 1.0;

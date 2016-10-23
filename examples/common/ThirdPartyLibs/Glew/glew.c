@@ -29,6 +29,27 @@
 ** THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#ifdef __clang__
+// Disable some warnings for external files.
+//#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wconversion"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#pragma clang diagnostic ignored "-Wreserved-id-macro"
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#pragma clang diagnostic ignored "-Wextra-semi"
+#pragma clang diagnostic ignored "-Wweak-vtables"
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wcast-qual"
+#pragma clang diagnostic ignored "-Wunreachable-code-break"
+#pragma clang diagnostic ignored "-Wunused-macros"
+#endif
+
 #include "CustomGL/glew.h"
 
 #if defined(_WIN32)

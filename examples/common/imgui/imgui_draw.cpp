@@ -12,6 +12,13 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wold-style-cast"         // warning : use of old-style cast                              // yes, they are more terse.
+#pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wformat-pedantic"
+#endif
+
 #include "imgui.h"
 #define IMGUI_DEFINE_MATH_OPERATORS
 #define IMGUI_DEFINE_PLACEMENT_NEW
