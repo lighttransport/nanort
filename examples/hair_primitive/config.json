@@ -1,0 +1,12 @@
+{ "cyhair_filename" : "straight.hair",
+  "scene_scale" : [1.0, 1.0, 1.0],
+  "scene_translate" : [0.0, -25.0, 0.0],
+  "max_strands" : -1,
+  "thickness" : -1,
+  "width" : 512,
+  "height" : 512,
+  "eye" : [0, 0, 100],
+  "up" : [0, 1, 0],
+  "look_at" : [0, 0, 0],
+  "dummy" : 0
+}
