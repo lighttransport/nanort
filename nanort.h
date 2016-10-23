@@ -322,7 +322,7 @@ template <typename T>
 inline real3<T> vnormalize(const real3<T> &rhs) {
   real3<T> v = rhs;
   T len = vlength(rhs);
-  if (fabs(len) > 1.0e-6f) {
+  if (std::fabs(len) > 1.0e-6f) {
     float inv_len = 1.0f / len;
     v.v[0] *= inv_len;
     v.v[1] *= inv_len;
@@ -367,7 +367,7 @@ template <typename real = float>
 class BVHNode {
  public:
   BVHNode() {}
-  ~BVHNode() {}
+  //~BVHNode() {}
 
   real bmin[3];
   real bmax[3];
@@ -862,7 +862,7 @@ struct BinBuffer {
 template <typename T>
 inline T CalculateSurfaceArea(const real3<T> &min, const real3<T> &max) {
   real3<T> box = max - min;
-  return 2.0 * (box[0] * box[1] + box[1] * box[2] + box[2] * box[0]);
+  return 2 * (box[0] * box[1] + box[1] * box[2] + box[2] * box[0]);
 }
 
 template <typename T>
@@ -906,12 +906,12 @@ inline void ContributeBinBuffer(BinBuffer *bins,  // [out]
   real3<T> scene_size, scene_inv_size;
   scene_size = scene_max - scene_min;
   for (int i = 0; i < 3; ++i) {
-    assert(scene_size[i] >= 0.0);
+    assert(scene_size[i] >= 0);
 
-    if (scene_size[i] > 0.0) {
+    if (scene_size[i] > 0) {
       scene_inv_size[i] = bin_size / scene_size[i];
     } else {
-      scene_inv_size[i] = 0.0;
+      scene_inv_size[i] = 0;
     }
   }
 
@@ -969,7 +969,7 @@ inline T SAH(size_t ns1, T leftArea, size_t ns2, T rightArea, T invS, T Taabb,
              T Ttri) {
   T sah;
 
-  sah = 2.0 * Taabb + (leftArea * invS) * static_cast<T>(ns1) * Ttri +
+  sah = 2 * Taabb + (leftArea * invS) * static_cast<T>(ns1) * Ttri +
         (rightArea * invS) * static_cast<T>(ns2) * Ttri;
 
   return sah;
@@ -1501,11 +1501,11 @@ bool BVHAccel<T, P, Pred, I>::Build(unsigned int num_primitives,
     bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<T>::max();
 
     bboxes_.resize(n);
-    for (size_t i = 0; i < n; i++) {  // for each primitived
+    for (unsigned int i = 0; i < n; i++) {  // for each primitived
       unsigned int idx = indices_[i];
 
       BBox<T> bbox;
-      p.BoundingBox(&(bbox.bmin), &(bbox.bmax), i);
+      p.BoundingBox(&(bbox.bmin), &(bbox.bmax), idx);
       bboxes_[idx] = bbox;
 
       for (int k = 0; k < 3; k++) {  // xyz
