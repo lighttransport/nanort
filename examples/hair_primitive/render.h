@@ -12,6 +12,8 @@ class Renderer {
   Renderer() {}
   ~Renderer() {}
 
+	void Init();
+
   /// Loads CyHair(.hair) curves.
   bool LoadCyHair(const char* cyhair_filename, const float scene_scale[3],
                   const float scene_translate[3], const int max_strands = -1);
@@ -21,8 +23,9 @@ class Renderer {
 
   /// Returns false when the rendering was canceled.
   bool Render(float* rgba, float* aux_rgba, int* sample_counts, float quat[4],
-              const RenderConfig& config, std::atomic<bool>& cancel_flag);
+              RenderConfig& config, std::atomic<bool>& cancel_flag);
 };
-};
+
+}
 
 #endif  // EXAMPLE_RENDER_H_

@@ -37,6 +37,24 @@ THE SOFTWARE.
 
 #include "cyhair_loader.h"
 
+#ifdef __clang__
+// Disable some warnings for external files.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wconversion"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#pragma clang diagnostic ignored "-Wreserved-id-macro"
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#pragma clang diagnostic ignored "-Wextra-semi"
+#pragma clang diagnostic ignored "-Wweak-vtables"
+#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
+#endif
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
@@ -53,7 +71,7 @@ typedef struct {
 #define PCG32_INITIALIZER \
   { 0x853c49e6748fea9bULL, 0xda3e39cb94b95bdbULL }
 
-float pcg32_random(pcg32_state_t *rng) {
+static float pcg32_random(pcg32_state_t *rng) {
   unsigned long long oldstate = rng->state;
   rng->state = oldstate * 6364136223846793005ULL + rng->inc;
   unsigned int xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
@@ -63,13 +81,23 @@ float pcg32_random(pcg32_state_t *rng) {
   return (float)((double)ret / (double)4294967296.0);
 }
 
-void pcg32_srandom(pcg32_state_t *rng, uint64_t initstate, uint64_t initseq) {
+static void pcg32_srandom(pcg32_state_t *rng, uint64_t initstate, uint64_t initseq) {
   rng->state = 0U;
   rng->inc = (initseq << 1U) | 1U;
   pcg32_random(rng);
   rng->state += initstate;
   pcg32_random(rng);
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc++98-compat"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#endif
 
 const float kPI = 3.141592f;
 
@@ -124,6 +152,7 @@ struct Texture {
   int width;
   int height;
   int components;
+  int pad0;
   unsigned char *image;
 
   Texture() {
@@ -134,28 +163,28 @@ struct Texture {
   }
 };
 
-CubicCurves gCurves;
-std::vector<Material> gMaterials;
-std::vector<Texture> gTextures;
+static CubicCurves *gCurves;
+static std::vector<Material> *gMaterials;
+static std::vector<Texture> *gTextures;
 
 typedef nanort::real3<float> float3;
 
-inline float3 Lerp3(float3 v0, float3 v1, float3 v2, float u, float v) {
-  return (1.0f - u - v) * v0 + u * v1 + v * v2;
-}
+//static inline float3 Lerp3(float3 v0, float3 v1, float3 v2, float u, float v) {
+//  return (1.0f - u - v) * v0 + u * v1 + v * v2;
+//}
 
-inline void CalcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
-  float3 v10 = v1 - v0;
-  float3 v20 = v2 - v0;
-
-  N = vcross(v20, v10);
-  N = vnormalize(N);
-}
+//static inline void CalcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
+//  float3 v10 = v1 - v0;
+//  float3 v20 = v2 - v0;
+//
+//  N = vcross(v20, v10);
+//  N = vnormalize(N);
+//}
 
 // -------------------------------------------------------------------------------
 // Curve intersector functions
 
-void GetZAlign(const float3 &o, const float3 &l, float matrix[3][3],
+static void GetZAlign(const float3 &o, const float3 &l, float matrix[3][3],
                float translate[3]) {
   float dxz, lxdxz, lydxz, lzdxz;
 
@@ -192,7 +221,7 @@ void GetZAlign(const float3 &o, const float3 &l, float matrix[3][3],
       -(o.x() * matrix[0][2] + o.y() * matrix[1][2] + o.z() * matrix[2][2]);
 }
 
-inline float3 Xform(const float3 &p0, float matrix[3][3], float translate[3]) {
+static inline float3 Xform(const float3 &p0, float matrix[3][3], float translate[3]) {
   float3 p;
 
   p[0] = p0.x() * matrix[0][0] + p0.y() * matrix[1][0] + p0.z() * matrix[2][0] +
@@ -205,7 +234,7 @@ inline float3 Xform(const float3 &p0, float matrix[3][3], float translate[3]) {
   return p;
 }
 
-void EvaluateBezier(const float3 *v, float t, float3 *p) {
+static void EvaluateBezier(const float3 *v, float t, float3 *p) {
   float3 v1[3], v2[2], v3[1];
   float u;
 
@@ -229,7 +258,7 @@ void EvaluateBezier(const float3 *v, float t, float3 *p) {
   (*p) = float3(v3[0].x(), v3[0].y(), v3[0].z());
 }
 
-void EvaluateBezierTangent(const float3 *v, float t, float3 *dv) {
+static void EvaluateBezierTangent(const float3 *v, float t, float3 *dv) {
   float3 C1 = v[3] - (3.0f * v[2]) + (3.0f * v[1]) - v[0];
   float3 C2 = (3.0f * v[2]) - (6.0f * v[1]) + (3.0f * v[0]);
   float3 C3 = (3.0f * v[1]) - (3.0f * v[0]);
@@ -289,7 +318,7 @@ class CurveGeometry {
         vertices_[3 * (4 * prim_index + 0) + 1] + radiuss_[4 * prim_index];
     (*bmax)[2] =
         vertices_[3 * (4 * prim_index + 0) + 2] + radiuss_[4 * prim_index];
-    for (int i = 1; i < 4; i++) {
+    for (unsigned int i = 1; i < 4; i++) {
       (*bmin)[0] = std::min(vertices_[3 * (4 * prim_index + i) + 0] -
                                 radiuss_[4 * prim_index + i],
                             (*bmin)[0]);
@@ -314,8 +343,11 @@ class CurveGeometry {
   const float *vertices_;
   const float *radiuss_;
   mutable float3 ray_org_;
+  float pad0;
   mutable float3 ray_dir_;
+  float pad1;
   mutable nanort::BVHTraceOptions trace_options_;
+  float pad2;
 };
 
 class CurveIntersection {
@@ -416,12 +448,12 @@ class CurveIntersector {
       P0x = p[0].x();
       P0y = p[0].y();
       P0z = p[0].z();
-      P0w = 0.5 * radius[0];
+      P0w = 0.5f * radius[0];
 
       P1x = p[1].x();
       P1y = p[1].y();
       P1z = p[1].z();
-      P1w = 0.5 * radius[1];
+      P1w = 0.5f * radius[1];
 
       // Project ray origin onto the line segment;
       float Ax, Ay, Az, Bx, By, Bz, Bw;
@@ -504,6 +536,8 @@ class CurveIntersector {
   /// This function is called only once in BVH traversal.
   /// `hit` = true if there is something hit.
   void PostTraversal(const nanort::Ray<float> &ray, bool hit) const {
+    (void)ray;
+
     if (hit) {
       float3 cps[4];
 
@@ -551,11 +585,11 @@ class CurveIntersector {
 
 // -----------------------------------------------------
 
-nanort::BVHAccel<float, CurveGeometry, CurvePred,
+static nanort::BVHAccel<float, CurveGeometry, CurvePred,
                  CurveIntersector<CurveIntersection> >
-    gAccel;
+    *gAccel;
 
-void BuildCameraFrame(float3 *origin, float3 *corner, float3 *u, float3 *v,
+static void BuildCameraFrame(float3 *origin, float3 *corner, float3 *u, float3 *v,
                       float quat[4], float eye[3], float lookat[3], float up[3],
                       float fov, int width, int height) {
   float e[4][4];
@@ -626,7 +660,7 @@ void BuildCameraFrame(float3 *origin, float3 *corner, float3 *u, float3 *v,
 
   {
     float flen =
-        (0.5f * (float)height / tanf(0.5f * (float)(fov * kPI / 180.0f)));
+        (0.5f * static_cast<float>(height) / tanf(0.5f * static_cast<float>(fov * kPI / 180.0f)));
     float3 look1;
     look1[0] = lookat1[0] - eye1[0];
     look1[1] = lookat1[1] - eye1[1];
@@ -653,7 +687,8 @@ void BuildCameraFrame(float3 *origin, float3 *corner, float3 *u, float3 *v,
   }
 }
 
-nanort::Ray<float> GenerateRay(const float3 &origin, const float3 &corner,
+#if 0
+static nanort::Ray<float> GenerateRay(const float3 &origin, const float3 &corner,
                                const float3 &du, const float3 &dv, float u,
                                float v) {
   float3 dir;
@@ -674,11 +709,11 @@ nanort::Ray<float> GenerateRay(const float3 &origin, const float3 &corner,
   return ray;
 }
 
-void FetchTexture(int tex_idx, float u, float v, float *col) {
+static void FetchTexture(int tex_idx, float u, float v, float *col) {
   assert(tex_idx >= 0);
-  Texture &texture = gTextures[tex_idx];
-  int tx = u * texture.width;
-  int ty = (1.0f - v) * texture.height;
+  Texture &texture = (*gTextures)[static_cast<size_t>(tex_idx)];
+  int tx = static_cast<int>(u * texture.width);
+  int ty = static_cast<int>((1.0f - v) * texture.height);
   int idx_offset = (ty * texture.width + tx) * texture.components;
   col[0] = texture.image[idx_offset + 0] / 255.f;
   col[1] = texture.image[idx_offset + 1] / 255.f;
@@ -691,7 +726,7 @@ static std::string GetBaseDir(const std::string &filepath) {
   return "";
 }
 
-int LoadTexture(const std::string &filename) {
+static int LoadTexture(const std::string &filename) {
   if (filename.empty()) return -1;
 
   printf("  Loading texture : %s\n", filename.c_str());
@@ -704,18 +739,36 @@ int LoadTexture(const std::string &filename) {
     texture.height = h;
     texture.components = n;
 
-    size_t n_elem = w * h * n;
+    size_t n_elem = static_cast<size_t>(w * h * n);
     texture.image = new unsigned char[n_elem];
-    for (int i = 0; i < n_elem; i++) {
+    for (size_t i = 0; i < n_elem; i++) {
       texture.image[i] = data[i];
     }
 
-    gTextures.push_back(texture);
-    return gTextures.size() - 1;
+    gTextures->push_back(texture);
+    return static_cast<int>(gTextures->size() - 1);
   }
 
   printf("  Failed to load : %s\n", filename.c_str());
   return -1;
+}
+#endif
+
+void Renderer::Init()
+{
+  delete gCurves;
+  gCurves = new CubicCurves();
+
+  delete gTextures;
+  gTextures = new std::vector<Texture>();
+
+  delete gMaterials;
+  gMaterials = new std::vector<Material>();
+
+  delete gAccel;
+  gAccel = new nanort::BVHAccel<float, CurveGeometry, CurvePred,
+                 CurveIntersector<CurveIntersection> >();
+
 }
 
 bool Renderer::LoadCyHair(const char *cyhair_filename,
@@ -732,14 +785,14 @@ bool Renderer::LoadCyHair(const char *cyhair_filename,
   std::cout << "  # of strands : " << cyhair.num_strands_ << std::endl;
   std::cout << "  # of points  : " << cyhair.total_points_ << std::endl;
 
-  ret = cyhair.ToCubicBezierCurves(&gCurves.vertices, &gCurves.radiuss,
+  ret = cyhair.ToCubicBezierCurves(&gCurves->vertices, &gCurves->radiuss,
                                    scene_scale, scene_translate, max_strands);
 
   return ret;
 }
 
 bool Renderer::BuildBVH() {
-  if (gCurves.vertices.empty()) {
+  if (gCurves->vertices.empty()) {
     return false;
   }
 
@@ -752,39 +805,39 @@ bool Renderer::BuildBVH() {
   printf("    # of leaf primitives: %d\n", build_options.min_leaf_primitives);
   printf("    SAH binsize         : %d\n", build_options.bin_size);
 
-  auto t_start = std::chrono::system_clock::now();
+  std::chrono::time_point<std::chrono::system_clock> t_start = std::chrono::system_clock::now();
 
-  CurveGeometry curves_geom(&gCurves.vertices.at(0), &gCurves.radiuss.at(0));
-  CurvePred curves_pred(&gCurves.vertices.at(0));
+  CurveGeometry curves_geom(&gCurves->vertices.at(0), &gCurves->radiuss.at(0));
+  CurvePred curves_pred(&gCurves->vertices.at(0));
 
-  unsigned int num_curves = gCurves.radiuss.size() / 4;
+  unsigned int num_curves = static_cast<unsigned int>(gCurves->radiuss.size() / 4);
 
-  bool ret = gAccel.Build(num_curves, build_options, curves_geom, curves_pred);
+  bool ret = gAccel->Build(num_curves, build_options, curves_geom, curves_pred);
   assert(ret);
 
-  auto t_end = std::chrono::system_clock::now();
+  std::chrono::time_point<std::chrono::system_clock> t_end = std::chrono::system_clock::now();
 
   std::chrono::duration<double, std::milli> ms = t_end - t_start;
   std::cout << "BVH build time: " << ms.count() << " [ms]\n";
 
-  nanort::BVHBuildStatistics stats = gAccel.GetStatistics();
+  nanort::BVHBuildStatistics stats = gAccel->GetStatistics();
 
   printf("  BVH statistics:\n");
   printf("    # of leaf   nodes: %d\n", stats.num_leaf_nodes);
   printf("    # of branch nodes: %d\n", stats.num_branch_nodes);
   printf("  Max tree depth     : %d\n", stats.max_tree_depth);
   float bmin[3], bmax[3];
-  gAccel.BoundingBox(bmin, bmax);
-  printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
-  printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
+  gAccel->BoundingBox(bmin, bmax);
+  std::cout << "  Bmin               : " << bmin[0] << ", " << bmin[1] << ", " << bmin[2] << std::endl;
+  std::cout << "  Bmax               : " << bmax[0] << ", " << bmax[1] << ", " << bmax[2] << std::endl;
 
   return true;
 }
 
 bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
-                      float quat[4], const RenderConfig &config,
+                      float quat[4], RenderConfig &config,
                       std::atomic<bool> &cancelFlag) {
-  if (!gAccel.IsValid()) {
+  if (!gAccel->IsValid()) {
     return false;
   }
 
@@ -800,26 +853,26 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
   BuildCameraFrame(&origin, &corner, &u, &v, quat, eye, look_at, up, fov, width,
                    height);
 
-  auto kCancelFlagCheckMilliSeconds = 300;
+  double kCancelFlagCheckMilliSeconds = 300;
 
   std::vector<std::thread> workers;
-  std::atomic<int> i(0);
+  std::atomic<size_t> i(0);
 
   uint32_t num_threads = std::max(1U, std::thread::hardware_concurrency());
 
-  auto startT = std::chrono::system_clock::now();
+  std::chrono::time_point<std::chrono::system_clock> startT = std::chrono::system_clock::now();
 
   // Initialize RNG.
 
-  for (auto t = 0; t < num_threads; t++) {
+  for (size_t t = 0; t < num_threads; t++) {
     workers.emplace_back(std::thread([&, t]() {
-      pcg32_state_t rng;
-      pcg32_srandom(&rng, config.pass,
+      pcg32_state_t rng = PCG32_INITIALIZER;
+      pcg32_srandom(&rng, static_cast<unsigned long long>(config.pass),
                     t);  // seed = combination of render pass + thread no.
 
-      int y = 0;
-      while ((y = i++) < config.height) {
-        auto currT = std::chrono::system_clock::now();
+      size_t y = 0;
+      while ((y = i++) < static_cast<size_t>(config.height)) {
+        std::chrono::time_point<std::chrono::system_clock> currT = std::chrono::system_clock::now();
 
         std::chrono::duration<double, std::milli> ms = currT - startT;
         // Check cancel flag
@@ -829,16 +882,7 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
           }
         }
 
-        // draw dash line to aux buffer for progress.
-        // for (int x = 0; x < config.width; x++) {
-        //  float c = (x / 8) % 2;
-        //  aux_rgba[4*(y*config.width+x)+0] = c;
-        //  aux_rgba[4*(y*config.width+x)+1] = c;
-        //  aux_rgba[4*(y*config.width+x)+2] = c;
-        //  aux_rgba[4*(y*config.width+x)+3] = 0.0f;
-        //}
-
-        for (int x = 0; x < config.width; x++) {
+        for (size_t x = 0; x < static_cast<size_t>(config.width); x++) {
           nanort::Ray<float> ray;
           ray.org[0] = origin[0];
           ray.org[1] = origin[1];
@@ -848,8 +892,8 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
           float u1 = pcg32_random(&rng);
 
           float3 dir;
-          dir = corner + (float(x) + u0) * u +
-                (float(config.height - y - 1) + u1) * v;
+          dir = corner + (static_cast<float>(x) + u0) * u +
+                (static_cast<float>(static_cast<size_t>(config.height) - y - 1) + u1) * v;
           dir = vnormalize(dir);
           ray.dir[0] = dir[0];
           ray.dir[1] = dir[1];
@@ -860,66 +904,65 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
           ray.max_t = kFar;
 
           nanort::BVHTraceOptions trace_options;
-          CurveIntersector<CurveIntersection> isector(&gCurves.vertices.at(0),
-                                                      &gCurves.radiuss.at(0));
-          bool hit = gAccel.Traverse(ray, trace_options, isector);
+          CurveIntersector<CurveIntersection> isector(&gCurves->vertices.at(0),
+                                                      &gCurves->radiuss.at(0));
+          bool hit = gAccel->Traverse(ray, trace_options, isector);
+
+          size_t idx = y * static_cast<size_t>(config.width) + x;
           if (hit) {
             float3 p;
             p[0] = ray.org[0] + isector.intersection.t * ray.dir[0];
             p[1] = ray.org[1] + isector.intersection.t * ray.dir[1];
             p[2] = ray.org[2] + isector.intersection.t * ray.dir[2];
 
-            config.positionImage[4 * (y * config.width + x) + 0] = p.x();
-            config.positionImage[4 * (y * config.width + x) + 1] = p.y();
-            config.positionImage[4 * (y * config.width + x) + 2] = p.z();
-            config.positionImage[4 * (y * config.width + x) + 3] = 1.0f;
+            config.positionRGBA[4 * idx + 0] = p.x();
+            config.positionRGBA[4 * idx + 1] = p.y();
+            config.positionRGBA[4 * idx + 2] = p.z();
+            config.positionRGBA[4 * idx + 3] = 1.0f;
 
-            config.uparamImage[4 * (y * config.width + x) + 0] =
-                isector.intersection.u;
-            config.uparamImage[4 * (y * config.width + x) + 1] =
-                isector.intersection.u;
-            config.uparamImage[4 * (y * config.width + x) + 2] =
-                isector.intersection.u;
-            config.uparamImage[4 * (y * config.width + x) + 3] = 1.0f;
+            config.uParamRGBA[4 * idx + 0] = isector.intersection.u;
+            config.uParamRGBA[4 * idx + 1] = isector.intersection.u;
+            config.uParamRGBA[4 * idx + 2] = isector.intersection.u;
+            config.uParamRGBA[4 * idx + 3] = 1.0f;
 
-            config.vparamImage[4 * (y * config.width + x) + 0] =
+            config.vParamRGBA[4 * (idx) + 0] =
                 isector.intersection.v;
-            config.vparamImage[4 * (y * config.width + x) + 1] =
+            config.vParamRGBA[4 * (idx) + 1] =
                 isector.intersection.v;
-            config.vparamImage[4 * (y * config.width + x) + 2] =
+            config.vParamRGBA[4 * (idx) + 2] =
                 isector.intersection.v;
-            config.vparamImage[4 * (y * config.width + x) + 3] = 1.0f;
+            config.vParamRGBA[4 * (idx) + 3] = 1.0f;
 
-            unsigned int prim_id = isector.intersection.prim_id;
+            //unsigned int prim_id = isector.intersection.prim_id;
 
             float3 N;
             N[0] = isector.intersection.normal[0];
             N[1] = isector.intersection.normal[1];
             N[2] = isector.intersection.normal[2];
 
-            config.normalImage[4 * (y * config.width + x) + 0] =
-                0.5 * N[0] + 0.5;
-            config.normalImage[4 * (y * config.width + x) + 1] =
-                0.5 * N[1] + 0.5;
-            config.normalImage[4 * (y * config.width + x) + 2] =
-                0.5 * N[2] + 0.5;
-            config.normalImage[4 * (y * config.width + x) + 3] = 1.0f;
+            config.normalRGBA[4 * (idx) + 0] =
+                0.5f * N[0] + 0.5f;
+            config.normalRGBA[4 * (idx) + 1] =
+                0.5f * N[1] + 0.5f;
+            config.normalRGBA[4 * (idx) + 2] =
+                0.5f * N[2] + 0.5f;
+            config.normalRGBA[4 * (idx) + 3] = 1.0f;
 
-            config.tangentImage[4 * (y * config.width + x) + 0] =
-                0.5 * isector.intersection.tangent[0] + 0.5;
-            config.tangentImage[4 * (y * config.width + x) + 1] =
-                0.5 * isector.intersection.tangent[1] + 0.5;
-            config.tangentImage[4 * (y * config.width + x) + 2] =
-                0.5 * isector.intersection.tangent[2] + 0.5;
-            config.tangentImage[4 * (y * config.width + x) + 3] = 1.0f;
+            config.tangentRGBA[4 * (idx) + 0] =
+                0.5f * isector.intersection.tangent[0] + 0.5f;
+            config.tangentRGBA[4 * (idx) + 1] =
+                0.5f * isector.intersection.tangent[1] + 0.5f;
+            config.tangentRGBA[4 * (idx) + 2] =
+                0.5f * isector.intersection.tangent[2] + 0.5f;
+            config.tangentRGBA[4 * (idx) + 3] = 1.0f;
 
-            config.depthImage[4 * (y * config.width + x) + 0] =
+            config.depthRGBA[4 * (idx) + 0] =
                 isector.intersection.t;
-            config.depthImage[4 * (y * config.width + x) + 1] =
+            config.depthRGBA[4 * (idx) + 1] =
                 isector.intersection.t;
-            config.depthImage[4 * (y * config.width + x) + 2] =
+            config.depthRGBA[4 * (idx) + 2] =
                 isector.intersection.t;
-            config.depthImage[4 * (y * config.width + x) + 3] = 1.0f;
+            config.depthRGBA[4 * (idx) + 3] = 1.0f;
 
             // Simple shading
             float NdotV = fabsf(vdot(N, dir));
@@ -927,75 +970,76 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
             float diffuse_col[3] = {0.5, 0.5, 0.5};
 
             if (config.pass == 0) {
-              rgba[4 * (y * config.width + x) + 0] = NdotV * diffuse_col[0];
-              rgba[4 * (y * config.width + x) + 1] = NdotV * diffuse_col[1];
-              rgba[4 * (y * config.width + x) + 2] = NdotV * diffuse_col[2];
-              rgba[4 * (y * config.width + x) + 3] = 1.0f;
-              sample_counts[y * config.width + x] =
+              rgba[4 * (idx) + 0] = NdotV * diffuse_col[0];
+              rgba[4 * (idx) + 1] = NdotV * diffuse_col[1];
+              rgba[4 * (idx) + 2] = NdotV * diffuse_col[2];
+              rgba[4 * (idx) + 3] = 1.0f;
+              sample_counts[idx] =
                   1;  // Set 1 for the first pass
             } else {  // additive.
-              rgba[4 * (y * config.width + x) + 0] += NdotV * diffuse_col[0];
-              rgba[4 * (y * config.width + x) + 1] += NdotV * diffuse_col[1];
-              rgba[4 * (y * config.width + x) + 2] += NdotV * diffuse_col[2];
-              rgba[4 * (y * config.width + x) + 3] += 1.0f;
-              sample_counts[y * config.width + x]++;
+              rgba[4 * (idx) + 0] += NdotV * diffuse_col[0];
+              rgba[4 * (idx) + 1] += NdotV * diffuse_col[1];
+              rgba[4 * (idx) + 2] += NdotV * diffuse_col[2];
+              rgba[4 * (idx) + 3] += 1.0f;
+              sample_counts[idx]++;
             }
           } else {
             {
               if (config.pass == 0) {
                 // clear pixel
-                rgba[4 * (y * config.width + x) + 0] = 0.0f;
-                rgba[4 * (y * config.width + x) + 1] = 0.0f;
-                rgba[4 * (y * config.width + x) + 2] = 0.0f;
-                rgba[4 * (y * config.width + x) + 3] = 0.0f;
-                aux_rgba[4 * (y * config.width + x) + 0] = 0.0f;
-                aux_rgba[4 * (y * config.width + x) + 1] = 0.0f;
-                aux_rgba[4 * (y * config.width + x) + 2] = 0.0f;
-                aux_rgba[4 * (y * config.width + x) + 3] = 0.0f;
-                sample_counts[y * config.width + x] =
+                rgba[4 * (idx) + 0] = 0.0f;
+                rgba[4 * (idx) + 1] = 0.0f;
+                rgba[4 * (idx) + 2] = 0.0f;
+                rgba[4 * (idx) + 3] = 0.0f;
+                aux_rgba[4 * (idx) + 0] = 0.0f;
+                aux_rgba[4 * (idx) + 1] = 0.0f;
+                aux_rgba[4 * (idx) + 2] = 0.0f;
+                aux_rgba[4 * (idx) + 3] = 0.0f;
+                sample_counts[idx] =
                     1;  // Set 1 for the first pass
               } else {
-                sample_counts[y * config.width + x]++;
+                sample_counts[idx]++;
               }
 
               // No super sampling
-              config.normalImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.normalImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.normalImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.normalImage[4 * (y * config.width + x) + 3] = 0.0f;
-              config.tangentImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.tangentImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.tangentImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.tangentImage[4 * (y * config.width + x) + 3] = 0.0f;
-              config.positionImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.positionImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.positionImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.positionImage[4 * (y * config.width + x) + 3] = 0.0f;
-              config.depthImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.depthImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.depthImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.depthImage[4 * (y * config.width + x) + 3] = 0.0f;
-              config.texcoordImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.texcoordImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.texcoordImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.texcoordImage[4 * (y * config.width + x) + 3] = 0.0f;
-              config.uparamImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.uparamImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.uparamImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.uparamImage[4 * (y * config.width + x) + 3] = 0.0f;
-              config.vparamImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.vparamImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.vparamImage[4 * (y * config.width + x) + 2] = 0.0f;
-              config.vparamImage[4 * (y * config.width + x) + 3] = 0.0f;
+              config.normalRGBA[4 * (idx) + 0] = 0.0f;
+              config.normalRGBA[4 * (idx) + 1] = 0.0f;
+              config.normalRGBA[4 * (idx) + 2] = 0.0f;
+              config.normalRGBA[4 * (idx) + 3] = 0.0f;
+              config.tangentRGBA[4 * (idx) + 0] = 0.0f;
+              config.tangentRGBA[4 * (idx) + 1] = 0.0f;
+              config.tangentRGBA[4 * (idx) + 2] = 0.0f;
+              config.tangentRGBA[4 * (idx) + 3] = 0.0f;
+              config.positionRGBA[4 * (idx) + 0] = 0.0f;
+              config.positionRGBA[4 * (idx) + 1] = 0.0f;
+              config.positionRGBA[4 * (idx) + 2] = 0.0f;
+              config.positionRGBA[4 * (idx) + 3] = 0.0f;
+              config.depthRGBA[4 * (idx) + 0] = 0.0f;
+              config.depthRGBA[4 * (idx) + 1] = 0.0f;
+              config.depthRGBA[4 * (idx) + 2] = 0.0f;
+              config.depthRGBA[4 * (idx) + 3] = 0.0f;
+              config.texCoordRGBA[4 * (idx) + 0] = 0.0f;
+              config.texCoordRGBA[4 * (idx) + 1] = 0.0f;
+              config.texCoordRGBA[4 * (idx) + 2] = 0.0f;
+              config.texCoordRGBA[4 * (idx) + 3] = 0.0f;
+              config.uParamRGBA[4 * (idx) + 0] = 0.0f;
+              config.uParamRGBA[4 * (idx) + 1] = 0.0f;
+              config.uParamRGBA[4 * (idx) + 2] = 0.0f;
+              config.uParamRGBA[4 * (idx) + 3] = 0.0f;
+              config.vParamRGBA[4 * (idx) + 0] = 0.0f;
+              config.vParamRGBA[4 * (idx) + 1] = 0.0f;
+              config.vParamRGBA[4 * (idx) + 2] = 0.0f;
+              config.vParamRGBA[4 * (idx) + 3] = 0.0f;
             }
           }
         }
 
-        for (int x = 0; x < config.width; x++) {
-          aux_rgba[4 * (y * config.width + x) + 0] = 0.0f;
-          aux_rgba[4 * (y * config.width + x) + 1] = 0.0f;
-          aux_rgba[4 * (y * config.width + x) + 2] = 0.0f;
-          aux_rgba[4 * (y * config.width + x) + 3] = 0.0f;
+        for (size_t x = 0; x < static_cast<size_t>(config.width); x++) {
+          size_t idx = y * static_cast<size_t>(config.width) + x;
+          aux_rgba[4 * (idx) + 0] = 0.0f;
+          aux_rgba[4 * (idx) + 1] = 0.0f;
+          aux_rgba[4 * (idx) + 2] = 0.0f;
+          aux_rgba[4 * (idx) + 3] = 0.0f;
         }
       }
     }));
@@ -1007,5 +1051,9 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
 
   return (!cancelFlag);
 };
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 }  // namespace example

@@ -2,10 +2,15 @@
 #define RENDER_CONFIG_H
 
 #include <string>
+#include <vector>
 
 namespace example {
 
-typedef struct {
+class RenderConfig {
+public:
+  RenderConfig() {}
+  ~RenderConfig() {}
+
   // framebuffer
   int width;
   int height;
@@ -20,14 +25,18 @@ typedef struct {
   int pass;
   int max_passes;
 
-  // For debugging. Array size = width * height * 4.
-  float *normalImage;
-  float *tangentImage;
-  float *positionImage;
-  float *depthImage;
-  float *texcoordImage;
-  float *uparamImage;
-  float *vparamImage;
+  // Render layers
+  std::vector<float> displayRGBA;  // Accumurated image.
+  std::vector<float> rgba;
+  std::vector<float> auxRGBA;       // Auxiliary buffer
+  std::vector<int>  sampleCounts;    // Sample num counter for each pixel.
+  std::vector<float> normalRGBA;    // For visualizing normal
+  std::vector<float> tangentRGBA;   // For visualizing hair tangent
+  std::vector<float> positionRGBA;  // For visualizing position
+  std::vector<float> depthRGBA;     // For visualizing depth
+  std::vector<float> texCoordRGBA;  // For visualizing texcoord
+  std::vector<float> uParamRGBA;  // For visualizing `u` parameter of curve intersection point
+  std::vector<float> vParamRGBA;  // For visualizing `v` parameter of curve intersection point
 
   // Scene input info
   std::string cyhair_filename;
@@ -36,7 +45,7 @@ typedef struct {
   int max_strands;  // -1 = read all strands
   float thickness;  // -1 = use thickness in cyhair file.
 
-} RenderConfig;
+};
 
 /// Loads config from JSON file.
 bool LoadRenderConfig(example::RenderConfig *config, const char *filename);

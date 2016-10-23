@@ -1,5 +1,28 @@
 // ImGui BtGui binding with OpenGL based on Imgui Glfw binding.
 
+#ifdef __clang__
+// Disable some warnings for external files.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wconversion"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#pragma clang diagnostic ignored "-Wreserved-id-macro"
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#pragma clang diagnostic ignored "-Wextra-semi"
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#pragma clang diagnostic ignored "-Wweak-vtables"
+#pragma clang diagnostic ignored "-Wunused-macros"
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wshadow"
+#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#endif
+
 #include "imgui_impl_btgui.h"
 
 #define USE_OPENGL2
@@ -31,7 +54,7 @@ static GLuint g_FontTexture = 0;
 // If text or lines are blurry when integrating ImGui in your engine:
 // - in your Render function, try translating your projection matrix by
 // (0.5f,0.5f) or (0.375f,0.375f)
-void ImGui_ImplBtGui_RenderDrawLists(ImDrawData* draw_data) {
+static void ImGui_ImplBtGui_RenderDrawLists(ImDrawData* draw_data) {
   // Avoid rendering when minimized, scale coordinates for retina displays
   // (screen coordinates != framebuffer coordinates)
   ImGuiIO& io = ImGui::GetIO();
@@ -312,13 +335,11 @@ void ImGui_ImplBtGui_NewFrame(int mouse_x, int mouse_y) {
   //    screen, etc.)
   //}
   // else
-  if (1) {
+  {
     io.MousePos = ImVec2((float)mouse_x,
                          (float)mouse_y);  // Mouse position in screen
                                            // coordinates (set to -1,-1 if no
                                            // mouse / on another screen, etc.)
-  } else {
-    io.MousePos = ImVec2(-1, -1);
   }
 
   // @todo
@@ -337,3 +358,7 @@ void ImGui_ImplBtGui_NewFrame(int mouse_x, int mouse_y) {
   // Start the frame
   ImGui::NewFrame();
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif

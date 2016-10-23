@@ -1,3 +1,25 @@
+#ifdef __clang__
+// Disable some warnings for external files.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wconversion"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#pragma clang diagnostic ignored "-Wreserved-id-macro"
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#pragma clang diagnostic ignored "-Wextra-semi"
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#pragma clang diagnostic ignored "-Wweak-vtables"
+#pragma clang diagnostic ignored "-Wunused-macros"
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wshadow"
+#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
+#endif
+
 #include "X11OpenGLWindow.h"
 #include "OpenGLInclude.h"
 
@@ -14,16 +36,13 @@
 #else
 #include<GL/glx.h>
 #endif // GLEW_DYNAMIC_LOAD_ALL_GLX_FUNCTIONS
+
 #include <assert.h>
 
 //#define DYNAMIC_LOAD_X11_FUNCTIONS
 #ifdef DYNAMIC_LOAD_X11_FUNCTIONS
 #include <dlfcn.h>
 #endif //DYNAMIC_LOAD_X11_FUNCTIONS
-
-//#include<X11/X.h>
-//#include<X11/Xlib.h>
-//#include<GL/gl.h>
 
 //defined in GL/glxew.h
 //#include<GL/glu.h>
@@ -1119,3 +1138,8 @@ int X11OpenGLWindow::fileOpenDialog(char* filename, int maxNameLength)
 	return len;
 
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+

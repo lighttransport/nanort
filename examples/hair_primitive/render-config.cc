@@ -1,6 +1,28 @@
 #include "render-config.h"
 
+#ifdef __clang__
+// Disable some warnings for external files.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wconversion"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#pragma clang diagnostic ignored "-Wreserved-id-macro"
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#pragma clang diagnostic ignored "-Wextra-semi"
+#pragma clang diagnostic ignored "-Wweak-vtables"
+#pragma clang diagnostic ignored "-Wdeprecated"
+#endif
+
 #include "picojson.h"
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #include <fstream>
 #include <istream>
@@ -42,9 +64,9 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     if (o["scene_scale"].is<picojson::array>()) {
       picojson::array arr = o["scene_scale"].get<picojson::array>();
       if (arr.size() == 3) {
-        config->scene_scale[0] = arr[0].get<double>();
-        config->scene_scale[1] = arr[1].get<double>();
-        config->scene_scale[2] = arr[2].get<double>();
+        config->scene_scale[0] = static_cast<float>(arr[0].get<double>());
+        config->scene_scale[1] = static_cast<float>(arr[1].get<double>());
+        config->scene_scale[2] = static_cast<float>(arr[2].get<double>());
       }
     }
   }
@@ -56,9 +78,9 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     if (o["scene_translate"].is<picojson::array>()) {
       picojson::array arr = o["scene_translate"].get<picojson::array>();
       if (arr.size() == 3) {
-        config->scene_translate[0] = arr[0].get<double>();
-        config->scene_translate[1] = arr[1].get<double>();
-        config->scene_translate[2] = arr[2].get<double>();
+        config->scene_translate[0] = static_cast<float>(arr[0].get<double>());
+        config->scene_translate[1] = static_cast<float>(arr[1].get<double>());
+        config->scene_translate[2] = static_cast<float>(arr[2].get<double>());
       }
     }
   }
@@ -70,9 +92,9 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     if (o["eye"].is<picojson::array>()) {
       picojson::array arr = o["eye"].get<picojson::array>();
       if (arr.size() == 3) {
-        config->eye[0] = arr[0].get<double>();
-        config->eye[1] = arr[1].get<double>();
-        config->eye[2] = arr[2].get<double>();
+        config->eye[0] = static_cast<float>(arr[0].get<double>());
+        config->eye[1] = static_cast<float>(arr[1].get<double>());
+        config->eye[2] = static_cast<float>(arr[2].get<double>());
       }
     }
   }
@@ -84,9 +106,9 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     if (o["up"].is<picojson::array>()) {
       picojson::array arr = o["up"].get<picojson::array>();
       if (arr.size() == 3) {
-        config->up[0] = arr[0].get<double>();
-        config->up[1] = arr[1].get<double>();
-        config->up[2] = arr[2].get<double>();
+        config->up[0] = static_cast<float>(arr[0].get<double>());
+        config->up[1] = static_cast<float>(arr[1].get<double>());
+        config->up[2] = static_cast<float>(arr[2].get<double>());
       }
     }
   }
@@ -98,9 +120,9 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     if (o["look_at"].is<picojson::array>()) {
       picojson::array arr = o["look_at"].get<picojson::array>();
       if (arr.size() == 3) {
-        config->look_at[0] = arr[0].get<double>();
-        config->look_at[1] = arr[1].get<double>();
-        config->look_at[2] = arr[2].get<double>();
+        config->look_at[0] = static_cast<float>(arr[0].get<double>());
+        config->look_at[1] = static_cast<float>(arr[1].get<double>());
+        config->look_at[2] = static_cast<float>(arr[2].get<double>());
       }
     }
   }

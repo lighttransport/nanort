@@ -40,8 +40,8 @@ class real3 {
  public:
   real3() : x(0.0f), y(0.0f), z(0.0f) {}
   real3(float v) : x(v), y(v), z(v) {}
-  real3(float x, float y, float z) : x(x), y(y), z(z) {}
-  ~real3() {}
+  real3(float xx, float yy, float zz) : x(xx), y(yy), z(zz) {}
+  //~real3() {}
 
   real3 operator+(const real3 &f2) const {
     return real3(x + f2.x, y + f2.y, z + f2.z);
@@ -88,7 +88,7 @@ static void mul_matrix(real3 out[4], const float mat[4][4], const real3 pt[4]) {
 
 static void CamullRomToCubicBezier(real3 Q[4], const real3 *cps, int cps_size,
                                    int seg_idx) {
-  size_t sz = cps_size;
+  size_t sz = static_cast<size_t>(cps_size);
   if (sz == 2) {
     Q[0] = cps[seg_idx];
     Q[1] = cps[seg_idx] * 2.0f / 3.0f + cps[seg_idx + 1] * 1.0f / 3.0f;
@@ -102,7 +102,7 @@ static void CamullRomToCubicBezier(real3 Q[4], const real3 *cps, int cps_size,
       P[2] = cps[seg_idx + 1];
       P[3] = cps[seg_idx + 2];
       mul_matrix(Q, toC2B0, P);
-    } else if (seg_idx == (int)(sz - 2)) {
+    } else if (seg_idx == static_cast<int>(sz - 2)) {
       P[0] = cps[seg_idx - 1];
       P[1] = cps[seg_idx + 0];
       P[2] = cps[seg_idx + 1];
@@ -139,7 +139,7 @@ bool CyHair::Load(const char *filename) {
   flags_ = header.flags;
   default_thickness_ = header.default_thickness;
   default_transparency_ = header.default_transparency;
-  default_segments_ = header.default_segments;
+  default_segments_ = static_cast<int>(header.default_segments);
   default_color_[0] = header.default_color[0];
   default_color_[1] = header.default_color[1];
   default_color_[2] = header.default_color[2];
@@ -215,7 +215,7 @@ bool CyHair::Load(const char *filename) {
   strand_offsets_[0] = 0;
   for (size_t i = 1; i < num_strands_; i++) {
     int num_segments = segments_.empty() ? default_segments_ : segments_[i - 1];
-    strand_offsets_[i] = strand_offsets_[i - 1] + (num_segments + 1);
+    strand_offsets_[i] = strand_offsets_[i - 1] + static_cast<unsigned int>(num_segments + 1);
   }
 
   return true;
@@ -233,7 +233,7 @@ bool CyHair::ToCubicBezierCurves(std::vector<float> *vertices,
   vertices->clear();
   radiuss->clear();
 
-  int num_strands = num_strands_;
+  int num_strands = static_cast<int>(num_strands_);
 
   if ((max_strands > 0) && (max_strands < num_strands)) {
     num_strands = max_strands;
@@ -244,7 +244,7 @@ bool CyHair::ToCubicBezierCurves(std::vector<float> *vertices,
             << std::endl;
 
   // Assume input points are CatmullRom spline.
-  for (size_t i = 0; i < num_strands; i++) {
+  for (size_t i = 0; i < static_cast<size_t>(num_strands); i++) {
     if ((i % 1000) == 0) {
       std::cout << i << " / " << num_strands_ << std::endl;
     }
@@ -255,7 +255,7 @@ bool CyHair::ToCubicBezierCurves(std::vector<float> *vertices,
     }
 
     std::vector<real3> segment_points;
-    for (size_t k = 0; k < num_segments; k++) {
+    for (size_t k = 0; k < static_cast<size_t>(num_segments); k++) {
       // Zup -> Yup
       real3 p(points_[3 * (strand_offsets_[i] + k) + 0],
               points_[3 * (strand_offsets_[i] + k) + 2],

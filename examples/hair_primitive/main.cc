@@ -22,6 +22,23 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#ifdef __clang__
+// Disable some warnings for external files.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wconversion"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#pragma clang diagnostic ignored "-Wreserved-id-macro"
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#pragma clang diagnostic ignored "-Wextra-semi"
+#pragma clang diagnostic ignored "-Wweak-vtables"
+#endif
+
 #define USE_OPENGL2
 #include "OpenGLWindow/OpenGLInclude.h"
 #ifdef _WIN32
@@ -31,6 +48,10 @@ THE SOFTWARE.
 #else
 // assume linux
 #include "OpenGLWindow/X11OpenGLWindow.h"
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
 #endif
 
 #ifdef _WIN32
@@ -59,14 +80,34 @@ THE SOFTWARE.
 #include <mutex>   // C++11
 #include <thread>  // C++11
 
+#ifdef __clang__
+// Disable some warnings for external files.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wconversion"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#pragma clang diagnostic ignored "-Wreserved-id-macro"
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#pragma clang diagnostic ignored "-Wextra-semi"
+#endif
+
 #include "imgui.h"
 #include "imgui_impl_btgui.h"
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #include "render-config.h"
 #include "render.h"
 #include "trackball.h"
 
-enum {
+typedef enum {
   SHOW_BUFFER_COLOR = 0,
   SHOW_BUFFER_NORMAL,
   SHOW_BUFFER_TANGENT,
@@ -74,78 +115,77 @@ enum {
   SHOW_BUFFER_DEPTH,
   SHOW_BUFFER_TEXCOORD,
   SHOW_BUFFER_UPARAM,
-  SHOW_BUFFER_VPARAM,
+  SHOW_BUFFER_VPARAM
 } ShowBufferMode;
 
-b3gDefaultOpenGLWindow* window = 0;
-int gWidth = 512;
-int gHeight = 512;
-int gMousePosX = -1, gMousePosY = -1;
-bool gMouseLeftDown = false;
-int gShowBufferMode = SHOW_BUFFER_COLOR;
-bool gTabPressed = false;
-bool gShiftPressed = false;
-float gShowPositionScale = 1.0f;
-float gShowDepthRange[2] = {10.0f, 20.f};
-bool gShowDepthPeseudoColor = true;
-float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-float gVParamScale = 1.0f;  // Usually 1/thickness
+static b3gDefaultOpenGLWindow* window = 0;
+static int gWidth = 512;
+static int gHeight = 512;
+static int gMousePosX = -1, gMousePosY = -1;
+static bool gMouseLeftDown = false;
+static int gShowBufferMode = SHOW_BUFFER_COLOR;
+static bool gTabPressed = false;
+static bool gShiftPressed = false;
+static float gShowPositionScale = 1.0f;
+static float gShowDepthRange[2] = {10.0f, 20.f};
+static bool gShowDepthPeseudoColor = true;
+static float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+static float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+static float gVParamScale = 1.0f;  // Usually 1/thickness
 
-example::Renderer gRenderer;
+static example::Renderer* gRenderer;
 
-std::atomic<bool> gRenderQuit;
-std::atomic<bool> gRenderRefresh;
-std::atomic<bool> gRenderCancel;
-example::RenderConfig gRenderConfig;
-std::mutex gMutex;
+static std::atomic<bool> gRenderQuit;
+static std::atomic<bool> gRenderRefresh;
+static std::atomic<bool> gRenderCancel;
+static example::RenderConfig* gRenderConfig;
+static std::mutex gMutex;
+static double gRenderTime;
 
-std::vector<float> gDisplayRGBA;  // Accumurated image.
-std::vector<float> gRGBA;
-std::vector<float> gAuxRGBA;       // Auxiliary buffer
-std::vector<int> gSampleCounts;    // Sample num counter for each pixel.
-std::vector<float> gNormalRGBA;    // For visualizing normal
-std::vector<float> gTangentRGBA;   // For visualizing hair tangent
-std::vector<float> gPositionRGBA;  // For visualizing position
-std::vector<float> gDepthRGBA;     // For visualizing depth
-std::vector<float> gTexCoordRGBA;  // For visualizing texcoord
-std::vector<float>
-    gUParamRGBA;  // For visualizing `u` parameter of curve intersection point
-std::vector<float>
-    gVParamRGBA;  // For visualizing `v` parameter of curve intersection point
+//static std::vector<float> gDisplayRGBA;  // Accumurated image.
+//static std::vector<float> gRGBA;
+//static std::vector<float> gAuxRGBA;       // Auxiliary buffer
+//static std::vector<int> gSampleCounts;    // Sample num counter for each pixel.
+//static std::vector<float> gNormalRGBA;    // For visualizing normal
+//static std::vector<float> gTangentRGBA;   // For visualizing hair tangent
+//static std::vector<float> gPositionRGBA;  // For visualizing position
+//static std::vector<float> gDepthRGBA;     // For visualizing depth
+//static std::vector<float> gTexCoordRGBA;  // For visualizing texcoord
+//static std::vector<float> gUParamRGBA;  // For visualizing `u` parameter of curve intersection point
+//static std::vector<float> gVParamRGBA;  // For visualizing `v` parameter of curve intersection point
 
-void RequestRender() {
+static void RequestRender() {
   {
     std::lock_guard<std::mutex> guard(gMutex);
-    gRenderConfig.pass = 0;
+    gRenderConfig->pass = 0;
   }
 
   gRenderRefresh = true;
   gRenderCancel = true;
 }
 
-void RenderThread() {
+static void RenderThread() {
   {
     std::lock_guard<std::mutex> guard(gMutex);
-    gRenderConfig.pass = 0;
+    gRenderConfig->pass = 0;
   }
 
   while (1) {
     if (gRenderQuit) return;
 
-    if (!gRenderRefresh || gRenderConfig.pass >= gRenderConfig.max_passes) {
+    if (!gRenderRefresh || gRenderConfig->pass >= gRenderConfig->max_passes) {
       // Give some cycles to this thread.
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       continue;
     }
 
-    auto startT = std::chrono::system_clock::now();
+    std::chrono::time_point<std::chrono::system_clock> startT = std::chrono::system_clock::now();
 
     // Initialize display buffer for the first pass.
     bool initial_pass = false;
     {
       std::lock_guard<std::mutex> guard(gMutex);
-      if (gRenderConfig.pass == 0) {
+      if (gRenderConfig->pass == 0) {
         initial_pass = true;
       }
     }
@@ -155,73 +195,48 @@ void RenderThread() {
     // Render() will repeatedly check this flag inside the rendering loop.
 
     bool ret =
-        gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), &gSampleCounts.at(0),
-                         gCurrQuat, gRenderConfig, gRenderCancel);
+        gRenderer->Render(&gRenderConfig->rgba.at(0), &gRenderConfig->auxRGBA.at(0), &gRenderConfig->sampleCounts.at(0),
+                         gCurrQuat, *gRenderConfig, gRenderCancel);
 
     if (ret) {
       std::lock_guard<std::mutex> guard(gMutex);
 
-      gRenderConfig.pass++;
+      gRenderConfig->pass++;
     }
 
-    auto endT = std::chrono::system_clock::now();
+    std::chrono::time_point<std::chrono::system_clock> endT = std::chrono::system_clock::now();
 
     std::chrono::duration<double, std::milli> ms = endT - startT;
 
-    // std::cout << ms.count() << " [ms]\n";
+    gRenderTime = ms.count();
   }
 }
 
-void InitRender(example::RenderConfig* rc) {
+static void InitRender(example::RenderConfig* rc) {
+
   rc->pass = 0;
 
   rc->max_passes = 128;
 
-  gSampleCounts.resize(rc->width * rc->height);
-  std::fill(gSampleCounts.begin(), gSampleCounts.end(), 0.0);
+  size_t len = static_cast<size_t>(rc->width * rc->height);
+  rc->sampleCounts.resize(len, 0.0f);
 
-  gDisplayRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gDisplayRGBA.begin(), gDisplayRGBA.end(), 0.0);
+  rc->displayRGBA.resize(len * 4, 0.0f);
+  rc->rgba.resize(len * 4, 0.0f);
+  rc->auxRGBA.resize(len * 4, 0.0f);
+  rc->normalRGBA.resize(len * 4, 0.0f);
+  rc->tangentRGBA.resize(len * 4, 0.0f);
+  rc->positionRGBA.resize(len * 4, 0.0f);
+  rc->depthRGBA.resize(len * 4, 0.0f);
+  rc->texCoordRGBA.resize(len * 4, 0.0f);
+  rc->uParamRGBA.resize(len * 4, 0.0f);
+  rc->vParamRGBA.resize(len * 4, 0.0f);
 
-  gRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gRGBA.begin(), gRGBA.end(), 0.0);
-
-  gAuxRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gAuxRGBA.begin(), gAuxRGBA.end(), 0.0);
-
-  gNormalRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gNormalRGBA.begin(), gNormalRGBA.end(), 0.0);
-
-  gTangentRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gTangentRGBA.begin(), gTangentRGBA.end(), 0.0);
-
-  gPositionRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gPositionRGBA.begin(), gPositionRGBA.end(), 0.0);
-
-  gDepthRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gDepthRGBA.begin(), gDepthRGBA.end(), 0.0);
-
-  gTexCoordRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gTexCoordRGBA.begin(), gTexCoordRGBA.end(), 0.0);
-
-  gUParamRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gUParamRGBA.begin(), gUParamRGBA.end(), 0.0);
-
-  gVParamRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gVParamRGBA.begin(), gVParamRGBA.end(), 0.0);
-
-  rc->normalImage = &gNormalRGBA.at(0);
-  rc->tangentImage = &gTangentRGBA.at(0);
-  rc->positionImage = &gPositionRGBA.at(0);
-  rc->depthImage = &gDepthRGBA.at(0);
-  rc->texcoordImage = &gTexCoordRGBA.at(0);
-  rc->uparamImage = &gUParamRGBA.at(0);
-  rc->vparamImage = &gVParamRGBA.at(0);
 
   trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-void checkErrors(std::string desc) {
+static void checkErrors(std::string desc) {
   GLenum e = glGetError();
   if (e != GL_NO_ERROR) {
     fprintf(stderr, "OpenGL error in \"%s\": %d (%d)\n", desc.c_str(), e, e);
@@ -229,7 +244,7 @@ void checkErrors(std::string desc) {
   }
 }
 
-void keyboardCallback(int keycode, int state) {
+static void keyboardCallback(int keycode, int state) {
   // printf("hello key %d, state %d(ctrl %d)\n", keycode, state,
   //       window->isModifierKeyPressed(B3G_CONTROL));
   // if (keycode == 'q' && window && window->isModifierKeyPressed(B3G_SHIFT)) {
@@ -252,40 +267,42 @@ void keyboardCallback(int keycode, int state) {
   }
 }
 
-void mouseMoveCallback(float x, float y) {
+static void mouseMoveCallback(float x, float y) {
   if (gMouseLeftDown) {
-    float w = gRenderConfig.width;
-    float h = gRenderConfig.height;
+    float w = gRenderConfig->width;
+    float h = gRenderConfig->height;
 
     float y_offset = gHeight - h;
 
     if (gTabPressed) {
-      const float dolly_scale = 0.1;
-      gRenderConfig.eye[2] += dolly_scale * (gMousePosY - y);
-      gRenderConfig.look_at[2] += dolly_scale * (gMousePosY - y);
+      const float dolly_scale = 0.1f;
+      gRenderConfig->eye[2] += dolly_scale * (gMousePosY - y);
+      gRenderConfig->look_at[2] += dolly_scale * (gMousePosY - y);
     } else if (gShiftPressed) {
-      const float trans_scale = 0.02;
-      gRenderConfig.eye[0] += trans_scale * (gMousePosX - x);
-      gRenderConfig.eye[1] -= trans_scale * (gMousePosY - y);
-      gRenderConfig.look_at[0] += trans_scale * (gMousePosX - x);
-      gRenderConfig.look_at[1] -= trans_scale * (gMousePosY - y);
+      const float trans_scale = 0.02f;
+      gRenderConfig->eye[0] += trans_scale * (gMousePosX - x);
+      gRenderConfig->eye[1] -= trans_scale * (gMousePosY - y);
+      gRenderConfig->look_at[0] += trans_scale * (gMousePosX - x);
+      gRenderConfig->look_at[1] -= trans_scale * (gMousePosY - y);
 
     } else {
       // Adjust y.
-      trackball(gPrevQuat, (2.f * gMousePosX - w) / (float)w,
-                (h - 2.f * (gMousePosY - y_offset)) / (float)h,
-                (2.f * x - w) / (float)w,
-                (h - 2.f * (y - y_offset)) / (float)h);
+      trackball(gPrevQuat, (2.f * gMousePosX - w) / static_cast<float>(w),
+                (h - 2.f * (gMousePosY - y_offset)) / static_cast<float>(h),
+                (2.f * x - w) / static_cast<float>(w),
+                (h - 2.f * (y - y_offset)) / static_cast<float>(h));
       add_quats(gPrevQuat, gCurrQuat, gCurrQuat);
     }
     RequestRender();
   }
 
-  gMousePosX = (int)x;
-  gMousePosY = (int)y;
+  gMousePosX = static_cast<int>(x);
+  gMousePosY = static_cast<int>(y);
 }
 
-void mouseButtonCallback(int button, int state, float x, float y) {
+static void mouseButtonCallback(int button, int state, float x, float y) {
+  (void)x;
+  (void)y;
   ImGui_ImplBtGui_SetMouseButtonState(button, (state == 1));
 
   ImGuiIO& io = ImGui::GetIO();
@@ -303,19 +320,21 @@ void mouseButtonCallback(int button, int state, float x, float y) {
   }
 }
 
-void resizeCallback(float width, float height) {
-  GLfloat h = (GLfloat)height / (GLfloat)width;
+static void resizeCallback(float width, float height) {
+  GLfloat h = static_cast<GLfloat>(height) / static_cast<GLfloat>(width);
   GLfloat xmax, znear, zfar;
+
+  (void)h;
 
   znear = 1.0f;
   zfar = 1000.0f;
   xmax = znear * 0.5f;
 
-  gWidth = width;
-  gHeight = height;
+  gWidth = static_cast<int>(width);
+  gHeight = static_cast<int>(height);
 }
 
-inline float pesudoColor(float v, int ch) {
+static inline float pesudoColor(float v, int ch) {
   if (ch == 0) {  // red
     if (v <= 0.5f)
       return 0.f;
@@ -342,40 +361,40 @@ inline float pesudoColor(float v, int ch) {
   }
 }
 
-void Display(int width, int height) {
-  std::vector<float> buf(width * height * 4);
+static void Display(int width, int height) {
+  std::vector<float> buf(static_cast<size_t>(width * height * 4));
   if (gShowBufferMode == SHOW_BUFFER_COLOR) {
     // normalize
     for (size_t i = 0; i < buf.size() / 4; i++) {
-      buf[4 * i + 0] = gRGBA[4 * i + 0];
-      buf[4 * i + 1] = gRGBA[4 * i + 1];
-      buf[4 * i + 2] = gRGBA[4 * i + 2];
-      buf[4 * i + 3] = gRGBA[4 * i + 3];
-      if (gSampleCounts[i] > 0) {
-        buf[4 * i + 0] /= static_cast<float>(gSampleCounts[i]);
-        buf[4 * i + 1] /= static_cast<float>(gSampleCounts[i]);
-        buf[4 * i + 2] /= static_cast<float>(gSampleCounts[i]);
-        buf[4 * i + 3] /= static_cast<float>(gSampleCounts[i]);
+      buf[4 * i + 0] = gRenderConfig->rgba[4 * i + 0];
+      buf[4 * i + 1] = gRenderConfig->rgba[4 * i + 1];
+      buf[4 * i + 2] = gRenderConfig->rgba[4 * i + 2];
+      buf[4 * i + 3] = gRenderConfig->rgba[4 * i + 3];
+      if (gRenderConfig->sampleCounts[i] > 0) {
+        buf[4 * i + 0] /= static_cast<float>(gRenderConfig->sampleCounts[i]);
+        buf[4 * i + 1] /= static_cast<float>(gRenderConfig->sampleCounts[i]);
+        buf[4 * i + 2] /= static_cast<float>(gRenderConfig->sampleCounts[i]);
+        buf[4 * i + 3] /= static_cast<float>(gRenderConfig->sampleCounts[i]);
       }
     }
   } else if (gShowBufferMode == SHOW_BUFFER_NORMAL) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gNormalRGBA[i];
+      buf[i] = gRenderConfig->normalRGBA[i];
     }
   } else if (gShowBufferMode == SHOW_BUFFER_TANGENT) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gTangentRGBA[i];
+      buf[i] = gRenderConfig->tangentRGBA[i];
     }
   } else if (gShowBufferMode == SHOW_BUFFER_POSITION) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gPositionRGBA[i] * gShowPositionScale;
+      buf[i] = gRenderConfig->positionRGBA[i] * gShowPositionScale;
     }
   } else if (gShowBufferMode == SHOW_BUFFER_DEPTH) {
     float d_min = std::min(gShowDepthRange[0], gShowDepthRange[1]);
     float d_diff = fabsf(gShowDepthRange[1] - gShowDepthRange[0]);
     d_diff = std::max(d_diff, std::numeric_limits<float>::epsilon());
     for (size_t i = 0; i < buf.size(); i++) {
-      float v = (gDepthRGBA[i] - d_min) / d_diff;
+      float v = (gRenderConfig->depthRGBA[i] - d_min) / d_diff;
       if (gShowDepthPeseudoColor) {
         buf[i] = pesudoColor(v, i % 4);
       } else {
@@ -384,17 +403,17 @@ void Display(int width, int height) {
     }
   } else if (gShowBufferMode == SHOW_BUFFER_TEXCOORD) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gTexCoordRGBA[i];
+      buf[i] = gRenderConfig->texCoordRGBA[i];
     }
   } else if (gShowBufferMode == SHOW_BUFFER_UPARAM) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gUParamRGBA[i];
+      buf[i] = gRenderConfig->uParamRGBA[i];
     }
   } else if (gShowBufferMode == SHOW_BUFFER_VPARAM) {
     for (size_t i = 0; i < buf.size() / 4; i++) {
-      buf[4 * i + 0] = gVParamScale * gVParamRGBA[4 * i + 0];
-      buf[4 * i + 1] = gVParamScale * gVParamRGBA[4 * i + 1];
-      buf[4 * i + 2] = gVParamScale * gVParamRGBA[4 * i + 2];
+      buf[4 * i + 0] = gVParamScale * gRenderConfig->vParamRGBA[4 * i + 0];
+      buf[4 * i + 1] = gVParamScale * gRenderConfig->vParamRGBA[4 * i + 1];
+      buf[4 * i + 2] = gVParamScale * gRenderConfig->vParamRGBA[4 * i + 2];
       buf[4 * i + 3] = 1.0f;
     }
   }
@@ -411,9 +430,14 @@ int main(int argc, char** argv) {
     config_filename = argv[1];
   }
 
+  gRenderConfig = new example::RenderConfig();
+  gRenderer = new example::Renderer();
+
+  gRenderer->Init();
+
   {
     bool ret =
-        example::LoadRenderConfig(&gRenderConfig, config_filename.c_str());
+        example::LoadRenderConfig(gRenderConfig, config_filename.c_str());
     if (!ret) {
       std::cerr << "Failed to load config file : " << config_filename.c_str()
                 << std::endl;
@@ -422,11 +446,11 @@ int main(int argc, char** argv) {
   }
 
   {
-    bool ret = gRenderer.LoadCyHair(
-        gRenderConfig.cyhair_filename.c_str(), gRenderConfig.scene_scale,
-        gRenderConfig.scene_translate, gRenderConfig.max_strands);
+    bool ret = gRenderer->LoadCyHair(
+        gRenderConfig->cyhair_filename.c_str(), gRenderConfig->scene_scale,
+        gRenderConfig->scene_translate, gRenderConfig->max_strands);
     if (!ret) {
-      std::cerr << "Failed to load cyhair : " << gRenderConfig.cyhair_filename
+      std::cerr << "Failed to load cyhair : " << gRenderConfig->cyhair_filename
                 << std::endl;
       return EXIT_FAILURE;
     }
@@ -434,7 +458,7 @@ int main(int argc, char** argv) {
   }
 
   {
-    bool ret = gRenderer.BuildBVH();
+    bool ret = gRenderer->BuildBVH();
     if (!ret) {
       std::cerr << "Failed to build BVH." << std::endl;
       return EXIT_FAILURE;
@@ -462,13 +486,22 @@ int main(int argc, char** argv) {
     exit(-1);
   }
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
   if (!GLEW_VERSION_2_1) {
     fprintf(stderr, "OpenGL 2.1 is not available\n");
     exit(-1);
   }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
 #endif
 
-  InitRender(&gRenderConfig);
+#endif
+
+  InitRender(gRenderConfig);
 
   checkErrors("init");
 
@@ -499,19 +532,19 @@ int main(int argc, char** argv) {
     ImGui_ImplBtGui_NewFrame(gMousePosX, gMousePosY);
     ImGui::Begin("UI");
     {
-      static float col[3] = {0, 0, 0};
-      static float f = 0.0f;
+      //static float col[3] = {0, 0, 0};
+      //static float f = 0.0f;
       // if (ImGui::ColorEdit3("color", col)) {
       //  RequestRender();
       //}
       // ImGui::InputFloat("intensity", &f);
-      if (ImGui::InputFloat3("eye", gRenderConfig.eye)) {
+      if (ImGui::InputFloat3("eye", gRenderConfig->eye)) {
         RequestRender();
       }
-      if (ImGui::InputFloat3("up", gRenderConfig.up)) {
+      if (ImGui::InputFloat3("up", gRenderConfig->up)) {
         RequestRender();
       }
-      if (ImGui::InputFloat3("look_at", gRenderConfig.look_at)) {
+      if (ImGui::InputFloat3("look_at", gRenderConfig->look_at)) {
         RequestRender();
       }
 
@@ -542,12 +575,12 @@ int main(int argc, char** argv) {
     ImGui::End();
 
     glViewport(0, 0, window->getWidth(), window->getHeight());
-    glClearColor(0, 0.1, 0.2f, 1.0f);
+    glClearColor(0, 0.1f, 0.2f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
     checkErrors("clear");
 
-    Display(gRenderConfig.width, gRenderConfig.height);
+    Display(gRenderConfig->width, gRenderConfig->height);
 
     ImGui::Render();
 

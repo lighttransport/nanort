@@ -5,6 +5,8 @@
 * Render hair as cubic Bezier curve.
 * Example CyHair loader is provided.  
   * Input points are treated as CatmullRom spline.
+* Hair shader based on PBRT-v3
+  * http://pbrt.org/hair.pdf
 
 ## Run
 

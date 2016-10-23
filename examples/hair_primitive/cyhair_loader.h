@@ -63,7 +63,7 @@ class CyHair {
     default_color_[2] = 0.5f;
   }
 
-  ~CyHair(){};
+  ~CyHair(){}
 
   /// Load CyHair data from a file.
   bool Load(const char *filename);
@@ -98,6 +98,7 @@ class CyHair {
   float default_thickness_;
   float default_transparency_;
   float default_color_[3];
+  int pad0;
 
   // Processed CyHair values
   std::vector<unsigned int> strand_offsets_;
