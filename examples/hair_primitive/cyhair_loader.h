@@ -63,7 +63,7 @@ class CyHair {
     default_color_[2] = 0.5f;
   }
 
-  ~CyHair(){}
+  ~CyHair() {}
 
   /// Load CyHair data from a file.
   bool Load(const char *filename);

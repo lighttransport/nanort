@@ -12,7 +12,7 @@ class Renderer {
   Renderer() {}
   ~Renderer() {}
 
-	void Init();
+  void Init();
 
   /// Loads CyHair(.hair) curves.
   bool LoadCyHair(const char* cyhair_filename, const float scene_scale[3],
@@ -25,7 +25,6 @@ class Renderer {
   bool Render(float* rgba, float* aux_rgba, int* sample_counts, float quat[4],
               RenderConfig& config, std::atomic<bool>& cancel_flag);
 };
-
 }
 
 #endif  // EXAMPLE_RENDER_H_

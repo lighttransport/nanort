@@ -215,7 +215,8 @@ bool CyHair::Load(const char *filename) {
   strand_offsets_[0] = 0;
   for (size_t i = 1; i < num_strands_; i++) {
     int num_segments = segments_.empty() ? default_segments_ : segments_[i - 1];
-    strand_offsets_[i] = strand_offsets_[i - 1] + static_cast<unsigned int>(num_segments + 1);
+    strand_offsets_[i] =
+        strand_offsets_[i - 1] + static_cast<unsigned int>(num_segments + 1);
   }
 
   return true;

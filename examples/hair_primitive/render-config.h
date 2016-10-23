@@ -7,7 +7,7 @@
 namespace example {
 
 class RenderConfig {
-public:
+ public:
   RenderConfig() {}
   ~RenderConfig() {}
 
@@ -29,14 +29,16 @@ public:
   std::vector<float> displayRGBA;  // Accumurated image.
   std::vector<float> rgba;
   std::vector<float> auxRGBA;       // Auxiliary buffer
-  std::vector<int>  sampleCounts;    // Sample num counter for each pixel.
+  std::vector<int> sampleCounts;    // Sample num counter for each pixel.
   std::vector<float> normalRGBA;    // For visualizing normal
   std::vector<float> tangentRGBA;   // For visualizing hair tangent
   std::vector<float> positionRGBA;  // For visualizing position
   std::vector<float> depthRGBA;     // For visualizing depth
   std::vector<float> texCoordRGBA;  // For visualizing texcoord
-  std::vector<float> uParamRGBA;  // For visualizing `u` parameter of curve intersection point
-  std::vector<float> vParamRGBA;  // For visualizing `v` parameter of curve intersection point
+  std::vector<float>
+      uParamRGBA;  // For visualizing `u` parameter of curve intersection point
+  std::vector<float>
+      vParamRGBA;  // For visualizing `v` parameter of curve intersection point
 
   // Scene input info
   std::string cyhair_filename;
@@ -44,7 +46,6 @@ public:
   float scene_translate[3];
   int max_strands;  // -1 = read all strands
   float thickness;  // -1 = use thickness in cyhair file.
-
 };
 
 /// Loads config from JSON file.

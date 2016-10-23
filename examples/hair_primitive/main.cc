@@ -142,18 +142,6 @@ static example::RenderConfig* gRenderConfig;
 static std::mutex gMutex;
 static double gRenderTime;
 
-//static std::vector<float> gDisplayRGBA;  // Accumurated image.
-//static std::vector<float> gRGBA;
-//static std::vector<float> gAuxRGBA;       // Auxiliary buffer
-//static std::vector<int> gSampleCounts;    // Sample num counter for each pixel.
-//static std::vector<float> gNormalRGBA;    // For visualizing normal
-//static std::vector<float> gTangentRGBA;   // For visualizing hair tangent
-//static std::vector<float> gPositionRGBA;  // For visualizing position
-//static std::vector<float> gDepthRGBA;     // For visualizing depth
-//static std::vector<float> gTexCoordRGBA;  // For visualizing texcoord
-//static std::vector<float> gUParamRGBA;  // For visualizing `u` parameter of curve intersection point
-//static std::vector<float> gVParamRGBA;  // For visualizing `v` parameter of curve intersection point
-
 static void RequestRender() {
   {
     std::lock_guard<std::mutex> guard(gMutex);
@@ -179,7 +167,8 @@ static void RenderThread() {
       continue;
     }
 
-    std::chrono::time_point<std::chrono::system_clock> startT = std::chrono::system_clock::now();
+    std::chrono::time_point<std::chrono::system_clock> startT =
+        std::chrono::system_clock::now();
 
     // Initialize display buffer for the first pass.
     bool initial_pass = false;
@@ -194,9 +183,10 @@ static void RenderThread() {
     // gRenderCancel may be set to true in main loop.
     // Render() will repeatedly check this flag inside the rendering loop.
 
-    bool ret =
-        gRenderer->Render(&gRenderConfig->rgba.at(0), &gRenderConfig->auxRGBA.at(0), &gRenderConfig->sampleCounts.at(0),
-                         gCurrQuat, *gRenderConfig, gRenderCancel);
+    bool ret = gRenderer->Render(&gRenderConfig->rgba.at(0),
+                                 &gRenderConfig->auxRGBA.at(0),
+                                 &gRenderConfig->sampleCounts.at(0), gCurrQuat,
+                                 *gRenderConfig, gRenderCancel);
 
     if (ret) {
       std::lock_guard<std::mutex> guard(gMutex);
@@ -204,7 +194,8 @@ static void RenderThread() {
       gRenderConfig->pass++;
     }
 
-    std::chrono::time_point<std::chrono::system_clock> endT = std::chrono::system_clock::now();
+    std::chrono::time_point<std::chrono::system_clock> endT =
+        std::chrono::system_clock::now();
 
     std::chrono::duration<double, std::milli> ms = endT - startT;
 
@@ -213,7 +204,6 @@ static void RenderThread() {
 }
 
 static void InitRender(example::RenderConfig* rc) {
-
   rc->pass = 0;
 
   rc->max_passes = 128;
@@ -231,7 +221,6 @@ static void InitRender(example::RenderConfig* rc) {
   rc->texCoordRGBA.resize(len * 4, 0.0f);
   rc->uParamRGBA.resize(len * 4, 0.0f);
   rc->vParamRGBA.resize(len * 4, 0.0f);
-
 
   trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
@@ -532,8 +521,8 @@ int main(int argc, char** argv) {
     ImGui_ImplBtGui_NewFrame(gMousePosX, gMousePosY);
     ImGui::Begin("UI");
     {
-      //static float col[3] = {0, 0, 0};
-      //static float f = 0.0f;
+      // static float col[3] = {0, 0, 0};
+      // static float f = 0.0f;
       // if (ImGui::ColorEdit3("color", col)) {
       //  RequestRender();
       //}

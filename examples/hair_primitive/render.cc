@@ -81,7 +81,8 @@ static float pcg32_random(pcg32_state_t *rng) {
   return (float)((double)ret / (double)4294967296.0);
 }
 
-static void pcg32_srandom(pcg32_state_t *rng, uint64_t initstate, uint64_t initseq) {
+static void pcg32_srandom(pcg32_state_t *rng, uint64_t initstate,
+                          uint64_t initseq) {
   rng->state = 0U;
   rng->inc = (initseq << 1U) | 1U;
   pcg32_random(rng);
@@ -169,11 +170,12 @@ static std::vector<Texture> *gTextures;
 
 typedef nanort::real3<float> float3;
 
-//static inline float3 Lerp3(float3 v0, float3 v1, float3 v2, float u, float v) {
+// static inline float3 Lerp3(float3 v0, float3 v1, float3 v2, float u, float v)
+// {
 //  return (1.0f - u - v) * v0 + u * v1 + v * v2;
 //}
 
-//static inline void CalcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
+// static inline void CalcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
 //  float3 v10 = v1 - v0;
 //  float3 v20 = v2 - v0;
 //
@@ -185,7 +187,7 @@ typedef nanort::real3<float> float3;
 // Curve intersector functions
 
 static void GetZAlign(const float3 &o, const float3 &l, float matrix[3][3],
-               float translate[3]) {
+                      float translate[3]) {
   float dxz, lxdxz, lydxz, lzdxz;
 
   dxz = sqrtf(l.x() * l.x() + l.z() * l.z());
@@ -221,7 +223,8 @@ static void GetZAlign(const float3 &o, const float3 &l, float matrix[3][3],
       -(o.x() * matrix[0][2] + o.y() * matrix[1][2] + o.z() * matrix[2][2]);
 }
 
-static inline float3 Xform(const float3 &p0, float matrix[3][3], float translate[3]) {
+static inline float3 Xform(const float3 &p0, float matrix[3][3],
+                           float translate[3]) {
   float3 p;
 
   p[0] = p0.x() * matrix[0][0] + p0.y() * matrix[1][0] + p0.z() * matrix[2][0] +
@@ -586,12 +589,12 @@ class CurveIntersector {
 // -----------------------------------------------------
 
 static nanort::BVHAccel<float, CurveGeometry, CurvePred,
-                 CurveIntersector<CurveIntersection> >
-    *gAccel;
+                        CurveIntersector<CurveIntersection> > *gAccel;
 
-static void BuildCameraFrame(float3 *origin, float3 *corner, float3 *u, float3 *v,
-                      float quat[4], float eye[3], float lookat[3], float up[3],
-                      float fov, int width, int height) {
+static void BuildCameraFrame(float3 *origin, float3 *corner, float3 *u,
+                             float3 *v, float quat[4], float eye[3],
+                             float lookat[3], float up[3], float fov, int width,
+                             int height) {
   float e[4][4];
 
   Matrix::LookAt(e, eye, lookat, up);
@@ -659,8 +662,8 @@ static void BuildCameraFrame(float3 *origin, float3 *corner, float3 *u, float3 *
   // up1[2] = up[2];
 
   {
-    float flen =
-        (0.5f * static_cast<float>(height) / tanf(0.5f * static_cast<float>(fov * kPI / 180.0f)));
+    float flen = (0.5f * static_cast<float>(height) /
+                  tanf(0.5f * static_cast<float>(fov * kPI / 180.0f)));
     float3 look1;
     look1[0] = lookat1[0] - eye1[0];
     look1[1] = lookat1[1] - eye1[1];
@@ -754,8 +757,7 @@ static int LoadTexture(const std::string &filename) {
 }
 #endif
 
-void Renderer::Init()
-{
+void Renderer::Init() {
   delete gCurves;
   gCurves = new CubicCurves();
 
@@ -767,8 +769,7 @@ void Renderer::Init()
 
   delete gAccel;
   gAccel = new nanort::BVHAccel<float, CurveGeometry, CurvePred,
-                 CurveIntersector<CurveIntersection> >();
-
+                                CurveIntersector<CurveIntersection> >();
 }
 
 bool Renderer::LoadCyHair(const char *cyhair_filename,
@@ -805,17 +806,20 @@ bool Renderer::BuildBVH() {
   printf("    # of leaf primitives: %d\n", build_options.min_leaf_primitives);
   printf("    SAH binsize         : %d\n", build_options.bin_size);
 
-  std::chrono::time_point<std::chrono::system_clock> t_start = std::chrono::system_clock::now();
+  std::chrono::time_point<std::chrono::system_clock> t_start =
+      std::chrono::system_clock::now();
 
   CurveGeometry curves_geom(&gCurves->vertices.at(0), &gCurves->radiuss.at(0));
   CurvePred curves_pred(&gCurves->vertices.at(0));
 
-  unsigned int num_curves = static_cast<unsigned int>(gCurves->radiuss.size() / 4);
+  unsigned int num_curves =
+      static_cast<unsigned int>(gCurves->radiuss.size() / 4);
 
   bool ret = gAccel->Build(num_curves, build_options, curves_geom, curves_pred);
   assert(ret);
 
-  std::chrono::time_point<std::chrono::system_clock> t_end = std::chrono::system_clock::now();
+  std::chrono::time_point<std::chrono::system_clock> t_end =
+      std::chrono::system_clock::now();
 
   std::chrono::duration<double, std::milli> ms = t_end - t_start;
   std::cout << "BVH build time: " << ms.count() << " [ms]\n";
@@ -828,8 +832,10 @@ bool Renderer::BuildBVH() {
   printf("  Max tree depth     : %d\n", stats.max_tree_depth);
   float bmin[3], bmax[3];
   gAccel->BoundingBox(bmin, bmax);
-  std::cout << "  Bmin               : " << bmin[0] << ", " << bmin[1] << ", " << bmin[2] << std::endl;
-  std::cout << "  Bmax               : " << bmax[0] << ", " << bmax[1] << ", " << bmax[2] << std::endl;
+  std::cout << "  Bmin               : " << bmin[0] << ", " << bmin[1] << ", "
+            << bmin[2] << std::endl;
+  std::cout << "  Bmax               : " << bmax[0] << ", " << bmax[1] << ", "
+            << bmax[2] << std::endl;
 
   return true;
 }
@@ -860,7 +866,8 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
 
   uint32_t num_threads = std::max(1U, std::thread::hardware_concurrency());
 
-  std::chrono::time_point<std::chrono::system_clock> startT = std::chrono::system_clock::now();
+  std::chrono::time_point<std::chrono::system_clock> startT =
+      std::chrono::system_clock::now();
 
   // Initialize RNG.
 
@@ -872,7 +879,8 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
 
       size_t y = 0;
       while ((y = i++) < static_cast<size_t>(config.height)) {
-        std::chrono::time_point<std::chrono::system_clock> currT = std::chrono::system_clock::now();
+        std::chrono::time_point<std::chrono::system_clock> currT =
+            std::chrono::system_clock::now();
 
         std::chrono::duration<double, std::milli> ms = currT - startT;
         // Check cancel flag
@@ -892,8 +900,11 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
           float u1 = pcg32_random(&rng);
 
           float3 dir;
-          dir = corner + (static_cast<float>(x) + u0) * u +
-                (static_cast<float>(static_cast<size_t>(config.height) - y - 1) + u1) * v;
+          dir =
+              corner + (static_cast<float>(x) + u0) * u +
+              (static_cast<float>(static_cast<size_t>(config.height) - y - 1) +
+               u1) *
+                  v;
           dir = vnormalize(dir);
           ray.dir[0] = dir[0];
           ray.dir[1] = dir[1];
@@ -925,27 +936,21 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
             config.uParamRGBA[4 * idx + 2] = isector.intersection.u;
             config.uParamRGBA[4 * idx + 3] = 1.0f;
 
-            config.vParamRGBA[4 * (idx) + 0] =
-                isector.intersection.v;
-            config.vParamRGBA[4 * (idx) + 1] =
-                isector.intersection.v;
-            config.vParamRGBA[4 * (idx) + 2] =
-                isector.intersection.v;
+            config.vParamRGBA[4 * (idx) + 0] = isector.intersection.v;
+            config.vParamRGBA[4 * (idx) + 1] = isector.intersection.v;
+            config.vParamRGBA[4 * (idx) + 2] = isector.intersection.v;
             config.vParamRGBA[4 * (idx) + 3] = 1.0f;
 
-            //unsigned int prim_id = isector.intersection.prim_id;
+            // unsigned int prim_id = isector.intersection.prim_id;
 
             float3 N;
             N[0] = isector.intersection.normal[0];
             N[1] = isector.intersection.normal[1];
             N[2] = isector.intersection.normal[2];
 
-            config.normalRGBA[4 * (idx) + 0] =
-                0.5f * N[0] + 0.5f;
-            config.normalRGBA[4 * (idx) + 1] =
-                0.5f * N[1] + 0.5f;
-            config.normalRGBA[4 * (idx) + 2] =
-                0.5f * N[2] + 0.5f;
+            config.normalRGBA[4 * (idx) + 0] = 0.5f * N[0] + 0.5f;
+            config.normalRGBA[4 * (idx) + 1] = 0.5f * N[1] + 0.5f;
+            config.normalRGBA[4 * (idx) + 2] = 0.5f * N[2] + 0.5f;
             config.normalRGBA[4 * (idx) + 3] = 1.0f;
 
             config.tangentRGBA[4 * (idx) + 0] =
@@ -956,12 +961,9 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
                 0.5f * isector.intersection.tangent[2] + 0.5f;
             config.tangentRGBA[4 * (idx) + 3] = 1.0f;
 
-            config.depthRGBA[4 * (idx) + 0] =
-                isector.intersection.t;
-            config.depthRGBA[4 * (idx) + 1] =
-                isector.intersection.t;
-            config.depthRGBA[4 * (idx) + 2] =
-                isector.intersection.t;
+            config.depthRGBA[4 * (idx) + 0] = isector.intersection.t;
+            config.depthRGBA[4 * (idx) + 1] = isector.intersection.t;
+            config.depthRGBA[4 * (idx) + 2] = isector.intersection.t;
             config.depthRGBA[4 * (idx) + 3] = 1.0f;
 
             // Simple shading
@@ -974,9 +976,8 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
               rgba[4 * (idx) + 1] = NdotV * diffuse_col[1];
               rgba[4 * (idx) + 2] = NdotV * diffuse_col[2];
               rgba[4 * (idx) + 3] = 1.0f;
-              sample_counts[idx] =
-                  1;  // Set 1 for the first pass
-            } else {  // additive.
+              sample_counts[idx] = 1;  // Set 1 for the first pass
+            } else {                   // additive.
               rgba[4 * (idx) + 0] += NdotV * diffuse_col[0];
               rgba[4 * (idx) + 1] += NdotV * diffuse_col[1];
               rgba[4 * (idx) + 2] += NdotV * diffuse_col[2];
@@ -995,8 +996,7 @@ bool Renderer::Render(float *rgba, float *aux_rgba, int *sample_counts,
                 aux_rgba[4 * (idx) + 1] = 0.0f;
                 aux_rgba[4 * (idx) + 2] = 0.0f;
                 aux_rgba[4 * (idx) + 3] = 0.0f;
-                sample_counts[idx] =
-                    1;  // Set 1 for the first pass
+                sample_counts[idx] = 1;  // Set 1 for the first pass
               } else {
                 sample_counts[idx]++;
               }
