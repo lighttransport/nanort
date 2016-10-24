@@ -192,14 +192,13 @@ static void Demuxfloat(float p[2], float f) {
 
 inline float AbsCosTheta(const vec3 &w) { return std::abs(w.z); }
 
-// static inline void SigmaAFromConcentration(float sigma_a[3], float ce, float
-// cp) {
-//    float eumelaninSigmaA[3] = {0.419f, 0.697f, 1.37f};
-//    float pheomelaninSigmaA[3] = {0.187f, 0.4f, 1.05f};
-//    for (int i = 0; i < 3; ++i) {
-//        sigma_a[i] = (ce * eumelaninSigmaA[i] + cp * pheomelaninSigmaA[i]);
-//    }
-//}
+static inline void SigmaAFromConcentration(float sigma_a[3], float ce, float cp) {
+    float eumelaninSigmaA[3] = {0.419f, 0.697f, 1.37f};
+    float pheomelaninSigmaA[3] = {0.187f, 0.4f, 1.05f};
+    for (int i = 0; i < 3; ++i) {
+        sigma_a[i] = (ce * eumelaninSigmaA[i] + cp * pheomelaninSigmaA[i]);
+    }
+}
 
 // static inline void SigmaAFromReflectance(float sigma_a[3], const float c[3],
 // float beta_n) {
@@ -334,6 +333,16 @@ static float SampleTrimmedLogistic(float u, float s, float a, float b) {
   float x = -s * std::log(1 / (u * k + LogisticCDF(a, s)) - 1);
   CHECK(!std::isnan(x));
   return Clamp(x, a, b);
+}
+
+HairParam::HairParam()
+  : eta(1.55f)
+  , beta_m(0.3f)
+  , beta_n(0.3f)
+  , alpha(2.0f)
+{
+  // Default: brown-ish hair.
+  SigmaAFromConcentration(sigma_a, 1.3f, 0.0f);
 }
 
 void HairBSDF::ComputeApPdf(float pdfs[pMax + 1], float cosThetaO) const {

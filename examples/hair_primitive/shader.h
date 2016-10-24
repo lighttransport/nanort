@@ -38,6 +38,29 @@ inline vec3 operator*(float f, const vec3 &v) {
   return vec3(v.x * f, v.y * f, v.z * f);
 }
 
+inline float vdot(const vec3 &a, const vec3 &b) {
+  return a.x * b.x + a.y * b.y + a.z * b.z;
+}
+
+inline vec3 ToLocal(const vec3 &tn, const vec3 &bn, const vec3& n, const vec3& v)
+{
+  return vec3(vdot(v, tn), vdot(v, bn), vdot(v, n));
+}
+
+
+class HairParam
+{
+ public:
+  HairParam();
+  
+  float h;
+  float eta;
+  float sigma_a[3];
+  float beta_m;
+  float beta_n;
+  float alpha;
+};
+
 #define pMax (3)
 
 class HairBSDF {

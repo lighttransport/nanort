@@ -3,6 +3,7 @@ sources = {
    "render.cc",
    "render-config.cc",
    "cyhair_loader.cc",
+   "shader.cc",
    "../common/matrix.cc",
    "../common/trackball.cc",
    "../common/imgui/imgui.cpp",
@@ -61,6 +62,9 @@ solution "HairSolution"
          links {"X11", "pthread", "dl"}
       end
       if os.is("MacOSX") then
+         buildoptions { "-fsanitize=address" }
+         linkoptions { "-fsanitize=address" }
+         buildoptions { "-Weverything -Werror" }
          links {"Cocoa.framework"}
          files {
                 "../common/OpenGLWindow/MacOpenGLWindow.h",

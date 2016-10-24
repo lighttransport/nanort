@@ -105,6 +105,7 @@ THE SOFTWARE.
 
 #include "render-config.h"
 #include "render.h"
+#include "shader.h"
 #include "trackball.h"
 
 typedef enum {
@@ -134,34 +135,45 @@ static float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 static float gVParamScale = 1.0f;  // Usually 1/thickness
 
 static example::Renderer* gRenderer;
-
-static std::atomic<bool> gRenderQuit;
-static std::atomic<bool> gRenderRefresh;
-static std::atomic<bool> gRenderCancel;
 static example::RenderConfig* gRenderConfig;
-static std::mutex gMutex;
-static double gRenderTime;
+
+typedef struct
+{
+  double renderTime_;
+  std::mutex mutex_;
+  std::atomic<bool> renderQuit_;
+  std::atomic<bool> renderRefresh_;
+  std::atomic<bool> renderCancel_;
+  char pad0;
+
+  example::HairParam hairParam_;
+
+  int pad1;
+
+} UIState;
+
+static UIState *gUIState;
 
 static void RequestRender() {
   {
-    std::lock_guard<std::mutex> guard(gMutex);
+    std::lock_guard<std::mutex> guard(gUIState->mutex_);
     gRenderConfig->pass = 0;
   }
 
-  gRenderRefresh = true;
-  gRenderCancel = true;
+  gUIState->renderRefresh_ = true;
+  gUIState->renderCancel_ = true;
 }
 
 static void RenderThread() {
   {
-    std::lock_guard<std::mutex> guard(gMutex);
+    std::lock_guard<std::mutex> guard(gUIState->mutex_);
     gRenderConfig->pass = 0;
   }
 
   while (1) {
-    if (gRenderQuit) return;
+    if (gUIState->renderQuit_) return;
 
-    if (!gRenderRefresh || gRenderConfig->pass >= gRenderConfig->max_passes) {
+    if (!gUIState->renderRefresh_ || gRenderConfig->pass >= gRenderConfig->max_passes) {
       // Give some cycles to this thread.
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
       continue;
@@ -173,23 +185,23 @@ static void RenderThread() {
     // Initialize display buffer for the first pass.
     bool initial_pass = false;
     {
-      std::lock_guard<std::mutex> guard(gMutex);
+      std::lock_guard<std::mutex> guard(gUIState->mutex_);
       if (gRenderConfig->pass == 0) {
         initial_pass = true;
       }
     }
 
-    gRenderCancel = false;
+    gUIState->renderCancel_ = false;
     // gRenderCancel may be set to true in main loop.
     // Render() will repeatedly check this flag inside the rendering loop.
 
     bool ret = gRenderer->Render(&gRenderConfig->rgba.at(0),
                                  &gRenderConfig->auxRGBA.at(0),
                                  &gRenderConfig->sampleCounts.at(0), gCurrQuat,
-                                 *gRenderConfig, gRenderCancel);
+                                 *gRenderConfig, gUIState->renderCancel_);
 
     if (ret) {
-      std::lock_guard<std::mutex> guard(gMutex);
+      std::lock_guard<std::mutex> guard(gUIState->mutex_);
 
       gRenderConfig->pass++;
     }
@@ -199,7 +211,7 @@ static void RenderThread() {
 
     std::chrono::duration<double, std::milli> ms = endT - startT;
 
-    gRenderTime = ms.count();
+    gUIState->renderTime_ = ms.count();
   }
 }
 
@@ -559,6 +571,12 @@ int main(int argc, char** argv) {
 
       ImGui::InputFloat2("show depth range", gShowDepthRange);
       ImGui::Checkbox("show depth pesudo color", &gShowDepthPeseudoColor);
+
+      if (ImGui::TreeNode("hair param"))
+      {
+        ImGui::DragFloat("eta", &gUIState->hairParam_.eta, 0.01f, 0.0f, 10.0f);
+        ImGui::TreePop();
+      }
     }
 
     ImGui::End();
@@ -583,8 +601,8 @@ int main(int argc, char** argv) {
 
   printf("quiting...\n");
   {
-    gRenderCancel = true;
-    gRenderQuit = true;
+    gUIState->renderCancel_ = true;
+    gUIState->renderQuit_ = true;
     renderThread.join();
   }
 
