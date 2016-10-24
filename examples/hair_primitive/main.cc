@@ -433,6 +433,7 @@ int main(int argc, char** argv) {
 
   gRenderConfig = new example::RenderConfig();
   gRenderer = new example::Renderer();
+  gUIState = new UIState();
 
   gRenderer->Init();
 
