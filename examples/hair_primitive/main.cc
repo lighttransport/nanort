@@ -134,6 +134,17 @@ static float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 static float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 static float gVParamScale = 1.0f;  // Usually 1/thickness
 
+typedef enum {
+  PBRT_INTEGRATOR_PATH = 0,
+  PBRT_INTEGRATOR_DIRECT_LIGHTING,
+} PbrtIntegrator;
+
+static int gPbrtIntegrator = PBRT_INTEGRATOR_PATH;
+static int gPbrtRenderWidth = 128;
+static int gPbrtRenderHeight = 128;
+static int gPbrtRenderMaxDepth = 10;
+static int gPbrtRenderPixelSamples = 64;
+
 static example::Renderer* gRenderer;
 static example::RenderConfig* gRenderConfig;
 
@@ -575,7 +586,23 @@ int main(int argc, char** argv) {
 
       if (ImGui::TreeNode("hair param"))
       {
+        ImGui::DragFloat3("sigma_a", gUIState->hairParam_.sigma_a, 0.01f, 0.0f, 10.0f);
         ImGui::DragFloat("eta", &gUIState->hairParam_.eta, 0.01f, 0.0f, 10.0f);
+        ImGui::SliderFloat("beta_m", &gUIState->hairParam_.beta_m, 0.0f, 1.0f);
+        ImGui::SliderFloat("beta_n", &gUIState->hairParam_.beta_n, 0.0f, 1.0f);
+        ImGui::DragFloat("alpha", &gUIState->hairParam_.alpha, 0.01f, 0.0f, 10.0f);
+        ImGui::RadioButton("path", &gPbrtIntegrator, PBRT_INTEGRATOR_PATH);
+        ImGui::SameLine();
+        ImGui::RadioButton("direct", &gPbrtIntegrator, PBRT_INTEGRATOR_DIRECT_LIGHTING);
+        ImGui::PushItemWidth(100);
+        ImGui::InputInt("width", &gPbrtRenderWidth);
+        ImGui::SameLine();
+        ImGui::InputInt("height", &gPbrtRenderHeight);
+        ImGui::InputInt("maxdepth", &gPbrtRenderMaxDepth);
+        ImGui::SameLine();
+        ImGui::InputInt("pixelsamples", &gPbrtRenderPixelSamples);
+        ImGui::PopItemWidth();
+        ImGui::Button("pbrt render");
         ImGui::TreePop();
       }
     }
