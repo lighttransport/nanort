@@ -502,8 +502,30 @@ public:
   T bmin[3];
   unsigned int prim_id;
   T bmax[3];
-  unsigned int pad0;
+  unsigned int flag;			// Used internally when building BVH.
 };
+
+template<typename T>
+void ExtendBoudingBoxes(
+	real3<T> *bmin, real3<T> *bmax, PrimRef<T> *prim_refs, unsigned int left_idx, unsigned int right_idx)
+{
+	(*bmin)[0] = std::numeric_limits<T>::max();
+	(*bmin)[1] = std::numeric_limits<T>::max();
+	(*bmin)[2] = std::numeric_limits<T>::max();
+	(*bmax)[0] = -std::numeric_limits<T>::max();
+	(*bmax)[1] = -std::numeric_limits<T>::max();
+	(*bmax)[2] = -std::numeric_limits<T>::max();
+
+	for (size_t i = left_idx; i < right_idx; i++) {
+		(*bmin)[0] = std::min(prim_refs[i].bmin[0], (*bmin)[0]);
+		(*bmin)[1] = std::min(prim_refs[i].bmin[1], (*bmin)[1]);
+		(*bmin)[2] = std::min(prim_refs[i].bmin[2], (*bmin)[2]);
+
+		(*bmax)[0] = std::max(prim_refs[i].bmax[0], (*bmax)[0]);
+		(*bmax)[1] = std::max(prim_refs[i].bmax[1], (*bmax)[1]);
+		(*bmax)[2] = std::max(prim_refs[i].bmax[2], (*bmax)[2]);
+	}
+}
 
 //
 // Clip the triangle by the split plane and update left and right bbox.
@@ -629,6 +651,12 @@ class BVHAccel {
 
   /// Builds BVH tree recursively.
   unsigned int BuildTree(BVHBuildStatistics *out_stat,
+                         std::vector<BVHNode<T> > *out_nodes,
+                         unsigned int left_idx, unsigned int right_idx,
+                         unsigned int depth, const P &p, const Pred &pred);
+
+  /// Builds SBVH tree recursively.
+  unsigned int BuildTreeSpatialSAH(BVHBuildStatistics *out_stat,
                          std::vector<BVHNode<T> > *out_nodes,
                          unsigned int left_idx, unsigned int right_idx,
                          unsigned int depth, const P &p, const Pred &pred);
@@ -1578,6 +1606,176 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTree(
   }
 
   out_stat->num_branch_nodes++;
+
+  return offset;
+}
+
+// Based on Ganestam and Doggett, "SAH guided spatial split partitioning for fast BVH construction", Eurogaphics 2016.
+template <typename T, class P, class Pred, class I>
+unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
+    BVHBuildStatistics *out_stat, std::vector<BVHNode<T> > *out_nodes,
+    unsigned int left_idx, unsigned int right_idx, unsigned int depth,
+    const P &p, const Pred &pred) {
+  assert(left_idx <= right_idx);
+
+  unsigned int offset = static_cast<unsigned int>(out_nodes->size());
+
+  if (out_stat->max_tree_depth < depth) {
+    out_stat->max_tree_depth = depth;
+  }
+
+	// Compute entire bounding box.
+	// Assume the bound box for each PrimRef are computed before.
+  real3<T> bmin, bmax;
+	ExtendBoudingBoxes(&bmin, &bmax, &prim_refs_.at(0), left_idx, right_idx);
+
+  unsigned int n = right_idx - left_idx;
+  if ((n < options_.min_leaf_primitives) ||
+      (depth >= options_.max_tree_depth)) {
+    // Create leaf node.
+    BVHNode<T> leaf;
+
+    leaf.bmin[0] = bmin[0];
+    leaf.bmin[1] = bmin[1];
+    leaf.bmin[2] = bmin[2];
+
+    leaf.bmax[0] = bmax[0];
+    leaf.bmax[1] = bmax[1];
+    leaf.bmax[2] = bmax[2];
+
+    assert(left_idx < std::numeric_limits<unsigned int>::max());
+
+    leaf.flag = 1;  // leaf
+    leaf.data[0] = n;
+    leaf.data[1] = left_idx;
+
+    out_nodes->push_back(leaf);  // atomic update
+
+    out_stat->num_leaf_nodes++;
+
+    return offset;
+  }
+
+  //
+  // Create branch node.
+  //
+
+  // Choose longest axis to split.
+  int split_axis = 0;
+  real3<T> bsize;	
+	bsize[0] = bmax[0] - bmin[0];
+	bsize[1] = bmax[1] - bmin[1];
+	bsize[2] = bmax[2] - bmin[2];
+  {
+		T longest = bsize[0];
+		if (longest < bsize[1]) {
+			split_axis = 1;
+			longest = bsize[1];
+		}	
+		if (longest < bsize[2]) {
+			split_axis = 2;
+			longest = bsize[2];
+		}	
+	}
+
+	// Find split candidate using spatial median using primitive's mid point(the center of the bounding box)
+	T split_pos;
+	{
+    PrimRef<T> *begin = &prim_refs_[left_idx];
+    PrimRef<T> *end = &prim_refs_[right_idx - 1] + 1;  // mimics end() iterator.
+		// TODO: Use sort()?
+		size_t size = std::distance(end, begin);
+
+    //pred.Set(split_axis, cut_pos[split_axis]);
+		// Get the median of an unorrede set of numbers of arbitrary type.
+		// This will modify the underlying dataset.
+		//std::nth_element(begin, begin + size / 2, end, pred);
+		std::nth_element(begin, begin + size / 2, end);
+
+		PrimRef<T> *mid = std::next(begin, size / 2);
+	}
+
+	const int kDisjointLeftPrimitive = (1 << 1);
+	const int kDisjointRighttPrimitive = (1 << 2);
+	const int kOverlappedLeftPrimitive = (1 << 3);
+	const int kOverlappedRightPrimitive = (1 << 4);
+	const int kSplitLeftPrimitive = (1 << 4);
+	const int kSplitRightPrimitive = (1 << 5);
+
+	// Classify primitive against split plane.
+	// 	
+	//   D_L : Disjoint set of left
+	//   D_R : Disjoint set of right
+	//   O_L : Oveelap set of left
+	//   O_R : Oveelap set of right
+	//   S_L : Split set of left
+	//   S_R : Split set of right
+	//
+	// NOTE: Intersection(D_L, D_R) = zero
+	//       Union(O_L, O_R) = S_L = S_R
+	// 
+	// See Fig.2.in "SAH guided spatial split partitioning for fast BVH construction" for details.
+	//
+	
+	// First classify primitive into D_L, D_R, O_L and O_R
+	for (size_t i = left_idx; i < right_idx; i++) {
+		prim_refs_[i].flag = 0;
+		if (prim_refs_[i].bmax[split_axis] < split_pos) {
+			// D_L : Disjoint left
+			prim_refs_[i].flag |= kDisjointLeftPrimitive; 
+		} else if (prim_refs_[i].bmin[split_axis] > split_pos) {
+			// D_R : Disjoint right
+			prim_refs_[i].flag |= kDisjointRighttPrimitive;
+		} else {
+			// Overlapping
+			const T bcenter = static_cast<T>(0.5) * (prim_refs_[i].bmin[split_axis] + prim_refs_[i].bmax[split_axis]);
+			if (bcenter < split_pos) {
+				prim_refs_[i].flag |= kOverlappedLeftPrimitive;
+			} else {
+				prim_refs_[i].flag |= kOverlappedRightPrimitive;
+			}
+		}
+	}
+
+	// Split O_L and O_R primitive to compute S_L and S_R.
+
+
+	// C_O = A(Union(D_L, O_L)) |Union(D_L, O_L)| + A(Union(D_R, O_R))|Union(D_R, O_R)|
+	// C_S = A(Union(D_L, O_L)) |Union(D_L, O_L)| + A(Union(D_R, O_R))|Union(D_R, O_R)|
+	// where A is the surface area of a set, C_O is the SAH cost of keeping the original triangles, and C_S is the SAH cost of using the split primitives.
+	// SAH cost when using the split sets
+
+#if 0 // todo
+  BVHNode<T> node;
+  node.axis = split_axis;
+  node.flag = 0;  // 0 = branch
+
+  out_nodes->push_back(node);
+
+  unsigned int left_child_index = 0;
+  unsigned int right_child_index = 0;
+
+  left_child_index =
+      BuildTree(out_stat, out_nodes, left_idx, mid_idx, depth + 1, p, pred);
+
+  right_child_index =
+      BuildTree(out_stat, out_nodes, mid_idx, right_idx, depth + 1, p, pred);
+
+  {
+    (*out_nodes)[offset].data[0] = left_child_index;
+    (*out_nodes)[offset].data[1] = right_child_index;
+
+    (*out_nodes)[offset].bmin[0] = bmin[0];
+    (*out_nodes)[offset].bmin[1] = bmin[1];
+    (*out_nodes)[offset].bmin[2] = bmin[2];
+
+    (*out_nodes)[offset].bmax[0] = bmax[0];
+    (*out_nodes)[offset].bmax[1] = bmax[1];
+    (*out_nodes)[offset].bmax[2] = bmax[2];
+  }
+
+  out_stat->num_branch_nodes++;
+#endif
 
   return offset;
 }
