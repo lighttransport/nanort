@@ -677,6 +677,26 @@ class BVHAccel {
   unsigned int pad0_;
 };
 
+// Comparator for spatial-median.
+template <typename T = float>
+class SpatialMedianComparator {
+ public:
+  SpatialMedianComparator(int axis) 
+      : axis_(axis) {}
+
+  bool operator()(const PrimRef<T>& a, const PrimRef<T>& b) const {
+    int axis = axis_;
+
+    const T a_med = a.bmax[axis] - a.bmin[axis];
+    const T b_med = b.bmax[axis] - b.bmin[axis];
+
+    return (a_med < b_med);
+  }
+
+ private:
+  int axis_;
+};
+
 // Predefined SAH predicator for triangle.
 template <typename T = float>
 class TriangleSAHPred {
@@ -719,6 +739,7 @@ class TriangleSAHPred {
   const unsigned int *faces_;
   const size_t vertex_stride_bytes_;
 };
+
 
 // Predefined Triangle mesh geometry.
 template <typename T = float>
@@ -1686,11 +1707,12 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
 		// TODO: Use sort()?
 		size_t size = std::distance(end, begin);
 
-    //pred.Set(split_axis, cut_pos[split_axis]);
+    SpatialMedianComparator<T> comparator(split_axis);
+
 		// Get the median of an unorrede set of numbers of arbitrary type.
 		// This will modify the underlying dataset.
-		//std::nth_element(begin, begin + size / 2, end, pred);
-		std::nth_element(begin, begin + size / 2, end);
+		std::nth_element(begin, begin + size / 2, end, comparator);
+		//std::nth_element(begin, begin + size / 2, end);
 
 		PrimRef<T> *mid = std::next(begin, size / 2);
 	}
@@ -1699,8 +1721,8 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
 	const int kDisjointRighttPrimitive = (1 << 2);
 	const int kOverlappedLeftPrimitive = (1 << 3);
 	const int kOverlappedRightPrimitive = (1 << 4);
-	const int kSplitLeftPrimitive = (1 << 4);
-	const int kSplitRightPrimitive = (1 << 5);
+	//const int kSplitLeftPrimitive = (1 << 4);
+	//const int kSplitRightPrimitive = (1 << 5);
 
 	// Classify primitive against split plane.
 	// 	
@@ -1717,7 +1739,7 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
 	// See Fig.2.in "SAH guided spatial split partitioning for fast BVH construction" for details.
 	//
 	
-	// First classify primitive into D_L, D_R, O_L and O_R
+	// First classify a primitive into D_L, D_R, O_L or O_R
 	for (size_t i = left_idx; i < right_idx; i++) {
 		prim_refs_[i].flag = 0;
 		if (prim_refs_[i].bmax[split_axis] < split_pos) {
