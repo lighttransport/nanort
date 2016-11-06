@@ -401,8 +401,8 @@ struct BVHBuildOptions {
   unsigned int shallow_depth;
   unsigned int min_primitives_for_parallel_build;
 
-  // SBVH parameter([0, 1]). 0: regular BVH, 1: full SBVH
-  float sbvh_alpha;
+  // Split BVH
+  bool use_sbvh;
 
   // Cache bounding box computation.
   // Requires more memory, but BVHbuild can be faster.
@@ -417,6 +417,7 @@ struct BVHBuildOptions {
         bin_size(64),
         shallow_depth(3),
         min_primitives_for_parallel_build(1024 * 128),
+        use_sbvh(false),
         cache_bbox(false) {}
 };
 
@@ -688,11 +689,11 @@ class BVHAccel {
                          unsigned int left_idx, unsigned int right_idx,
                          unsigned int depth, const P &p, const Pred &pred);
 
-  /// Builds SBVH tree recursively.
-  unsigned int BuildTreeSpatialSAH(BVHBuildStatistics *out_stat,
+  /// Builds Split BVH tree recursively.
+  unsigned int BuildTreeSplit(BVHBuildStatistics *out_stat,
                          std::vector<BVHNode<T> > *out_nodes,
-                         unsigned int left_idx, unsigned int right_idx,
-                         unsigned int depth, const P &p, const Pred &pred);
+                         std::vector<PrimRef<T> > *out_prim_refs,
+                         std::vector<PrimRef<T> > &prim_refs, unsigned int depth, const P &p);
 
   bool TestLeafNode(const BVHNode<T> &node, const Ray<T> &ray,
                     const I &intersector) const;
@@ -748,13 +749,13 @@ class TriangleSAHPred {
     pos_ = pos;
   }
 
-  bool operator()(PrimRef<T>& prim_ref) const {
+  bool operator()(unsigned int prim_id) const {
     int axis = axis_;
     T pos = pos_;
 
-    unsigned int i0 = faces_[3 * prim_ref.prim_id + 0];
-    unsigned int i1 = faces_[3 * prim_ref.prim_id + 1];
-    unsigned int i2 = faces_[3 * prim_ref.prim_id + 2];
+    unsigned int i0 = faces_[3 * prim_id + 0];
+    unsigned int i1 = faces_[3 * prim_id + 1];
+    unsigned int i2 = faces_[3 * prim_id + 2];
 
     real3<T> p0(get_vertex_addr<T>(vertices_, i0, vertex_stride_bytes_));
     real3<T> p1(get_vertex_addr<T>(vertices_, i1, vertex_stride_bytes_));
@@ -843,7 +844,7 @@ class TriangleMesh {
 		BBox<T> *left,
 		BBox<T> *right,
 		const unsigned int prim_index,
-   	int axis, T pos) {
+   	int axis, T pos) const {
 
 		left->clear();
 		right->clear();
@@ -1661,9 +1662,9 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTree(
   unsigned int mid_idx = left_idx;
   int cut_axis = min_cut_axis;
   for (int axis_try = 0; axis_try < 3; axis_try++) {
-    PrimRef<T> *begin = &prim_refs_[left_idx];
-    PrimRef<T> *end = &prim_refs_[right_idx - 1] + 1;  // mimics end() iterator.
-    PrimRef<T> *mid = 0;
+    unsigned int *begin = &indices_[left_idx];
+    unsigned int *end = &indices_[right_idx - 1] + 1;  // mimics end() iterator.
+    unsigned int *mid = 0;
 
     // try min_cut_axis first.
     cut_axis = (min_cut_axis + axis_try) % 3;
@@ -1725,27 +1726,38 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTree(
 }
 
 // Based on Ganestam and Doggett, "SAH guided spatial split partitioning for fast BVH construction", Eurogaphics 2016.
+// TODO: multi-thread safe, optimize memory allocation.
 template <typename T, class P, class Pred, class I>
-unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
+unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSplit(
     BVHBuildStatistics *out_stat, std::vector<BVHNode<T> > *out_nodes,
-    unsigned int left_idx, unsigned int right_idx, unsigned int depth,
-    const P &p, const Pred &pred) {
-  assert(left_idx <= right_idx);
+    std::vector<PrimRef<T> > *out_prim_refs,
+    std::vector<PrimRef<T> > &prim_refs, unsigned int depth,
+    const P &p) {
 
-  unsigned int offset = static_cast<unsigned int>(out_nodes->size());
+  assert(prim_refs.size() > 0);
+
+  unsigned int offset_nodes = static_cast<unsigned int>(out_nodes->size());
 
   if (out_stat->max_tree_depth < depth) {
     out_stat->max_tree_depth = depth;
   }
 
+  unsigned int n = static_cast<unsigned int>(prim_refs.size());
+
 	// Compute entire bounding box.
 	// Assume the bound box for each PrimRef are computed before.
   real3<T> bmin, bmax;
-	ExtendBoudingBoxes(&bmin, &bmax, &prim_refs_.at(0), left_idx, right_idx);
+	ExtendBoudingBoxes(&bmin, &bmax, &prim_refs.at(0), 0, n);
 
-  unsigned int n = right_idx - left_idx;
   if ((n < options_.min_leaf_primitives) ||
       (depth >= options_.max_tree_depth)) {
+
+    // Emit prim_refs
+    unsigned int offset_prim_refs = static_cast<unsigned int>(out_prim_refs->size());
+    for (size_t i = 0; i < n; i++) {
+      out_prim_refs->push_back(prim_refs[i]);
+    }
+
     // Create leaf node.
     BVHNode<T> leaf;
 
@@ -1757,17 +1769,15 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
     leaf.bmax[1] = bmax[1];
     leaf.bmax[2] = bmax[2];
 
-    assert(left_idx < std::numeric_limits<unsigned int>::max());
-
     leaf.flag = 1;  // leaf
     leaf.data[0] = n;
-    leaf.data[1] = left_idx;
+    leaf.data[1] = offset_prim_refs;
 
-    out_nodes->push_back(leaf);  // atomic update
+    out_nodes->push_back(leaf);
 
     out_stat->num_leaf_nodes++;
 
-    return offset;
+    return offset_nodes;
   }
 
   //
@@ -1794,25 +1804,27 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
 
 	// Find split candidate using spatial median using primitive's mid point(the center of the bounding box)
 	T split_pos;
+  unsigned int mid_idx = 0;
 	{
-    PrimRef<T> *begin = &prim_refs_[left_idx];
-    PrimRef<T> *end = &prim_refs_[right_idx - 1] + 1;  // mimics end() iterator.
+    PrimRef<T> *begin = &prim_refs[0];
+    PrimRef<T> *end = &prim_refs[n - 1] + 1;  // mimics end() iterator.
 		// TODO: Use sort()?
 		size_t size = std::distance(end, begin);
 
     SpatialMedianComparator<T> comparator(split_axis);
 
-		// Get the median of an unorrede set of numbers of arbitrary type.
+		// Get the median of an unordered set of numbers of arbitrary type.
 		// This will modify the underlying dataset.
 		std::nth_element(begin, begin + size / 2, end, comparator);
 		//std::nth_element(begin, begin + size / 2, end);
 
 		PrimRef<T> *mid = begin + (size / 2);
 		split_pos = static_cast<T>(0.5) * (mid->bmax[split_axis] - mid->bmin[split_axis]);
+    mid_idx = size / 2;
 	}
 
 	const int kDisjointLeftPrimitive = (1 << 1);
-	const int kDisjointRighttPrimitive = (1 << 2);
+	const int kDisjointRightPrimitive = (1 << 2);
 	const int kOverlappedLeftPrimitive = (1 << 3);
 	const int kOverlappedRightPrimitive = (1 << 4);
 
@@ -1838,30 +1850,30 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
 	size_t num_disjoint_right_prims = 0;
 	size_t num_overlap_left_prims = 0;
 	size_t num_overlap_right_prims = 0;
-	for (size_t i = left_idx; i < right_idx; i++) {
-		prim_refs_[i].flag = 0;
-		if (prim_refs_[i].bmax[split_axis] < split_pos) {
+	for (size_t i = 0; i < n; i++) {
+		prim_refs[i].flag = 0;
+		if (prim_refs[i].bmax[split_axis] < split_pos) {
 			// D_L : Disjoint left
-			prim_refs_[i].flag |= kDisjointLeftPrimitive; 
-			D_L = BBoxExtend(D_L, prim_refs_[i].bmin);
-			D_L = BBoxExtend(D_L, prim_refs_[i].bmax);
-		} else if (prim_refs_[i].bmin[split_axis] > split_pos) {
+			prim_refs[i].flag |= kDisjointLeftPrimitive; 
+			D_L = BBoxExtend(D_L, prim_refs[i].bmin);
+			D_L = BBoxExtend(D_L, prim_refs[i].bmax);
+		} else if (prim_refs[i].bmin[split_axis] > split_pos) {
 			// D_R : Disjoint right
-			prim_refs_[i].flag |= kDisjointRighttPrimitive;
-			D_R = BBoxExtend(D_R, prim_refs_[i].bmin);
-			D_R = BBoxExtend(D_R, prim_refs_[i].bmax);
+			prim_refs[i].flag |= kDisjointRightPrimitive;
+			D_R = BBoxExtend(D_R, prim_refs[i].bmin);
+			D_R = BBoxExtend(D_R, prim_refs[i].bmax);
 		} else {
 			// Overlapping
-			const T bcenter = static_cast<T>(0.5) * (prim_refs_[i].bmin[split_axis] + prim_refs_[i].bmax[split_axis]);
+			const T bcenter = static_cast<T>(0.5) * (prim_refs[i].bmin[split_axis] + prim_refs[i].bmax[split_axis]);
 			if (bcenter < split_pos) {
-				prim_refs_[i].flag |= kOverlappedLeftPrimitive;
-				O_L = BBoxExtend(O_L, prim_refs_[i].bmin);
-				O_L = BBoxExtend(O_L, prim_refs_[i].bmax);
+				prim_refs[i].flag |= kOverlappedLeftPrimitive;
+				O_L = BBoxExtend(O_L, prim_refs[i].bmin);
+				O_L = BBoxExtend(O_L, prim_refs[i].bmax);
 				num_overlap_left_prims++;
 			} else {
-				prim_refs_[i].flag |= kOverlappedRightPrimitive;
-				O_R = BBoxExtend(O_R, prim_refs_[i].bmin);
-				O_R = BBoxExtend(O_R, prim_refs_[i].bmax);
+				prim_refs[i].flag |= kOverlappedRightPrimitive;
+				O_R = BBoxExtend(O_R, prim_refs[i].bmin);
+				O_R = BBoxExtend(O_R, prim_refs[i].bmax);
 				num_overlap_right_prims++;
 			}
 		}
@@ -1869,14 +1881,15 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
 
 	// Split O_L and O_R primitive to compute S_L and S_R.
 	// TODO: Optimize memory allocation(Use fast + parallel memory allocator instead of std::vector
-	std::vector<PrimRef<T> > split_prim_refs(num_overlap_left_prims + num_overlap_right_prims);	
+	std::vector<PrimRef<T> > left_split_prim_refs(num_overlap_left_prims);
+	std::vector<PrimRef<T> > right_split_prim_refs(num_overlap_right_prims);
 
 	BBox<T> S_L, S_R;
-	for (size_t i = left_idx; i < right_idx; i++) {
-		if ((prim_refs_[i].flag & kOverlappedLeftPrimitive) ||
-		    (prim_refs_[i].flag & kOverlappedRightPrimitive)) {
+	for (size_t i = 0; i < n; i++) {
+		if ((prim_refs[i].flag & kOverlappedLeftPrimitive) ||
+		    (prim_refs[i].flag & kOverlappedRightPrimitive)) {
 			BBox<T> left_bbox, right_bbox;
-			p.Split(&left_bbox, &right_bbox, prim_refs_[i].prim_id, split_axis, split_pos);
+			p.Split(&left_bbox, &right_bbox, prim_refs[i].prim_id, split_axis, split_pos);
 
 			PrimRef<T> left_prim_ref, right_prim_ref;
 
@@ -1886,7 +1899,7 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
 			left_prim_ref.bmax[0] = left_bbox.bmax[0];
 			left_prim_ref.bmax[1] = left_bbox.bmax[1];
 			left_prim_ref.bmax[2] = left_bbox.bmax[2];
-			left_prim_ref.prim_id = prim_refs_[i].prim_id;
+			left_prim_ref.prim_id = prim_refs[i].prim_id;
 			left_prim_ref.flag = 0; // Clear `flag` with 0 for just in case.
 
 			right_prim_ref.bmin[0] = right_bbox.bmin[0];
@@ -1895,15 +1908,15 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
 			right_prim_ref.bmax[0] = right_bbox.bmax[0];
 			right_prim_ref.bmax[1] = right_bbox.bmax[1];
 			right_prim_ref.bmax[2] = right_bbox.bmax[2];
-			right_prim_ref.prim_id = prim_refs_[i].prim_id;
+			right_prim_ref.prim_id = prim_refs[i].prim_id;
 			right_prim_ref.flag = 0;
 
 			// Update the bound for a split set
 			S_L = BBoxExtend(left_bbox, S_L);
 			S_R = BBoxExtend(right_bbox, S_R);
 			
-			split_prim_refs.push_back(left_prim_ref);
-			split_prim_refs.push_back(right_prim_ref);
+			left_split_prim_refs.push_back(left_prim_ref);
+			right_split_prim_refs.push_back(right_prim_ref);
 		}
 	}
 	
@@ -1940,47 +1953,76 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
 	C_O = SA_D_L_O_L * N_D_L_O_L + SA_D_R_O_R * N_D_R_O_R;
 	C_S = SA_D_L_S_L * N_D_L_S_L + SA_D_R_S_R * N_D_R_S_R;
 
+  bool use_split = false;
 	if (C_O < C_S) {
 		// No split
 	} else {
 		// Split
+    use_split = true;
 	}
 
-	(void)p;
-	(void)pred;
-#if 0 // todo
   BVHNode<T> node;
   node.axis = split_axis;
   node.flag = 0;  // 0 = branch
 
   out_nodes->push_back(node);
 
-  unsigned int left_child_index = 0;
-  unsigned int right_child_index = 0;
+  unsigned int left_child_node_index = 0;
+  unsigned int right_child_node_index = 0;
 
-  left_child_index =
-      BuildTree(out_stat, out_nodes, left_idx, mid_idx, depth + 1, p, pred);
+  // FIXME: Don't allocate tmp buffer for left and right PrimRef list.
+  std::vector<PrimRef<T> > left_prim_refs;
+  std::vector<PrimRef<T> > right_prim_refs;
 
-  right_child_index =
-      BuildTree(out_stat, out_nodes, mid_idx, right_idx, depth + 1, p, pred);
+  if (use_split) {
+
+    // New left/right set = Disjoint set + Split set
+    for (size_t i = 0; i < n; i++) {
+      if (prim_refs[i].flag & kDisjointLeftPrimitive) {
+        left_prim_refs.push_back(prim_refs[i]);
+      } else if (prim_refs[i].flag & kDisjointRightPrimitive) {
+        right_prim_refs.push_back(prim_refs[i]);
+      }
+    }
+
+    left_prim_refs.insert(left_prim_refs.end(), left_split_prim_refs.begin(), left_split_prim_refs.end());
+    right_prim_refs.insert(right_prim_refs.end(), right_split_prim_refs.begin(), right_split_prim_refs.end());
+
+  } else {
+
+    // New left/right set = Disjoint set + Overlapping set
+    for (size_t i = 0; i < n; i++) {
+      if ((prim_refs[i].flag & kDisjointLeftPrimitive) || (prim_refs[i].flag & kOverlappedLeftPrimitive)) {
+        left_prim_refs.push_back(prim_refs[i]);
+      } else if ((prim_refs[i].flag & kDisjointRightPrimitive) || (prim_refs[i].flag & kOverlappedRightPrimitive)) {
+        right_prim_refs.push_back(prim_refs[i]);
+      }
+    }
+
+  }
+
+  left_child_node_index =
+      BuildTreeSplit(out_stat, out_nodes, out_prim_refs, left_prim_refs, depth + 1, p);
+
+  right_child_node_index =
+      BuildTreeSplit(out_stat, out_nodes, out_prim_refs, right_prim_refs, depth + 1, p);
 
   {
-    (*out_nodes)[offset].data[0] = left_child_index;
-    (*out_nodes)[offset].data[1] = right_child_index;
+    (*out_nodes)[offset_nodes].data[0] = left_child_node_index;
+    (*out_nodes)[offset_nodes].data[1] = right_child_node_index;
 
-    (*out_nodes)[offset].bmin[0] = bmin[0];
-    (*out_nodes)[offset].bmin[1] = bmin[1];
-    (*out_nodes)[offset].bmin[2] = bmin[2];
+    (*out_nodes)[offset_nodes].bmin[0] = bmin[0];
+    (*out_nodes)[offset_nodes].bmin[1] = bmin[1];
+    (*out_nodes)[offset_nodes].bmin[2] = bmin[2];
 
-    (*out_nodes)[offset].bmax[0] = bmax[0];
-    (*out_nodes)[offset].bmax[1] = bmax[1];
-    (*out_nodes)[offset].bmax[2] = bmax[2];
+    (*out_nodes)[offset_nodes].bmax[0] = bmax[0];
+    (*out_nodes)[offset_nodes].bmax[1] = bmax[1];
+    (*out_nodes)[offset_nodes].bmax[2] = bmax[2];
   }
 
   out_stat->num_branch_nodes++;
-#endif
 
-  return offset;
+  return offset_nodes;
 }
 
 template <typename T, class P, class Pred, class I>
@@ -1997,143 +2039,153 @@ bool BVHAccel<T, P, Pred, I>::Build(unsigned int num_primitives,
 
   unsigned int n = num_primitives;
 
-  //
-  // 0. Setup primitive references.
-  //
-  prim_refs_.reserve(2 * n); // 2x = consider worst case senarios.
-  prim_refs_.resize(n);
-  
-  for (int i = 0; i < static_cast<int>(n); i++) {
-    BBox<T> bbox;
-    p.BoundingBox(&(bbox.bmin), &(bbox.bmax), i);
+  if (options.use_sbvh) {
 
-    prim_refs_[static_cast<size_t>(i)].prim_id = static_cast<unsigned int>(i);
-    prim_refs_[static_cast<size_t>(i)].bmin[0] = bbox.bmin[0];
-    prim_refs_[static_cast<size_t>(i)].bmin[1] = bbox.bmin[1];
-    prim_refs_[static_cast<size_t>(i)].bmin[2] = bbox.bmin[2];
-    prim_refs_[static_cast<size_t>(i)].bmax[0] = bbox.bmax[0];
-    prim_refs_[static_cast<size_t>(i)].bmax[1] = bbox.bmax[1];
-    prim_refs_[static_cast<size_t>(i)].bmax[2] = bbox.bmax[2];
-  }
-  
-  //
-  // 1. Create triangle indices(this will be permutated in BuildTree)
-  //
-  indices_.resize(n);
+    prim_refs_.clear();
+    
+    //
+    // 1. Setup initial PrimRef list.
+    //
+    std::vector<PrimRef<T> > prim_refs(n);
+    for (int i = 0; i < static_cast<int>(n); i++) {
+      BBox<T> bbox;
+      p.BoundingBox(&(bbox.bmin), &(bbox.bmax), i);
+
+      prim_refs[static_cast<size_t>(i)].prim_id = static_cast<unsigned int>(i);
+      prim_refs[static_cast<size_t>(i)].bmin[0] = bbox.bmin[0];
+      prim_refs[static_cast<size_t>(i)].bmin[1] = bbox.bmin[1];
+      prim_refs[static_cast<size_t>(i)].bmin[2] = bbox.bmin[2];
+      prim_refs[static_cast<size_t>(i)].bmax[0] = bbox.bmax[0];
+      prim_refs[static_cast<size_t>(i)].bmax[1] = bbox.bmax[1];
+      prim_refs[static_cast<size_t>(i)].bmax[2] = bbox.bmax[2];
+    }
+
+    //
+    // 2. Build tree
+    //
+    BuildTreeSplit(&stats_, &nodes_, &prim_refs_, prim_refs, /* depth */0, p);
+
+  } else {
+
+    //
+    // 1. Create triangle indices(this will be permutated in BuildTree)
+    //
+    indices_.resize(n);
 
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
-  for (int i = 0; i < static_cast<int>(n); i++) {
-    indices_[static_cast<size_t>(i)] = static_cast<unsigned int>(i);
-  }
-
-  //
-  // 2. Compute bounding box(optional).
-  //
-  real3<T> bmin, bmax;
-  if (options.cache_bbox) {
-    bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<T>::max();
-    bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<T>::max();
-
-    bboxes_.resize(n);
-    for (size_t i = 0; i < n; i++) {  // for each primitived
-      unsigned int idx = indices_[i];
-
-      BBox<T> bbox;
-      p.BoundingBox(&(bbox.bmin), &(bbox.bmax), i);
-      bboxes_[idx] = bbox;
-
-      for (int k = 0; k < 3; k++) {  // xyz
-        if (bmin[k] > bbox.bmin[k]) {
-          bmin[k] = bbox.bmin[k];
-        }
-        if (bmax[k] < bbox.bmax[k]) {
-          bmax[k] = bbox.bmax[k];
-        }
-      }
+    for (int i = 0; i < static_cast<int>(n); i++) {
+      indices_[static_cast<size_t>(i)] = static_cast<unsigned int>(i);
     }
 
-  } else {
-#ifdef _OPENMP
-    ComputeBoundingBoxOMP(&bmin, &bmax, &indices_.at(0), 0, n, p);
-#else
-    ComputeBoundingBox(&bmin, &bmax, &indices_.at(0), 0, n, p);
-#endif
-  }
+    //
+    // 2. Compute bounding box(optional).
+    //
+    real3<T> bmin, bmax;
+    if (options.cache_bbox) {
+      bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<T>::max();
+      bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<T>::max();
 
-//
-// 3. Build tree
-//
+      bboxes_.resize(n);
+      for (size_t i = 0; i < n; i++) {  // for each primitived
+        unsigned int idx = indices_[i];
+
+        BBox<T> bbox;
+        p.BoundingBox(&(bbox.bmin), &(bbox.bmax), i);
+        bboxes_[idx] = bbox;
+
+        for (int k = 0; k < 3; k++) {  // xyz
+          if (bmin[k] > bbox.bmin[k]) {
+            bmin[k] = bbox.bmin[k];
+          }
+          if (bmax[k] < bbox.bmax[k]) {
+            bmax[k] = bbox.bmax[k];
+          }
+        }
+      }
+
+    } else {
+#ifdef _OPENMP
+      ComputeBoundingBoxOMP(&bmin, &bmax, &indices_.at(0), 0, n, p);
+#else
+      ComputeBoundingBox(&bmin, &bmax, &indices_.at(0), 0, n, p);
+#endif
+    }
+
+    //
+    // 3. Build tree
+    //
 #ifdef _OPENMP
 #if NANORT_ENABLE_PARALLEL_BUILD
 
-  // Do parallel build for enoughly large dataset.
-  if (n > options.min_primitives_for_parallel_build) {
-    BuildShallowTree(&nodes_, 0, n, /* root depth */ 0, options.shallow_depth,
-                     p, pred);  // [0, n)
+    // Do parallel build for enoughly large dataset.
+    if (n > options.min_primitives_for_parallel_build) {
+      BuildShallowTree(&nodes_, 0, n, /* root depth */ 0, options.shallow_depth,
+                       p, pred);  // [0, n)
 
-    assert(shallow_node_infos_.size() > 0);
+      assert(shallow_node_infos_.size() > 0);
 
-    // Build deeper tree in parallel
-    std::vector<std::vector<BVHNode<T> > > local_nodes(
-        shallow_node_infos_.size());
-    std::vector<BVHBuildStatistics> local_stats(shallow_node_infos_.size());
+      // Build deeper tree in parallel
+      std::vector<std::vector<BVHNode<T> > > local_nodes(
+          shallow_node_infos_.size());
+      std::vector<BVHBuildStatistics> local_stats(shallow_node_infos_.size());
 
 #pragma omp parallel for
-    for (int i = 0; i < static_cast<int>(shallow_node_infos_.size()); i++) {
-      unsigned int left_idx = shallow_node_infos_[i].left_idx;
-      unsigned int right_idx = shallow_node_infos_[i].right_idx;
-      BuildTree(&(local_stats[i]), &(local_nodes[i]), left_idx, right_idx,
-                options.shallow_depth, p, pred);
-    }
-
-    // Join local nodes
-    for (int i = 0; i < static_cast<int>(local_nodes.size()); i++) {
-      assert(!local_nodes[i].empty());
-      size_t offset = nodes_.size();
-
-      // Add offset to child index(for branch node).
-      for (size_t j = 0; j < local_nodes[i].size(); j++) {
-        if (local_nodes[i][j].flag == 0) {  // branch
-          local_nodes[i][j].data[0] += offset - 1;
-          local_nodes[i][j].data[1] += offset - 1;
-        }
+      for (int i = 0; i < static_cast<int>(shallow_node_infos_.size()); i++) {
+        unsigned int left_idx = shallow_node_infos_[i].left_idx;
+        unsigned int right_idx = shallow_node_infos_[i].right_idx;
+        BuildTree(&(local_stats[i]), &(local_nodes[i]), left_idx, right_idx,
+                  options.shallow_depth, p, pred);
       }
 
-      // replace
-      nodes_[shallow_node_infos_[i].offset] = local_nodes[i][0];
+      // Join local nodes
+      for (int i = 0; i < static_cast<int>(local_nodes.size()); i++) {
+        assert(!local_nodes[i].empty());
+        size_t offset = nodes_.size();
 
-      // Skip root element of the local node.
-      nodes_.insert(nodes_.end(), local_nodes[i].begin() + 1,
-                    local_nodes[i].end());
+        // Add offset to child index(for branch node).
+        for (size_t j = 0; j < local_nodes[i].size(); j++) {
+          if (local_nodes[i][j].flag == 0) {  // branch
+            local_nodes[i][j].data[0] += offset - 1;
+            local_nodes[i][j].data[1] += offset - 1;
+          }
+        }
+
+        // replace
+        nodes_[shallow_node_infos_[i].offset] = local_nodes[i][0];
+
+        // Skip root element of the local node.
+        nodes_.insert(nodes_.end(), local_nodes[i].begin() + 1,
+                      local_nodes[i].end());
+      }
+
+      // Join statistics
+      for (int i = 0; i < static_cast<int>(local_nodes.size()); i++) {
+        stats_.max_tree_depth =
+            std::max(stats_.max_tree_depth, local_stats[i].max_tree_depth);
+        stats_.num_leaf_nodes += local_stats[i].num_leaf_nodes;
+        stats_.num_branch_nodes += local_stats[i].num_branch_nodes;
+      }
+
+    } else {
+      BuildTree(&stats_, &nodes_, 0, n,
+                /* root depth */ 0, p, pred);  // [0, n)
     }
-
-    // Join statistics
-    for (int i = 0; i < static_cast<int>(local_nodes.size()); i++) {
-      stats_.max_tree_depth =
-          std::max(stats_.max_tree_depth, local_stats[i].max_tree_depth);
-      stats_.num_leaf_nodes += local_stats[i].num_leaf_nodes;
-      stats_.num_branch_nodes += local_stats[i].num_branch_nodes;
-    }
-
-  } else {
-    BuildTree(&stats_, &nodes_, 0, n,
-              /* root depth */ 0, p, pred);  // [0, n)
-  }
 
 #else  // !NANORT_ENABLE_PARALLEL_BUILD
-  {
-    BuildTree(&stats_, &nodes_, 0, n,
-              /* root depth */ 0, p, pred);  // [0, n)
-  }
+    {
+      BuildTree(&stats_, &nodes_, 0, n,
+                /* root depth */ 0, p, pred);  // [0, n)
+    }
 #endif
 #else  // !_OPENMP
-  {
-    BuildTree(&stats_, &nodes_, 0, n,
-              /* root depth */ 0, p, pred);  // [0, n)
-  }
+    {
+      BuildTree(&stats_, &nodes_, 0, n,
+                /* root depth */ 0, p, pred);  // [0, n)
+    }
 #endif
+  } // !use_sbvh
 
   return true;
 }
