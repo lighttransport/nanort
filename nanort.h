@@ -459,9 +459,13 @@ class BBox {
   real3<T> bmax;
 
   BBox() {
+		clear();
+  }
+
+	inline void clear() {
     bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<T>::max();
     bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<T>::max();
-  }
+	}
 
 };
 
@@ -476,6 +480,36 @@ inline BBox<T> BBoxExtend(const BBox<T>& a, const real3<T>& b)
   c.bmax[0] = std::max(a.bmax[0], b[0]);
   c.bmax[1] = std::max(a.bmax[1], b[1]);
   c.bmax[2] = std::max(a.bmax[2], b[2]);
+
+  return c;
+}
+
+template<typename T>
+inline BBox<T> BBoxExtend(const BBox<T>& a, const T b[])
+{
+  BBox<T> c;
+  c.bmin[0] = std::min(a.bmin[0], b[0]);
+  c.bmin[1] = std::min(a.bmin[1], b[1]);
+  c.bmin[2] = std::min(a.bmin[2], b[2]);
+
+  c.bmax[0] = std::max(a.bmax[0], b[0]);
+  c.bmax[1] = std::max(a.bmax[1], b[1]);
+  c.bmax[2] = std::max(a.bmax[2], b[2]);
+
+  return c;
+}
+
+template<typename T>
+inline BBox<T> BBoxExtend(const BBox<T>& a, const BBox<T>& b)
+{
+  BBox<T> c;
+  c.bmin[0] = std::min(a.bmin[0], b.bmin[0]);
+  c.bmin[1] = std::min(a.bmin[1], b.bmin[1]);
+  c.bmin[2] = std::min(a.bmin[2], b.bmin[2]);
+
+  c.bmax[0] = std::max(a.bmax[0], b.bmax[0]);
+  c.bmax[1] = std::max(a.bmax[1], b.bmax[1]);
+  c.bmax[2] = std::max(a.bmax[2], b.bmax[2]);
 
   return c;
 }
@@ -506,8 +540,7 @@ public:
 };
 
 template<typename T>
-void ExtendBoudingBoxes(
-	real3<T> *bmin, real3<T> *bmax, PrimRef<T> *prim_refs, unsigned int left_idx, unsigned int right_idx)
+void ExtendBoudingBoxes(real3<T> *bmin, real3<T> *bmax, PrimRef<T> *prim_refs, unsigned int left_idx, unsigned int right_idx)
 {
 	(*bmin)[0] = std::numeric_limits<T>::max();
 	(*bmin)[1] = std::numeric_limits<T>::max();
@@ -529,7 +562,7 @@ void ExtendBoudingBoxes(
 
 //
 // Clip the triangle by the split plane and update left and right bbox.
-// See Embree code for more details.
+// See `splitTrianglw` in Embree code for more details.
 //
 template<typename T>
 void ClipTriangle(
@@ -773,7 +806,7 @@ class TriangleMesh {
   /// Compute bounding box for `prim_index`th triangle.
   /// This function is called for each primitive in BVH build.
   void BoundingBox(real3<T> *bmin, real3<T> *bmax,
-                   unsigned int prim_index) const {
+                   const unsigned int prim_index) const {
     (*bmin)[0] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
                                  vertex_stride_bytes_)[0];
     (*bmin)[1] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
@@ -804,6 +837,61 @@ class TriangleMesh {
       }
     }
   }
+
+	// Reuired for Split BVH
+	void Split(
+		BBox<T> *left,
+		BBox<T> *right,
+		const unsigned int prim_index,
+   	int axis, T pos) {
+
+		left->clear();
+		right->clear();
+
+    const T *p0_ptr = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
+                                 vertex_stride_bytes_);
+    const T *p1_ptr = get_vertex_addr(vertices_, faces_[3 * prim_index + 1],
+                                 vertex_stride_bytes_);
+    const T *p2_ptr = get_vertex_addr(vertices_, faces_[3 * prim_index + 2],
+                                 vertex_stride_bytes_);
+
+		real3<T> v[3];
+		v[0][0] = p0_ptr[0];
+		v[0][1] = p0_ptr[1];
+		v[0][2] = p0_ptr[2];
+		v[1][0] = p1_ptr[0];
+		v[1][1] = p1_ptr[1];
+		v[1][2] = p1_ptr[2];
+		v[2][0] = p2_ptr[0];
+		v[2][1] = p2_ptr[1];
+		v[2][2] = p2_ptr[2];
+
+    /* clip triangle to left and right box by processing all edges */
+		BBox<T> left_bbox, right_bbox;
+    real3<T> v1 = v[2];
+    for (size_t i=0; i<3; i++) {
+      real3<T> v0 = v1; v1 = v[i];
+      T v0d = v0[axis], v1d = v1[axis];
+
+      if (v0d <= pos) left_bbox = BBoxExtend(left_bbox, v0); // this point is on left side
+      if (v0d >= pos) right_bbox = BBoxExtend(right_bbox, v0); // this point is on right side
+
+      if ((v0d < pos && pos < v1d) || (v1d < pos && pos < v0d)) // the edge crosses the splitting location
+      {
+        assert((v1d-v0d) != 0.0);
+        real3<T> c = v0 + (pos-v0d)/(v1d-v0d)*(v1-v0);
+        left_bbox = BBoxExtend(left_bbox, c);
+        right_bbox = BBoxExtend(right_bbox, c);
+      }
+    }  
+
+    /* clip against current bounds */
+    BBox<T> bounds;
+		BoundingBox(&(bounds.bmin), &(bounds.bmax), prim_index);
+
+    (*left)  = BBoxIntersect(left_bbox,bounds);
+    (*right) = BBoxIntersect(right_bbox,bounds);
+	}
 
   const T *vertices_;
   const unsigned int *faces_;
@@ -1025,9 +1113,14 @@ struct BinBuffer {
 };
 
 template <typename T>
-inline T CalculateSurfaceArea(const real3<T> &min, const real3<T> &max) {
-  real3<T> box = max - min;
+inline T CalculateSurfaceArea(const real3<T> &bmin, const real3<T> &bmax) {
+  real3<T> box = bmax - bmin;
   return 2.0 * (box[0] * box[1] + box[1] * box[2] + box[2] * box[0]);
+}
+
+template <typename T>
+inline T CalculateSurfaceArea(const BBox<T> &bbox) {
+	return CalculateSurfaceArea(bbox.bmin, bbox.bmax);
 }
 
 template <typename T>
@@ -1714,15 +1807,14 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
 		std::nth_element(begin, begin + size / 2, end, comparator);
 		//std::nth_element(begin, begin + size / 2, end);
 
-		PrimRef<T> *mid = std::next(begin, size / 2);
+		PrimRef<T> *mid = begin + (size / 2);
+		split_pos = static_cast<T>(0.5) * (mid->bmax[split_axis] - mid->bmin[split_axis]);
 	}
 
 	const int kDisjointLeftPrimitive = (1 << 1);
 	const int kDisjointRighttPrimitive = (1 << 2);
 	const int kOverlappedLeftPrimitive = (1 << 3);
 	const int kOverlappedRightPrimitive = (1 << 4);
-	//const int kSplitLeftPrimitive = (1 << 4);
-	//const int kSplitRightPrimitive = (1 << 5);
 
 	// Classify primitive against split plane.
 	// 	
@@ -1740,33 +1832,122 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSpatialSAH(
 	//
 	
 	// First classify a primitive into D_L, D_R, O_L or O_R
+	BBox<T> D_L, D_R;
+	BBox<T> O_L, O_R;
+	size_t num_disjoint_left_prims = 0;
+	size_t num_disjoint_right_prims = 0;
+	size_t num_overlap_left_prims = 0;
+	size_t num_overlap_right_prims = 0;
 	for (size_t i = left_idx; i < right_idx; i++) {
 		prim_refs_[i].flag = 0;
 		if (prim_refs_[i].bmax[split_axis] < split_pos) {
 			// D_L : Disjoint left
 			prim_refs_[i].flag |= kDisjointLeftPrimitive; 
+			D_L = BBoxExtend(D_L, prim_refs_[i].bmin);
+			D_L = BBoxExtend(D_L, prim_refs_[i].bmax);
 		} else if (prim_refs_[i].bmin[split_axis] > split_pos) {
 			// D_R : Disjoint right
 			prim_refs_[i].flag |= kDisjointRighttPrimitive;
+			D_R = BBoxExtend(D_R, prim_refs_[i].bmin);
+			D_R = BBoxExtend(D_R, prim_refs_[i].bmax);
 		} else {
 			// Overlapping
 			const T bcenter = static_cast<T>(0.5) * (prim_refs_[i].bmin[split_axis] + prim_refs_[i].bmax[split_axis]);
 			if (bcenter < split_pos) {
 				prim_refs_[i].flag |= kOverlappedLeftPrimitive;
+				O_L = BBoxExtend(O_L, prim_refs_[i].bmin);
+				O_L = BBoxExtend(O_L, prim_refs_[i].bmax);
+				num_overlap_left_prims++;
 			} else {
 				prim_refs_[i].flag |= kOverlappedRightPrimitive;
+				O_R = BBoxExtend(O_R, prim_refs_[i].bmin);
+				O_R = BBoxExtend(O_R, prim_refs_[i].bmax);
+				num_overlap_right_prims++;
 			}
 		}
 	}
 
 	// Split O_L and O_R primitive to compute S_L and S_R.
+	// TODO: Optimize memory allocation(Use fast + parallel memory allocator instead of std::vector
+	std::vector<PrimRef<T> > split_prim_refs(num_overlap_left_prims + num_overlap_right_prims);	
 
+	BBox<T> S_L, S_R;
+	for (size_t i = left_idx; i < right_idx; i++) {
+		if ((prim_refs_[i].flag & kOverlappedLeftPrimitive) ||
+		    (prim_refs_[i].flag & kOverlappedRightPrimitive)) {
+			BBox<T> left_bbox, right_bbox;
+			p.Split(&left_bbox, &right_bbox, prim_refs_[i].prim_id, split_axis, split_pos);
 
+			PrimRef<T> left_prim_ref, right_prim_ref;
+
+			left_prim_ref.bmin[0] = left_bbox.bmin[0];
+			left_prim_ref.bmin[1] = left_bbox.bmin[1];
+			left_prim_ref.bmin[2] = left_bbox.bmin[2];
+			left_prim_ref.bmax[0] = left_bbox.bmax[0];
+			left_prim_ref.bmax[1] = left_bbox.bmax[1];
+			left_prim_ref.bmax[2] = left_bbox.bmax[2];
+			left_prim_ref.prim_id = prim_refs_[i].prim_id;
+			left_prim_ref.flag = 0; // Clear `flag` with 0 for just in case.
+
+			right_prim_ref.bmin[0] = right_bbox.bmin[0];
+			right_prim_ref.bmin[1] = right_bbox.bmin[1];
+			right_prim_ref.bmin[2] = right_bbox.bmin[2];
+			right_prim_ref.bmax[0] = right_bbox.bmax[0];
+			right_prim_ref.bmax[1] = right_bbox.bmax[1];
+			right_prim_ref.bmax[2] = right_bbox.bmax[2];
+			right_prim_ref.prim_id = prim_refs_[i].prim_id;
+			right_prim_ref.flag = 0;
+
+			// Update the bound for a split set
+			S_L = BBoxExtend(left_bbox, S_L);
+			S_R = BBoxExtend(right_bbox, S_R);
+			
+			split_prim_refs.push_back(left_prim_ref);
+			split_prim_refs.push_back(right_prim_ref);
+		}
+	}
+	
+	// Compute SAH cost.
+	//
 	// C_O = A(Union(D_L, O_L)) |Union(D_L, O_L)| + A(Union(D_R, O_R))|Union(D_R, O_R)|
-	// C_S = A(Union(D_L, O_L)) |Union(D_L, O_L)| + A(Union(D_R, O_R))|Union(D_R, O_R)|
+	// C_S = A(Union(D_L, S_L)) |Union(D_L, S_L)| + A(Union(D_R, S_R))|Union(D_R, S_R)|
 	// where A is the surface area of a set, C_O is the SAH cost of keeping the original triangles, and C_S is the SAH cost of using the split primitives.
 	// SAH cost when using the split sets
 
+	T C_O = static_cast<T>(0);
+	T C_S = static_cast<T>(0);
+
+	// |Union(D, O)| = # of prims in D + # of prims in O, since there is no overlap in Disjoint set and Overlapping set.
+	// |Union(D, S|| = # of prims in D + # of prims in S, since there is no overlap in Disjoint set and Split set.
+	// SurfaceArea(Union(a, b)) = SurfaceArea(a) + SurfaceArea(b) - SurfaceArea(Intersect(a, b))
+	BBox<T> I_D_L_O_L = BBoxIntersect(D_L, O_L);
+	BBox<T> I_D_R_O_R = BBoxIntersect(D_R, O_R);
+	BBox<T> I_D_L_S_L = BBoxIntersect(D_L, S_L);
+	BBox<T> I_D_R_S_R = BBoxIntersect(D_R, S_R);
+
+	size_t N_D_L_O_L = num_disjoint_left_prims + num_overlap_left_prims;
+	size_t N_D_R_O_R = num_disjoint_right_prims + num_overlap_right_prims;
+
+	// #(S_L) = #(S_R) = #(O_L) + #(O_R)
+	size_t N_D_L_S_L = num_disjoint_left_prims + num_overlap_left_prims + num_overlap_right_prims;
+	size_t N_D_R_S_R = num_disjoint_right_prims + num_overlap_left_prims + num_overlap_right_prims;
+	
+	T SA_D_L_O_L = CalculateSurfaceArea(D_L) + CalculateSurfaceArea(O_L) - CalculateSurfaceArea(I_D_L_O_L);
+	T SA_D_R_O_R = CalculateSurfaceArea(D_R) + CalculateSurfaceArea(O_R) - CalculateSurfaceArea(I_D_R_O_R);
+	T SA_D_L_S_L = CalculateSurfaceArea(D_L) + CalculateSurfaceArea(S_L) - CalculateSurfaceArea(I_D_L_S_L);
+	T SA_D_R_S_R = CalculateSurfaceArea(D_R) + CalculateSurfaceArea(S_R) - CalculateSurfaceArea(I_D_R_S_R);
+
+	C_O = SA_D_L_O_L * N_D_L_O_L + SA_D_R_O_R * N_D_R_O_R;
+	C_S = SA_D_L_S_L * N_D_L_S_L + SA_D_R_S_R * N_D_R_S_R;
+
+	if (C_O < C_S) {
+		// No split
+	} else {
+		// Split
+	}
+
+	(void)p;
+	(void)pred;
 #if 0 // todo
   BVHNode<T> node;
   node.axis = split_axis;
