@@ -111,6 +111,13 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
+  config->use_sbvh = false;
+  if (o.find("use_sbvh") != o.end()) {
+    if (o["use_sbvh"].is<bool>()) {
+      config->use_sbvh = o["use_sbvh"].get<bool>();
+    }
+  }
+
   return true;
 }
 }

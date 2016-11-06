@@ -26,11 +26,15 @@ typedef struct {
   float *depthImage;
   float *texcoordImage;
   float *varycoordImage;
+  float *traversalCountImage;
 
   // Scene input info
   std::string obj_filename;
   std::string eson_filename;
   float scene_scale;
+
+  // Builds Spatial BVH.
+  bool use_sbvh;
 
 } RenderConfig;
 

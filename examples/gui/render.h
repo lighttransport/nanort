@@ -7,6 +7,15 @@
 
 namespace example {
 
+class RenderStatistics {
+ public:
+  RenderStatistics() : num_shoot_rays(0.0), average_traversals(0.0) {}
+  ~RenderStatistics() {}
+
+  double num_shoot_rays;
+  double average_traversals;
+};
+
 class Renderer {
  public:
   Renderer() {}
@@ -21,12 +30,13 @@ class Renderer {
   /// Loads cached .eson mesh.
   bool LoadEsonMesh(const char* eson_filename);
 
-  /// Builds bvh.
-  bool BuildBVH();
+  /// Builds BVH.
+  bool BuildBVH(bool use_sbvh);
 
   /// Returns false when the rendering was canceled.
-  bool Render(float* rgba, float* aux_rgba, int *sample_counts, float quat[4],
-              const RenderConfig& config, std::atomic<bool>& cancel_flag);
+  bool Render(RenderStatistics* render_stats, float* rgba, float* aux_rgba,
+              int* sample_counts, float quat[4], const RenderConfig& config,
+              std::atomic<bool>& cancel_flag);
 };
 };
 

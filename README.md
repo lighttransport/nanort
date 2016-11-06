@@ -28,6 +28,11 @@ Path tracing example contributed by https://github.com/daseyb
   * Robust BVH Ray Traversal(using up to 4 ulp version): http://jcgt.org/published/0002/02/02/
   * Watertight Ray/Triangle Intesection: http://jcgt.org/published/0002/01/05/
 
+### Experimental features
+
+* Split SAH(Set `true` to `BVHBuildOptions.use_sbvh`)
+  * Currently SBVH build is not optimized(no parallel build, no optimzied memory allocation)
+
 ## Applications
 
 * Test renderer for your light trasport algorithm development.
@@ -239,7 +244,7 @@ PR are always welcome!
 * [ ] Fast BVH build
   * [ ] Bonsai: Rapid Bounding Volume Hierarchy Generation using Mini Trees http://jcgt.org/published/0004/03/02/
 * [ ] Efficient BVH
-  * [ ] Spatial split BVH
+  * [x] Spatial split BVH(Bsaed on SAH guided spatial split: http://www.lu.se/lup/publication/deb28b78-3cde-4693-88d7-bf1e49ebd8f2)
 * [ ] Motion blur
 * [ ] Accurate ray curve intersection
 * [ ] Example bi-directional path tracing renderer.

@@ -151,8 +151,8 @@ struct Texture {
 Mesh gMesh;
 std::vector<Material> gMaterials;
 std::vector<Texture> gTextures;
-nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>,
-                 nanort::TriangleIntersector<> >
+nanort::BVHAccel<float, nanort::TriangleMesh<float>,
+                 nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> >
     gAccel;
 
 typedef nanort::real3<float> float3;
@@ -342,6 +342,9 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
 
   if (!err.empty()) {
     std::cerr << err << std::endl;
+  }
+
+  if (!ret) {
     return false;
   }
 
@@ -381,12 +384,44 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   // mesh.facevarying_tangents = NULL;
   // mesh.facevarying_binormals = NULL;
 
+  // material_t -> Material and Texture
+  gMaterials.resize(materials.size());
+  gTextures.resize(0);
+  for (size_t i = 0; i < materials.size(); i++) {
+    gMaterials[i].diffuse[0] = materials[i].diffuse[0];
+    gMaterials[i].diffuse[1] = materials[i].diffuse[1];
+    gMaterials[i].diffuse[2] = materials[i].diffuse[2];
+    gMaterials[i].specular[0] = materials[i].specular[0];
+    gMaterials[i].specular[1] = materials[i].specular[1];
+    gMaterials[i].specular[2] = materials[i].specular[2];
+
+    gMaterials[i].id = i;
+
+    // map_Kd
+    gMaterials[i].diffuse_texid = LoadTexture(materials[i].diffuse_texname);
+    // map_Ks
+    gMaterials[i].specular_texid = LoadTexture(materials[i].specular_texname);
+  }
+
+  // Add Default material to the last.
+  {
+    Material mat;
+    mat.diffuse[0] = mat.diffuse[1] = mat.diffuse[2] = 0.5f;
+    mat.specular[0] = mat.specular[1] = mat.specular[2] = 0.0f;
+    mat.diffuse_texid = -1;
+    mat.specular_texid = -1;
+    mat.id = gMaterials.size();
+    gMaterials.push_back(mat);
+  }
+
   size_t vertexIdxOffset = 0;
   size_t faceIdxOffset = 0;
 
   for (size_t i = 0; i < attrib.vertices.size(); i++) {
     mesh.vertices[i] = scale * attrib.vertices[i];
   }
+
+  assert(gMaterials.size() > 0);
 
   for (size_t i = 0; i < shapes.size(); i++) {
     for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
@@ -397,7 +432,13 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
       mesh.faces[3 * (faceIdxOffset + f) + 2] =
           shapes[i].mesh.indices[3 * f + 2].vertex_index;
 
-      mesh.material_ids[faceIdxOffset + f] = shapes[i].mesh.material_ids[f];
+      unsigned int mat_id = shapes[i].mesh.material_ids[f];
+      if (mat_id == static_cast<unsigned int>(-1)) {
+        // Assign default material
+        mat_id = gMaterials.size() - 1;
+      }
+
+      mesh.material_ids[faceIdxOffset + f] = mat_id;
     }
 
     if (attrib.normals.size() > 0) {
@@ -560,25 +601,6 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
     }
 
     faceIdxOffset += shapes[i].mesh.indices.size() / 3;
-  }
-
-  // material_t -> Material and Texture
-  gMaterials.resize(materials.size());
-  gTextures.resize(0);
-  for (size_t i = 0; i < materials.size(); i++) {
-    gMaterials[i].diffuse[0] = materials[i].diffuse[0];
-    gMaterials[i].diffuse[1] = materials[i].diffuse[1];
-    gMaterials[i].diffuse[2] = materials[i].diffuse[2];
-    gMaterials[i].specular[0] = materials[i].specular[0];
-    gMaterials[i].specular[1] = materials[i].specular[1];
-    gMaterials[i].specular[2] = materials[i].specular[2];
-
-    gMaterials[i].id = i;
-
-    // map_Kd
-    gMaterials[i].diffuse_texid = LoadTexture(materials[i].diffuse_texname);
-    // map_Ks
-    gMaterials[i].specular_texid = LoadTexture(materials[i].specular_texname);
   }
 
   return true;
@@ -778,22 +800,23 @@ bool Renderer::LoadEsonMesh(const char* eson_filename) {
   return true;
 }
 
-bool Renderer::BuildBVH() {
+bool Renderer::BuildBVH(bool use_sbvh) {
   std::cout << "[Build BVH] " << std::endl;
 
   nanort::BVHBuildOptions<float> build_options;  // Use default option
-  build_options.cache_bbox = false;
+  build_options.use_sbvh = use_sbvh;
 
   printf("  BVH build option:\n");
   printf("    # of leaf primitives: %d\n", build_options.min_leaf_primitives);
   printf("    SAH binsize         : %d\n", build_options.bin_size);
+  printf("    Build SBVH          : %d\n", build_options.use_sbvh);
 
   auto t_start = std::chrono::system_clock::now();
 
-  nanort::TriangleMesh<float> triangle_mesh(gMesh.vertices.data(),
-                                            gMesh.faces.data(), sizeof(float) * 3);
-  nanort::TriangleSAHPred<float> triangle_pred(gMesh.vertices.data(),
-                                               gMesh.faces.data(), sizeof(float) * 3);
+  nanort::TriangleMesh<float> triangle_mesh(
+      gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
+  nanort::TriangleSAHPred<float> triangle_pred(
+      gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
 
   printf("num_triangles = %lu\n", gMesh.num_faces);
 
@@ -812,6 +835,15 @@ bool Renderer::BuildBVH() {
   printf("    # of leaf   nodes: %d\n", stats.num_leaf_nodes);
   printf("    # of branch nodes: %d\n", stats.num_branch_nodes);
   printf("  Max tree depth     : %d\n", stats.max_tree_depth);
+  if (build_options.use_sbvh) {
+    printf(
+        "  # of prim refs     : %d (%f %% increase compared to the original "
+        "%d)\n",
+        static_cast<int>(gAccel.GetPrimRefs().size()),
+        100.0 * static_cast<double>(gAccel.GetPrimRefs().size()) /
+            static_cast<double>(gMesh.num_faces),
+        static_cast<int>(gMesh.num_faces));
+  }
   float bmin[3], bmax[3];
   gAccel.BoundingBox(bmin, bmax);
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
@@ -820,8 +852,9 @@ bool Renderer::BuildBVH() {
   return true;
 }
 
-bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
-                      float quat[4], const RenderConfig& config,
+bool Renderer::Render(RenderStatistics* stats, float* rgba, float* aux_rgba,
+                      int* sample_counts, float quat[4],
+                      const RenderConfig& config,
                       std::atomic<bool>& cancelFlag) {
   if (!gAccel.IsValid()) {
     return false;
@@ -848,11 +881,12 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 
   auto startT = std::chrono::system_clock::now();
 
-  // Initialize RNG.
+  std::atomic<size_t> num_traversals(0);
 
   for (auto t = 0; t < num_threads; t++) {
     workers.emplace_back(std::thread([&, t]() {
-      pcg32_state_t rng;
+      // Initialize RNG.
+      pcg32_state_t rng = PCG32_INITIALIZER;
       pcg32_srandom(&rng, config.pass,
                     t);  // seed = combination of render pass + thread no.
 
@@ -901,7 +935,13 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           nanort::TriangleIntersector<> triangle_intersector(
               gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
           nanort::BVHTraceOptions trace_options;
-          bool hit = gAccel.Traverse(ray, trace_options, triangle_intersector);
+          nanort::BVHTraceStatistics trace_stats;
+          bool hit = gAccel.TraverseWithStatistics(
+              &trace_stats, ray, trace_options, triangle_intersector);
+
+          num_traversals += trace_stats.num_branch_traversals +
+                            trace_stats.num_leaf_traversals;
+
           if (hit) {
             float3 p;
             p[0] =
@@ -1074,6 +1114,18 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               config.varycoordImage[4 * (y * config.width + x) + 3] = 0.0f;
             }
           }
+
+          // Fill Stat buffer
+          config.traversalCountImage[4 * (y * config.width + x) + 0] =
+              trace_stats.num_leaf_traversals +
+              trace_stats.num_branch_traversals;
+          config.traversalCountImage[4 * (y * config.width + x) + 1] =
+              trace_stats.num_leaf_traversals +
+              trace_stats.num_branch_traversals;
+          config.traversalCountImage[4 * (y * config.width + x) + 2] =
+              trace_stats.num_leaf_traversals +
+              trace_stats.num_branch_traversals;
+          config.traversalCountImage[4 * (y * config.width + x) + 3] = 1.0f;
         }
 
         for (int x = 0; x < config.width; x++) {
@@ -1089,6 +1141,10 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
   for (auto& t : workers) {
     t.join();
   }
+
+  stats->num_shoot_rays = config.width * config.height;
+  stats->average_traversals =
+      static_cast<double>(num_traversals) / stats->num_shoot_rays;
 
   return (!cancelFlag);
 };

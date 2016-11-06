@@ -72,6 +72,7 @@ THE SOFTWARE.
 #define SHOW_BUFFER_DEPTH (3)
 #define SHOW_BUFFER_TEXCOORD (4)
 #define SHOW_BUFFER_VARYCOORD (5)
+#define SHOW_BUFFER_RAY_TRAVERSAL_COUNT (6)
 
 b3gDefaultOpenGLWindow* window = 0;
 int gWidth = 512;
@@ -83,11 +84,13 @@ bool gTabPressed = false;
 bool gShiftPressed = false;
 float gShowPositionScale = 1.0f;
 float gShowDepthRange[2] = {10.0f, 20.f};
+int gShowTravRange[2] = {0, 16};
 bool gShowDepthPeseudoColor = true;
 float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
 example::Renderer gRenderer;
+example::RenderStatistics gRenderStatistics;
 
 std::atomic<bool> gRenderQuit;
 std::atomic<bool> gRenderRefresh;
@@ -104,6 +107,7 @@ std::vector<float> gPositionRGBA;   // For visualizing position
 std::vector<float> gDepthRGBA;      // For visualizing depth
 std::vector<float> gTexCoordRGBA;   // For visualizing texcoord
 std::vector<float> gVaryCoordRGBA;  // For visualizing varycentric coord
+std::vector<float> gTravCountRGBA;  // For visualizing ray traversal count
 
 void RequestRender() {
   {
@@ -145,9 +149,9 @@ void RenderThread() {
     // gRenderCancel may be set to true in main loop.
     // Render() will repeatedly check this flag inside the rendering loop.
 
-    bool ret =
-        gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), &gSampleCounts.at(0),
-                         gCurrQuat, gRenderConfig, gRenderCancel);
+    bool ret = gRenderer.Render(&gRenderStatistics, &gRGBA.at(0),
+                                &gAuxRGBA.at(0), &gSampleCounts.at(0),
+                                gCurrQuat, gRenderConfig, gRenderCancel);
 
     if (ret) {
       std::lock_guard<std::mutex> guard(gMutex);
@@ -195,11 +199,14 @@ void InitRender(example::RenderConfig* rc) {
   gVaryCoordRGBA.resize(rc->width * rc->height * 4);
   std::fill(gVaryCoordRGBA.begin(), gVaryCoordRGBA.end(), 0.0);
 
+  gTravCountRGBA.resize(rc->width * rc->height * 4, 0.0);
+
   rc->normalImage = &gNormalRGBA.at(0);
   rc->positionImage = &gPositionRGBA.at(0);
   rc->depthImage = &gDepthRGBA.at(0);
   rc->texcoordImage = &gTexCoordRGBA.at(0);
   rc->varycoordImage = &gVaryCoordRGBA.at(0);
+  rc->traversalCountImage = &gTravCountRGBA.at(0);
 
   trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
@@ -361,6 +368,14 @@ void Display(int width, int height) {
         buf[i] = v;
       }
     }
+  } else if (gShowBufferMode == SHOW_BUFFER_RAY_TRAVERSAL_COUNT) {
+    int d_min = std::min(gShowTravRange[0], gShowTravRange[1]);
+    int d_diff = std::abs(gShowTravRange[1] - gShowTravRange[0]);
+    d_diff = std::max(d_diff, 0);
+    for (size_t i = 0; i < buf.size(); i++) {
+      float v = (gTravCountRGBA[i] - d_min) / static_cast<float>(d_diff);
+      buf[i] = pesudoColor(v, i % 4);
+    }
   } else if (gShowBufferMode == SHOW_BUFFER_TEXCOORD) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gTexCoordRGBA[i];
@@ -422,7 +437,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  gRenderer.BuildBVH();
+  gRenderer.BuildBVH(gRenderConfig.use_sbvh);
 
   window = new b3gDefaultOpenGLWindow;
   b3gWindowConstructionInfo ci;
@@ -482,11 +497,8 @@ int main(int argc, char** argv) {
     ImGui_ImplBtGui_NewFrame(gMousePosX, gMousePosY);
     ImGui::Begin("UI");
     {
-      static float col[3] = {0, 0, 0};
-      static float f = 0.0f;
-      // if (ImGui::ColorEdit3("color", col)) {
-      //  RequestRender();
-      //}
+      ImGui::Text("ave traversals : %f", gRenderStatistics.average_traversals);
+
       // ImGui::InputFloat("intensity", &f);
       if (ImGui::InputFloat3("eye", gRenderConfig.eye)) {
         RequestRender();
@@ -495,6 +507,9 @@ int main(int argc, char** argv) {
         RequestRender();
       }
       if (ImGui::InputFloat3("look_at", gRenderConfig.look_at)) {
+        RequestRender();
+      }
+      if (ImGui::InputFloat4("quat", gCurrQuat)) {
         RequestRender();
       }
 
@@ -509,11 +524,22 @@ int main(int argc, char** argv) {
       ImGui::RadioButton("texcoord", &gShowBufferMode, SHOW_BUFFER_TEXCOORD);
       ImGui::SameLine();
       ImGui::RadioButton("varycoord", &gShowBufferMode, SHOW_BUFFER_VARYCOORD);
+      ImGui::SameLine();
+      ImGui::RadioButton("trav count", &gShowBufferMode,
+                         SHOW_BUFFER_RAY_TRAVERSAL_COUNT);
 
-      ImGui::InputFloat("show pos scale", &gShowPositionScale);
+      if (gShowBufferMode == SHOW_BUFFER_POSITION) {
+        ImGui::InputFloat("show pos scale", &gShowPositionScale);
+      }
 
-      ImGui::InputFloat2("show depth range", gShowDepthRange);
-      ImGui::Checkbox("show depth pesudo color", &gShowDepthPeseudoColor);
+      if (gShowBufferMode == SHOW_BUFFER_DEPTH) {
+        ImGui::InputFloat2("show depth range", gShowDepthRange);
+        ImGui::Checkbox("show depth pesudo color", &gShowDepthPeseudoColor);
+      }
+
+      if (gShowBufferMode == SHOW_BUFFER_RAY_TRAVERSAL_COUNT) {
+        ImGui::SliderInt2("show trav range", gShowTravRange, 0, 128);
+      }
     }
 
     ImGui::End();
