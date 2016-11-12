@@ -471,8 +471,8 @@ int main(int argc, char** argv) {
   ImGui_ImplBtGui_Init(window);
 
   ImGuiIO& io = ImGui::GetIO();
-  // io.Fonts->AddFontDefault();
-  io.Fonts->AddFontFromFileTTF("./DroidSans.ttf", 15.0f);
+  io.Fonts->AddFontDefault();
+  //io.Fonts->AddFontFromFileTTF("./DroidSans.ttf", 15.0f);
 
   std::thread renderThread(RenderThread);
 
