@@ -66,6 +66,11 @@ THE SOFTWARE.
 #include "render.h"
 #include "trackball.h"
 
+#ifdef WIN32
+#undef min
+#undef max
+#endif
+
 #define SHOW_BUFFER_COLOR (0)
 #define SHOW_BUFFER_NORMAL (1)
 #define SHOW_BUFFER_POSITION (2)
