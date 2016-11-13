@@ -4,8 +4,13 @@ platform: x64
 configuration: Release
 
 before_build:
+  - cd C:\projects
+  - nuget install nupengl.core
+  - cd C:\projects\nanort
   - echo running cmake...
   - cmake -G "Visual Studio 12 Win64" -Bbuild -H.
+    -DGLEW_INCLUDE_DIR="C:\projects\nupengl.core.0.1.0.1\build\native\include"
+    -DGLEW_LIBRARY="C:\projects\nupengl.core.0.1.0.1\build\native\lib\x64\glew32.lib"
 
 build:
   parallel: true

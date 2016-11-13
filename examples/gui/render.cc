@@ -45,6 +45,11 @@ THE SOFTWARE.
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#ifdef WIN32
+#undef min
+#undef max
+#endif
+
 namespace example {
 
 // PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org

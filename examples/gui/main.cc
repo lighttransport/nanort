@@ -66,6 +66,11 @@ THE SOFTWARE.
 #include "render.h"
 #include "trackball.h"
 
+#ifdef WIN32
+#undef min
+#undef max
+#endif
+
 #define SHOW_BUFFER_COLOR (0)
 #define SHOW_BUFFER_NORMAL (1)
 #define SHOW_BUFFER_POSITION (2)
@@ -466,8 +471,8 @@ int main(int argc, char** argv) {
   ImGui_ImplBtGui_Init(window);
 
   ImGuiIO& io = ImGui::GetIO();
-  // io.Fonts->AddFontDefault();
-  io.Fonts->AddFontFromFileTTF("./DroidSans.ttf", 15.0f);
+  io.Fonts->AddFontDefault();
+  //io.Fonts->AddFontFromFileTTF("./DroidSans.ttf", 15.0f);
 
   std::thread renderThread(RenderThread);
 
