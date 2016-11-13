@@ -7,8 +7,6 @@
 
 #include <iostream>
 
-#define USE_MULTIHIT_RAY_TRAVERSAL (0)
-
 namespace {
 
 // This class is NOT thread-safe timer!
@@ -492,28 +490,6 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
   return true;
 }
 
-#if USE_MULTIHIT_RAY_TRAVERSAL
-void IdToCol(float col[3], int mid)
-{
-    float table[8][3] = {
-        { 1.0f, 0.0f, 0.0f },
-        { 0.0f, 0.0f, 1.0f },
-        { 0.0f, 1.0f, 0.0f },
-        { 1.0f, 0.0f, 1.0f },
-        { 0.0f, 1.0f, 1.0f },
-        { 1.0f, 1.0f, 0.0f },
-        { 1.0f, 1.0f, 1.0f },
-        { 0.5f, 0.5f, 0.5f }
-    };
-
-    int id = mid % 8; 
-
-    col[0] = table[id][0];
-    col[1] = table[id][1];
-    col[2] = table[id][2];
-}
-#endif
-
 } // namespace
 
 
@@ -609,7 +585,6 @@ int main(int argc, char** argv)
       ray.min_t = 0.0f;
       ray.max_t = kFar;
 
-#if !USE_MULTIHIT_RAY_TRAVERSAL 
       nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces, sizeof(float) * 3);
       nanort::BVHTraceOptions trace_options;
       bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
@@ -627,28 +602,6 @@ int main(int argc, char** argv)
         rgb[3 * ((height - y - 1) * width + x) + 1] = fabsf(normal[1]);
         rgb[3 * ((height - y - 1) * width + x) + 2] = fabsf(normal[2]);
       }
-#else // multi-hit ray traversal.
-      nanort::StackVector<nanort::TriangleIntersector, 128> isects;
-      int max_isects = 8;
-      nanort::BVHTraceOptions trace_options;
-      bool hit = accel.MultiHitTraverse(ray, trace_options, max_isects, &isects);
-      if (hit) {
-        float col[3];
-        IdToCol(col, isects->size()-1);
-        //if (isects.size() >= 3) {
-        //  for (int i = 0; i < (int)isects.size(); i++) {
-        //    printf("t[%d]: %f\n", i, isects[i].t);
-        //  }
-        //  printf("max: %d\n", (int)isects.size());
-        //}
-
-        // Flip Y
-        rgb[3 * ((height - y - 1) * width + x) + 0] = col[0];
-        rgb[3 * ((height - y - 1) * width + x) + 1] = col[1];
-        rgb[3 * ((height - y - 1) * width + x) + 2] = col[2];
-      }
-#endif
-
     }
   }
 
