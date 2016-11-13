@@ -404,6 +404,9 @@ struct BVHBuildOptions {
 
   // Split BVH
   bool use_sbvh;
+  T max_sbvh_increase_factor;  // Maximum primitive increasing factor for SBVh.
+                               // Usually 1.2(20% increase) would work well for
+                               // various scenes.
 
   unsigned char pad[3];
 
@@ -415,7 +418,8 @@ struct BVHBuildOptions {
         bin_size(64),
         shallow_depth(3),
         min_primitives_for_parallel_build(1024 * 128),
-        use_sbvh(false) {}
+        use_sbvh(false),
+        max_sbvh_increase_factor(1.2) {}
 };
 
 /// BVH build statistics.
@@ -704,7 +708,8 @@ class BVHAccel {
                               std::vector<BVHNode<T> > *out_nodes,
                               std::vector<PrimRef<T> > *out_prim_refs,
                               const std::vector<PrimRef<T> > &prim_refs,
-                              unsigned int depth, const P &p);
+                              const unsigned int num_prims,
+                              const unsigned int depth, const P &p);
 
   bool TestLeafNode(const BVHNode<T> &node, const Ray<T> &ray,
                     const I &intersector) const;
@@ -1694,8 +1699,10 @@ template <typename T, class P, class Pred, class I>
 unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSplit(
     BVHBuildStatistics *out_stat, std::vector<BVHNode<T> > *out_nodes,
     std::vector<PrimRef<T> > *out_prim_refs,
-    const std::vector<PrimRef<T> > &prim_refs, unsigned int depth, const P &p) {
+    const std::vector<PrimRef<T> > &prim_refs, const unsigned int num_prims,
+    const unsigned int depth, const P &p) {
   assert(prim_refs.size() > 0);
+  assert(num_prims > 0);
 
   unsigned int offset_nodes = static_cast<unsigned int>(out_nodes->size());
 
@@ -1703,7 +1710,7 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSplit(
     out_stat->max_tree_depth = depth;
   }
 
-  unsigned int n = static_cast<unsigned int>(prim_refs.size());
+  unsigned int n = num_prims;
 
   // Compute entire bounding box.
   // Assume the bound box for each PrimRef are computed before.
@@ -2047,11 +2054,13 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTreeSplit(
   // left_prim_refs.size() << ", right : " << right_prim_refs.size() <<
   // std::endl;
 
-  left_child_node_index = BuildTreeSplit(out_stat, out_nodes, out_prim_refs,
-                                         left_prim_refs, depth + 1, p);
+  left_child_node_index =
+      BuildTreeSplit(out_stat, out_nodes, out_prim_refs, left_prim_refs,
+                     left_prim_refs.size(), depth + 1, p);
 
-  right_child_node_index = BuildTreeSplit(out_stat, out_nodes, out_prim_refs,
-                                          right_prim_refs, depth + 1, p);
+  right_child_node_index =
+      BuildTreeSplit(out_stat, out_nodes, out_prim_refs, right_prim_refs,
+                     right_prim_refs.size(), depth + 1, p);
 
   {
     (*out_nodes)[offset_nodes].data[0] = left_child_node_index;
@@ -2088,9 +2097,16 @@ bool BVHAccel<T, P, Pred, I>::Build(unsigned int num_primitives,
     prim_refs_.clear();
 
     //
-    // 1. Setup initial PrimRef list.
+    // 1. Setup initial working buffer for PrimRef list.
+    // For implementation simplicity we allocate maximu allowed size for this
+    // working buffer
+    // and the buffer does not dynamically grow during SBVH construction.
+    // (We abondon splitting primitive when there is no space left for this
+    // buffer)
     //
-    std::vector<PrimRef<T> > prim_refs(n);
+    std::vector<PrimRef<T> > prim_refs;
+    assert(options.max_sbvh_increase_factor >= 1.0);
+    prim_refs.resize(n * options.max_sbvh_increase_factor);
     for (int i = 0; i < static_cast<int>(n); i++) {
       BBox<T> bbox;
       p.BoundingBox(&(bbox.bmin), &(bbox.bmax), i);
@@ -2107,7 +2123,8 @@ bool BVHAccel<T, P, Pred, I>::Build(unsigned int num_primitives,
     //
     // 2. Build tree
     //
-    BuildTreeSplit(&stats_, &nodes_, &prim_refs_, prim_refs, /* depth */ 0, p);
+    BuildTreeSplit(&stats_, &nodes_, &prim_refs_, prim_refs, n, /* depth */ 0,
+                   p);
 
   } else {
     //
