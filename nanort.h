@@ -405,8 +405,8 @@ struct BVHBuildOptions {
   // Split BVH
   bool use_sbvh;
   T max_sbvh_increase_factor;  // Maximum primitive increasing factor for SBVh.
-                               // Usually 1.2(20% increase) would work well for
-                               // various scenes.
+                               // Usually 1.4(40% increase from the number of input primitives) would work well for
+                               // many scenes.
 
   unsigned char pad[3];
 
@@ -419,7 +419,7 @@ struct BVHBuildOptions {
         shallow_depth(3),
         min_primitives_for_parallel_build(1024 * 128),
         use_sbvh(false),
-        max_sbvh_increase_factor(1.2) {}
+        max_sbvh_increase_factor(1.4) {}
 };
 
 /// BVH build statistics.
@@ -2107,6 +2107,10 @@ bool BVHAccel<T, P, Pred, I>::Build(unsigned int num_primitives,
     std::vector<PrimRef<T> > prim_refs;
     assert(options.max_sbvh_increase_factor >= 1.0);
     prim_refs.resize(n * options.max_sbvh_increase_factor);
+
+#ifdef _OPENMP
+#pragma omp parallel for 
+#endif
     for (int i = 0; i < static_cast<int>(n); i++) {
       BBox<T> bbox;
       p.BoundingBox(&(bbox.bmin), &(bbox.bmax), i);
