@@ -23,11 +23,16 @@ Right-handed coorinate, Y up, counter clock-wise normal definition.
 
 ## Build on Windows
 
-    > premake5 vs2013
+`GUISolution.sln` is pre-generated solution file for Visual Studio 2015.
 
-Or 
+If you want re-generate solution file or generate solution file for Visual Studio 2015,
 
     > premake5 vs2015
+
+For Visual Studio 2013,
+
+    > premake5 vs2013
+
 
 ## Usage
 

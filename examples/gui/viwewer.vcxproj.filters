@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="common">
+      <UniqueIdentifier>{AEFEE3F6-9AA0-0ECD-835B-22216F9C951D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\OpenGLWindow">
+      <UniqueIdentifier>{1A8F7EAD-86F0-5BBB-0F5E-A26D7BBE927A}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\ThirdPartyLibs">
+      <UniqueIdentifier>{321BD2D3-9E87-8DCE-677B-252CD3A6AF36}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\ThirdPartyLibs\Glew">
+      <UniqueIdentifier>{F031787A-DC41-244B-45FB-8869312A13E4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\imgui">
+      <UniqueIdentifier>{98D6CB64-8439-5B09-2DBF-93BF1901278C}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\nativefiledialog">
+      <UniqueIdentifier>{F4C58EC8-60FD-D65F-6907-3B83D5BDFD58}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common\nativefiledialog\src">
+      <UniqueIdentifier>{0B5EC45D-776B-F243-0052-EE2E6C5EBEFA}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\common\OpenGLWindow\Win32OpenGLWindow.h">
+      <Filter>common\OpenGLWindow</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\OpenGLWindow\Win32Window.h">
+      <Filter>common\OpenGLWindow</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\common\OpenGLWindow\Win32OpenGLWindow.cpp">
+      <Filter>common\OpenGLWindow</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\OpenGLWindow\Win32Window.cpp">
+      <Filter>common\OpenGLWindow</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\ThirdPartyLibs\Glew\glew.c">
+      <Filter>common\ThirdPartyLibs\Glew</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\imgui\imgui.cpp">
+      <Filter>common\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\imgui\imgui_draw.cpp">
+      <Filter>common\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\imgui\imgui_impl_btgui.cpp">
+      <Filter>common\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\nativefiledialog\src\nfd_common.c">
+      <Filter>common\nativefiledialog\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\nativefiledialog\src\nfd_win.cpp">
+      <Filter>common\nativefiledialog\src</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\trackball.cc">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cc" />
+    <ClCompile Include="matrix.cc" />
+    <ClCompile Include="render-config.cc" />
+    <ClCompile Include="render.cc" />
+  </ItemGroup>
+</Project>

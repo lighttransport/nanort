@@ -7,15 +7,14 @@ sources = {
    "main.cc",
    "render.cc",
    "render-config.cc",
-   "../common/trackball.cc",
    "matrix.cc",
+   "../common/trackball.cc",
    "../common/imgui/imgui.cpp",
    "../common/imgui/imgui_draw.cpp",
    "../common/imgui/imgui_impl_btgui.cpp",
    }
 
--- premake4.lua
-solution "ViewerSolution"
+solution "GUISolution"
    configurations { "Release", "Debug" }
 
    if os.is("Windows") then
@@ -43,7 +42,7 @@ solution "ViewerSolution"
       includedirs { "./", "../../" }
       includedirs { "../common" }
       includedirs { "../common/imgui" }
-      includedirs { "../common/nativefiledialog/src/include" }
+      --includedirs { "../common/nativefiledialog/src/include" }
 
       if os.is("Windows") then
          defines { "NOMINMAX" }
@@ -55,7 +54,9 @@ solution "ViewerSolution"
             "../common/OpenGLWindow/Win32Window.cpp",
             "../common/OpenGLWindow/Win32Window.h",
             }
-         files { "../common/nativefiledialog/src/nfd_win.cpp" }
+         includedirs { "./../common/nativefiledialog/src/include" }
+         files { "../common/nativefiledialog/src/nfd_common.c",
+                 "../common/nativefiledialog/src/nfd_win.cpp" }
       end
       if os.is("Linux") then
          files {
@@ -80,7 +81,9 @@ solution "ViewerSolution"
                 "../common/OpenGLWindow/MacOpenGLWindow.h",
                 "../common/OpenGLWindow/MacOpenGLWindow.mm",
                }
-         files { "../common/nativefiledialog/src/nfd_cocoa.m" }
+         includedirs { "./../common/nativefiledialog/src/include" }
+         files { "../common/nativefiledialog/src/nfd_cocoa.m",
+                 "../common/nativefiledialog/src/nfd_common.c" }
       end
 
       configuration "Debug"
