@@ -9,6 +9,11 @@
 #define UNICODE
 #endif
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4389)
+#pragma warning(disable : 4996)
+#pragma warning(disable : 4189)
+#endif
 
 #include <wchar.h>
 #include <stdio.h>

@@ -742,7 +742,7 @@ class TriangleIntersector {
     const T Cz = ray_coeff_.Sz * C[ray_coeff_.kz];
     const T D = U * Az + V * Bz + W * Cz;
 
-    const T rcpDet = 1.0 / det;
+    const T rcpDet = static_cast<T>(1.0) / det;
     T tt = D * rcpDet;
 
     if (tt > (*t_inout)) {
@@ -862,7 +862,7 @@ struct BinBuffer {
 template <typename T>
 inline T CalculateSurfaceArea(const real3<T> &min, const real3<T> &max) {
   real3<T> box = max - min;
-  return 2.0 * (box[0] * box[1] + box[1] * box[2] + box[2] * box[0]);
+  return static_cast<T>(2.0) * (box[0] * box[1] + box[1] * box[2] + box[2] * box[0]);
 }
 
 template <typename T>
@@ -969,7 +969,7 @@ inline T SAH(size_t ns1, T leftArea, size_t ns2, T rightArea, T invS, T Taabb,
              T Ttri) {
   T sah;
 
-  sah = 2.0 * Taabb + (leftArea * invS) * static_cast<T>(ns1) * Ttri +
+  sah = static_cast<T>(2.0) * Taabb + (leftArea * invS) * static_cast<T>(ns1) * Ttri +
         (rightArea * invS) * static_cast<T>(ns2) * Ttri;
 
   return sah;
@@ -1505,7 +1505,7 @@ bool BVHAccel<T, P, Pred, I>::Build(unsigned int num_primitives,
       unsigned int idx = indices_[i];
 
       BBox<T> bbox;
-      p.BoundingBox(&(bbox.bmin), &(bbox.bmax), i);
+      p.BoundingBox(&(bbox.bmin), &(bbox.bmax), static_cast<unsigned int>(i));
       bboxes_[idx] = bbox;
 
       for (int k = 0; k < 3; k++) {  // xyz

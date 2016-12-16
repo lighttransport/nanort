@@ -352,7 +352,7 @@ uint8_t *Value::Serialize(uint8_t *p) const {
       // (*(reinterpret_cast<int64_t *>(ptr))) = size_;
       memcpy(ptr, &size_, sizeof(int64_t));
       ptr += sizeof(int64_t);
-      memcpy(ptr, string_.c_str(), size_);
+      memcpy(ptr, string_.c_str(), static_cast<size_t>(size_));
       ptr += size_;
     } break;
     case BINARY_TYPE: {
@@ -360,7 +360,7 @@ uint8_t *Value::Serialize(uint8_t *p) const {
       // (*(reinterpret_cast<int64_t *>(ptr))) = size_;
       memcpy(ptr, &size_, sizeof(int64_t));
       ptr += sizeof(int64_t);
-      memcpy(ptr, binary_.ptr, size_);
+      memcpy(ptr, binary_.ptr, static_cast<size_t>(size_));
       ptr += size_;
     } break;
     case OBJECT_TYPE: {

@@ -2,6 +2,10 @@
 
 #include "imgui_impl_btgui.h"
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4100)
+#endif
+
 #define USE_OPENGL2
 #include "OpenGLWindow/OpenGLInclude.h"
 #ifdef _WIN32

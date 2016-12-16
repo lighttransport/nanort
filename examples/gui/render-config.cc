@@ -55,9 +55,9 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     if (o["eye"].is<picojson::array>()) {
       picojson::array arr = o["eye"].get<picojson::array>();
       if (arr.size() == 3) {
-        config->eye[0] = arr[0].get<double>();
-        config->eye[1] = arr[1].get<double>();
-        config->eye[2] = arr[2].get<double>();
+        config->eye[0] = static_cast<float>(arr[0].get<double>());
+        config->eye[1] = static_cast<float>(arr[1].get<double>());
+        config->eye[2] = static_cast<float>(arr[2].get<double>());
       }
     }
   }
@@ -69,9 +69,9 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     if (o["up"].is<picojson::array>()) {
       picojson::array arr = o["up"].get<picojson::array>();
       if (arr.size() == 3) {
-        config->up[0] = arr[0].get<double>();
-        config->up[1] = arr[1].get<double>();
-        config->up[2] = arr[2].get<double>();
+        config->up[0] = static_cast<float>(arr[0].get<double>());
+        config->up[1] = static_cast<float>(arr[1].get<double>());
+        config->up[2] = static_cast<float>(arr[2].get<double>());
       }
     }
   }
@@ -83,17 +83,17 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     if (o["look_at"].is<picojson::array>()) {
       picojson::array arr = o["look_at"].get<picojson::array>();
       if (arr.size() == 3) {
-        config->look_at[0] = arr[0].get<double>();
-        config->look_at[1] = arr[1].get<double>();
-        config->look_at[2] = arr[2].get<double>();
+        config->look_at[0] = static_cast<float>(arr[0].get<double>());
+        config->look_at[1] = static_cast<float>(arr[1].get<double>());
+        config->look_at[2] = static_cast<float>(arr[2].get<double>());
       }
     }
   }
 
   config->fov = 45.0f;
   if (o.find("fov") != o.end()) {
-    if (o["width"].is<double>()) {
-      config->fov = static_cast<int>(o["fov"].get<double>());
+    if (o["fov"].is<double>()) {
+      config->fov = static_cast<float>(o["fov"].get<double>());
     }
   }
 

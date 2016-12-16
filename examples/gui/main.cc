@@ -22,6 +22,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4244)
+#endif
+
 #define USE_OPENGL2
 #include "OpenGLWindow/OpenGLInclude.h"
 #ifdef _WIN32
@@ -242,17 +246,17 @@ void keyboardCallback(int keycode, int state) {
 
 void mouseMoveCallback(float x, float y) {
   if (gMouseLeftDown) {
-    float w = gRenderConfig.width;
-    float h = gRenderConfig.height;
+    float w = static_cast<float>(gRenderConfig.width);
+    float h = static_cast<float>(gRenderConfig.height);
 
     float y_offset = gHeight - h;
 
     if (gTabPressed) {
-      const float dolly_scale = 0.1;
+      const float dolly_scale = 0.1f;
       gRenderConfig.eye[2] += dolly_scale * (gMousePosY - y);
       gRenderConfig.look_at[2] += dolly_scale * (gMousePosY - y);
     } else if (gShiftPressed) {
-      const float trans_scale = 0.02;
+      const float trans_scale = 0.02f;
       gRenderConfig.eye[0] += trans_scale * (gMousePosX - x);
       gRenderConfig.eye[1] -= trans_scale * (gMousePosY - y);
       gRenderConfig.look_at[0] += trans_scale * (gMousePosX - x);
@@ -274,6 +278,8 @@ void mouseMoveCallback(float x, float y) {
 }
 
 void mouseButtonCallback(int button, int state, float x, float y) {
+  (void)x;
+  (void)y;
   ImGui_ImplBtGui_SetMouseButtonState(button, (state == 1));
 
   ImGuiIO& io = ImGui::GetIO();
@@ -292,15 +298,15 @@ void mouseButtonCallback(int button, int state, float x, float y) {
 }
 
 void resizeCallback(float width, float height) {
-  GLfloat h = (GLfloat)height / (GLfloat)width;
+  //GLfloat h = (GLfloat)height / (GLfloat)width;
   GLfloat xmax, znear, zfar;
 
   znear = 1.0f;
   zfar = 1000.0f;
   xmax = znear * 0.5f;
 
-  gWidth = width;
-  gHeight = height;
+  gWidth = static_cast<int>(width);
+  gHeight = static_cast<int>(height);
 }
 
 inline float pesudoColor(float v, int ch) {
@@ -524,7 +530,7 @@ int main(int argc, char** argv) {
     ImGui::End();
 
     glViewport(0, 0, window->getWidth(), window->getHeight());
-    glClearColor(0, 0.1, 0.2f, 1.0f);
+    glClearColor(0.0f, 0.1f, 0.2f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
     checkErrors("clear");

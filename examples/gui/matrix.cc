@@ -26,7 +26,7 @@ static inline float vlength(float v[3]) {
 static void vnormalize(float v[3]) {
   float len = vlength(v);
   if (std::abs(len) > 1.0e-30) {
-    float inv_len = 1.0 / len;
+    float inv_len = 1.0f / len;
     v[0] *= inv_len;
     v[1] *= inv_len;
     v[2] *= inv_len;

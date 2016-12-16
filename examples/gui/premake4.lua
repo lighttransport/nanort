@@ -45,6 +45,9 @@ solution "GUISolution"
       --includedirs { "../common/nativefiledialog/src/include" }
 
       if os.is("Windows") then
+         flags { "FatalCompileWarnings" }
+         warnings "Extra" -- /W4
+
          defines { "NOMINMAX" }
          defines { "USE_NATIVEFILEDIALOG" }
          buildoptions { "/W4" } -- raise compile error level.

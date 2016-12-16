@@ -22,6 +22,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+
+#ifdef _MSC_VER
+#pragma warning(disable : 4018)
+#pragma warning(disable : 4244)
+#pragma warning(disable : 4189)
+#pragma warning(disable : 4996)
+#pragma warning(disable : 4267)
+#pragma warning(disable : 4477)
+#endif
+
 #include "render.h"
 
 #include <chrono>  // C++11
@@ -68,7 +78,7 @@ float pcg32_random(pcg32_state_t* rng) {
   rng->state = oldstate * 6364136223846793005ULL + rng->inc;
   unsigned int xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
   unsigned int rot = oldstate >> 59u;
-  unsigned int ret = (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+  unsigned int ret = (xorshifted >> rot) | (xorshifted << ((-static_cast<int>(rot)) & 31));
 
   return (float)((double)ret / (double)4294967296.0);
 }
@@ -325,7 +335,7 @@ int LoadTexture(const std::string& filename) {
 
     size_t n_elem = w * h * n;
     texture.image = new unsigned char[n_elem];
-    for (int i = 0; i < n_elem; i++) {
+    for (size_t i = 0; i < n_elem; i++) {
       texture.image[i] = data[i];
     }
 
@@ -396,7 +406,7 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   // mesh.facevarying_tangents = NULL;
   // mesh.facevarying_binormals = NULL;
 
-  size_t vertexIdxOffset = 0;
+  //size_t vertexIdxOffset = 0;
   size_t faceIdxOffset = 0;
 
   for (size_t i = 0; i < attrib.vertices.size(); i++) {
@@ -781,9 +791,9 @@ bool Renderer::LoadEsonMesh(const char* eson_filename) {
     ss << "texture" << i << "_";
     std::string pf = ss.str();
 
-    texture.width = v.Get(pf + "width").Get<int64_t>();
-    texture.height = v.Get(pf + "height").Get<int64_t>();
-    texture.components = v.Get(pf + "components").Get<int64_t>();
+    texture.width = static_cast<int>(v.Get(pf + "width").Get<int64_t>());
+    texture.height = static_cast<int>(v.Get(pf + "height").Get<int64_t>());
+    texture.components = static_cast<int>(v.Get(pf + "components").Get<int64_t>());
 
     size_t n_elem = texture.width * texture.height * texture.components;
     texture.image = new unsigned char[n_elem];
@@ -974,11 +984,11 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             }
 
             config.normalImage[4 * (y * config.width + x) + 0] =
-                0.5 * N[0] + 0.5;
+                0.5f * N[0] + 0.5f;
             config.normalImage[4 * (y * config.width + x) + 1] =
-                0.5 * N[1] + 0.5;
+                0.5f * N[1] + 0.5f;
             config.normalImage[4 * (y * config.width + x) + 2] =
-                0.5 * N[2] + 0.5;
+                0.5f * N[2] + 0.5f;
             config.normalImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             config.depthImage[4 * (y * config.width + x) + 0] =
