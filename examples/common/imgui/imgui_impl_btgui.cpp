@@ -316,13 +316,11 @@ void ImGui_ImplBtGui_NewFrame(int mouse_x, int mouse_y) {
   //    screen, etc.)
   //}
   // else
-  if (1) {
+  {
     io.MousePos = ImVec2((float)mouse_x,
                          (float)mouse_y);  // Mouse position in screen
                                            // coordinates (set to -1,-1 if no
                                            // mouse / on another screen, etc.)
-  } else {
-    io.MousePos = ImVec2(-1, -1);
   }
 
   // @todo
