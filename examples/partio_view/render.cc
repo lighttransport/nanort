@@ -22,7 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-
 #ifdef _MSC_VER
 #pragma warning(disable : 4018)
 #pragma warning(disable : 4244)
@@ -71,7 +70,8 @@ float pcg32_random(pcg32_state_t* rng) {
   rng->state = oldstate * 6364136223846793005ULL + rng->inc;
   unsigned int xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
   unsigned int rot = oldstate >> 59u;
-  unsigned int ret = (xorshifted >> rot) | (xorshifted << ((-static_cast<int>(rot)) & 31));
+  unsigned int ret =
+      (xorshifted >> rot) | (xorshifted << ((-static_cast<int>(rot)) & 31));
 
   return (float)((double)ret / (double)4294967296.0);
 }
@@ -93,7 +93,7 @@ typedef nanort::real3<float> float3;
 // Predefined SAH predicator for sphere.
 class SpherePred {
  public:
-  SpherePred(const float *vertices)
+  SpherePred(const float* vertices)
       : axis_(0), pos_(0.0f), vertices_(vertices) {}
 
   void Set(int axis, float pos) const {
@@ -115,18 +115,17 @@ class SpherePred {
  private:
   mutable int axis_;
   mutable float pos_;
-  const float *vertices_;
+  const float* vertices_;
 };
 
 class SphereGeometry {
  public:
-  SphereGeometry(const float *vertices, const float *radiuss)
+  SphereGeometry(const float* vertices, const float* radiuss)
       : vertices_(vertices), radiuss_(radiuss) {}
 
   /// Compute bounding box for `prim_index`th sphere.
   /// This function is called for each primitive in BVH build.
-  void BoundingBox(float3 *bmin, float3 *bmax,
-                   unsigned int prim_index) const {
+  void BoundingBox(float3* bmin, float3* bmax, unsigned int prim_index) const {
     (*bmin)[0] = vertices_[3 * prim_index + 0] - radiuss_[prim_index];
     (*bmin)[1] = vertices_[3 * prim_index + 1] - radiuss_[prim_index];
     (*bmin)[2] = vertices_[3 * prim_index + 2] - radiuss_[prim_index];
@@ -135,8 +134,8 @@ class SphereGeometry {
     (*bmax)[2] = vertices_[3 * prim_index + 2] + radiuss_[prim_index];
   }
 
-  const float *vertices_;
-  const float *radiuss_;
+  const float* vertices_;
+  const float* radiuss_;
   mutable float3 ray_org_;
   mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
@@ -149,6 +148,8 @@ class SphereIntersection {
   float u;
   float v;
 
+  float3 normal;
+
   // Required member variables.
   float t;
   unsigned int prim_id;
@@ -157,14 +158,14 @@ class SphereIntersection {
 template <class I>
 class SphereIntersector {
  public:
-  SphereIntersector(const float *vertices, const float *radiuss)
+  SphereIntersector(const float* vertices, const float* radiuss)
       : vertices_(vertices), radiuss_(radiuss) {}
 
   /// Do ray interesection stuff for `prim_index` th primitive and return hit
   /// distance `t`,
   /// varycentric coordinate `u` and `v`.
   /// Returns true if there's intersection.
-  bool Intersect(float *t_inout, unsigned int prim_index) const {
+  bool Intersect(float* t_inout, unsigned int prim_index) const {
     if ((prim_index < trace_options_.prim_ids_range[0]) ||
         (prim_index >= trace_options_.prim_ids_range[1])) {
       return false;
@@ -244,8 +245,8 @@ class SphereIntersector {
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
   /// This function is called only once in BVH traversal.
-  void PrepareTraversal(const nanort::Ray<float> &ray,
-                        const nanort::BVHTraceOptions &trace_options) const {
+  void PrepareTraversal(const nanort::Ray<float>& ray,
+                        const nanort::BVHTraceOptions& trace_options) const {
     ray_org_[0] = ray.org[0];
     ray_org_[1] = ray.org[1];
     ray_org_[2] = ray.org[2];
@@ -260,19 +261,19 @@ class SphereIntersector {
   /// Post BVH traversal stuff(e.g. compute intersection point information)
   /// This function is called only once in BVH traversal.
   /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray<float> &ray, bool hit) const {
+  void PostTraversal(const nanort::Ray<float>& ray, bool hit) const {
     if (hit) {
       float3 hitP = ray_org_ + intersection.t * ray_dir_;
-      float3 center =
-          float3(&vertices_[3 * intersection.prim_id]);
+      float3 center = float3(&vertices_[3 * intersection.prim_id]);
       float3 n = vnormalize(hitP - center);
+      intersection.normal = n;
       intersection.u = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
       intersection.v = acos(n[1]) / M_PI;
     }
   }
 
-  const float *vertices_;
-  const float *radiuss_;
+  const float* vertices_;
+  const float* radiuss_;
   mutable float3 ray_org_;
   mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
@@ -282,7 +283,9 @@ class SphereIntersector {
 
 // -----------------------------------------------------
 
-nanort::BVHAccel<float, SphereGeometry, SpherePred, SphereIntersector<SphereIntersection> > gAccel;
+nanort::BVHAccel<float, SphereGeometry, SpherePred,
+                 SphereIntersector<SphereIntersection> >
+    gAccel;
 
 inline float3 Lerp3(float3 v0, float3 v1, float3 v2, float u, float v) {
   return (1.0f - u - v) * v0 + u * v1 + v * v2;
@@ -415,37 +418,39 @@ nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
   return ray;
 }
 
-static std::string GetBaseDir(const std::string &filepath) {
+static std::string GetBaseDir(const std::string& filepath) {
   if (filepath.find_last_of("/\\") != std::string::npos)
     return filepath.substr(0, filepath.find_last_of("/\\"));
   return "";
 }
 
-bool Renderer::LoadPartio(const char* filename, const float scene_scale, const float constant_radius)
-{
-  Partio::ParticlesDataMutable* p=Partio::read(filename);
-  if(!p) {
+bool Renderer::LoadPartio(const char* filename, const float scene_scale,
+                          const float constant_radius) {
+  Partio::ParticlesDataMutable* p = Partio::read(filename);
+  if (!p) {
     std::cerr << "Failed to read particle data : " << filename << std::endl;
     return false;
   }
 
   Partio::ParticleAttribute posAttr;
-  if(!p->attributeInfo("position",posAttr)) {
-    std::cerr << "\"position\" attribute does not exist in the particle data." << std::endl;
+  if (!p->attributeInfo("position", posAttr)) {
+    std::cerr << "\"position\" attribute does not exist in the particle data."
+              << std::endl;
     return false;
   }
 
   bool has_radius = false;
   Partio::ParticleAttribute radiusAttr;
-  if(!p->attributeInfo("radius",radiusAttr)) {
-    std::cout << "\"radius\" attribute not found. Use constant radius." << std::endl;
+  if (!p->attributeInfo("radius", radiusAttr)) {
+    std::cout << "\"radius\" attribute not found. Use constant radius."
+              << std::endl;
   } else {
     has_radius = true;
   }
 
   int num_particles = p->numParticles();
   // TODO(LTE): Ensure position is VECTOR type.
-  const float* pos=p->data<float>(posAttr,0);
+  const float* pos = p->data<float>(posAttr, 0);
   vertices_.clear();
   for (size_t i = 0; i < num_particles * 3; i++) {
     vertices_.push_back(pos[i]);
@@ -453,7 +458,6 @@ bool Renderer::LoadPartio(const char* filename, const float scene_scale, const f
 
   // TODO(LTE): Support loading custom particle attributes.
   if (has_radius) {
-
   } else {
     radiuss_.clear();
 
@@ -480,7 +484,8 @@ bool Renderer::BuildBVH() {
   SphereGeometry sphere_geom(&vertices_.at(0), &radiuss_.at(0));
   SpherePred sphere_pred(&vertices_.at(0));
 
-  bool ret = gAccel.Build(radiuss_.size(), build_options, sphere_geom, sphere_pred);
+  bool ret =
+      gAccel.Build(radiuss_.size(), build_options, sphere_geom, sphere_pred);
   assert(ret);
 
   auto t_end = std::chrono::system_clock::now();
@@ -586,12 +591,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           bool hit = gAccel.Traverse(ray, trace_options, isector);
           if (hit) {
             float3 p;
-            p[0] =
-                ray.org[0] + isector.intersection.t * ray.dir[0];
-            p[1] =
-                ray.org[1] + isector.intersection.t * ray.dir[1];
-            p[2] =
-                ray.org[2] + isector.intersection.t * ray.dir[2];
+            p[0] = ray.org[0] + isector.intersection.t * ray.dir[0];
+            p[1] = ray.org[1] + isector.intersection.t * ray.dir[1];
+            p[2] = ray.org[2] + isector.intersection.t * ray.dir[2];
 
             config.positionImage[4 * (y * config.width + x) + 0] = p.x();
             config.positionImage[4 * (y * config.width + x) + 1] = p.y();
@@ -607,7 +609,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 
             unsigned int prim_id = isector.intersection.prim_id;
 
-            float3 N;
+            float3 N = isector.intersection.normal;
 
             config.normalImage[4 * (y * config.width + x) + 0] =
                 0.5f * N[0] + 0.5f;

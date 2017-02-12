@@ -292,7 +292,7 @@ void mouseButtonCallback(int button, int state, float x, float y) {
 }
 
 void resizeCallback(float width, float height) {
-  //GLfloat h = (GLfloat)height / (GLfloat)width;
+  // GLfloat h = (GLfloat)height / (GLfloat)width;
   GLfloat xmax, znear, zfar;
 
   znear = 1.0f;
@@ -396,9 +396,12 @@ int main(int argc, char** argv) {
 
   // Load particle data.
   {
-    bool ret = gRenderer.LoadPartio(gRenderConfig.partio_filename.c_str(), gRenderConfig.scene_scale, gRenderConfig.constant_radius);
+    bool ret = gRenderer.LoadPartio(gRenderConfig.partio_filename.c_str(),
+                                    gRenderConfig.scene_scale,
+                                    gRenderConfig.constant_radius);
     if (!ret) {
-      fprintf(stderr, "Failed to load partio data [ %s ]\n", gRenderConfig.partio_filename.c_str());
+      fprintf(stderr, "Failed to load partio data [ %s ]\n",
+              gRenderConfig.partio_filename.c_str());
       return -1;
     }
   }
@@ -448,7 +451,7 @@ int main(int argc, char** argv) {
 
   ImGuiIO& io = ImGui::GetIO();
   io.Fonts->AddFontDefault();
-  //io.Fonts->AddFontFromFileTTF("./DroidSans.ttf", 15.0f);
+  // io.Fonts->AddFontFromFileTTF("./DroidSans.ttf", 15.0f);
 
   std::thread renderThread(RenderThread);
 
