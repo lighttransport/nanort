@@ -1,15 +1,21 @@
 set(BUILD_TARGET "gui")
 
-find_package(GLEW REQUIRED)
 find_package(OpenGL REQUIRED)
-find_package(X11 REQUIRED)
 
-include_directories(${GLEW_INCLUDE_DIR})
+if(NOT MSVC)
+find_package(X11 REQUIRED)
+endif()
+
+#include_directories(${GLEW_INCLUDE_DIR})
 include_directories(${OPENGL_INCLUDE_DIR})
 include_directories(${X11_INCLUDE_DIR})
 
 include_directories(${CMAKE_SOURCE_DIR} "${CMAKE_SOURCE_DIR}/examples/common")
 include_directories(${CMAKE_SOURCE_DIR} "${CMAKE_SOURCE_DIR}/examples/common/imgui")
+
+# local Glew
+include_directories(${CMAKE_SOURCE_DIR} "${CMAKE_SOURCE_DIR}/examples/common/ThirdPartyLibs/Glew")
+add_definitions("-DGLEW_STATIC")
 
 set(SOURCES
     main.cc
@@ -33,13 +39,19 @@ else()
     set(SOURCES ${SOURCES} ../common/OpenGLWindow/X11OpenGLWindow.cpp)
 endif()
 
+set(SOURCES ${SOURCES} ../common/ThirdPartyLibs/Glew/glew.c)
+
 add_executable(${BUILD_TARGET} ${SOURCES})
 
 target_link_libraries(
     ${BUILD_TARGET}
-    ${GLEW_LIBRARIES}
     ${OPENGL_LIBRARIES}
+)
+
+if(NOT MSVC)
+target_link_libraries(
     ${X11_LIBRARIES}
 )
+endif()
 
 source_group("Source Files" FILES ${SOURCES})

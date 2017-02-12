@@ -296,6 +296,9 @@ class real3 {
   real3 operator/(const real3 &f2) const {
     return real3(x() / f2.x(), y() / f2.y(), z() / f2.z());
   }
+  real3 operator-() const {
+    return real3(-x(), -y(), -z());
+  }
   T operator[](int i) const { return v[i]; }
   T &operator[](int i) { return v[i]; }
 

@@ -4,6 +4,11 @@ project(nanort)
 # ------------------------------------------------------------------------------
 # C++ settings
 # ------------------------------------------------------------------------------
+if (MSVC)
+  # Increase compiler warning level.
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
+endif()
+
 if (NOT MSVC)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O2 -Wall")
 endif()
