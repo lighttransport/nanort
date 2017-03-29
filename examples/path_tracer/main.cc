@@ -311,7 +311,7 @@ public:
 
     void sampleDirect(const float3& x, float Xi1, float Xi2, float3& dstDir, float& dstDist, float& dstPdf, float3& dstRadiance) const {
         unsigned int num_faces = emissive_faces_.size();
-        unsigned int face = std::min(unsigned int(floor(Xi1 * num_faces)), num_faces - 1);
+        unsigned int face = std::min(static_cast<unsigned int>(floor(Xi1 * num_faces)), num_faces - 1);
         float lightPickPdf = 1.0f / float(num_faces);
 
         //normalize random number
@@ -641,7 +641,7 @@ void progressBar(int tick, int total, int width = 50) {
 
 bool CheckForOccluder(  float3 p1, float3 p2,
                         const Mesh& mesh, 
-                        const nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<>>& accel) {
+                        const nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> >& accel) {
     static const float ray_eps = 0.00001f;
 
     float3 dir = p2 - p1;
