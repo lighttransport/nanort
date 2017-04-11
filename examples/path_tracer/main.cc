@@ -24,7 +24,7 @@
 #endif
 
 const int uMaxBounces = 10;
-//const int SPP = 10000;
+// const int SPP = 10000;
 const int SPP = 100;
 
 #ifdef _WIN32
@@ -206,6 +206,22 @@ float uniformFloat(float min, float max) {
   return min + float(rand()) / RAND_MAX * (max - min);
 }
 
+// Building an Orthonormal Basis, Revisited
+// http://jcgt.org/published/0006/01/01/
+void revisedONB(const float3 &n, float3 &b1, float3 &b2) {
+  if (n.z < 0.0f) {
+    const float a = 1.0f / (1.0f - n.z);
+    const float b = n.x * n.y * a;
+    b1 = float3(1.0f - n.x * n.x * a, -b, n.x);
+    b2 = float3(b, n.y * n.y * a - 1.0f, -n.y);
+  } else {
+    const float a = 1.0f / (1.0f + n.z);
+    const float b = -n.x * n.y * a;
+    b1 = float3(1.0f - n.x * n.x * a, b, -n.x);
+    b2 = float3(b, 1.0f - n.y * n.y * a, -n.y);
+  }
+}
+
 float3 directionCosTheta(float3 normal) {
   float u1 = uniformFloat(0, 1);
   float phi = uniformFloat(0, 2 * M_PI);
@@ -216,15 +232,21 @@ float3 directionCosTheta(float3 normal) {
   float y = r * sinf(phi);
   float z = sqrtf(1.0 - u1);
 
+#if 0  // simpler way
   float3 xDir =
       fabsf(normal.x) < fabsf(normal.y) ? float3(1, 0, 0) : float3(0, 1, 0);
   float3 yDir = normalize(vcross(normal, xDir));
   xDir = vcross(yDir, normal);
+#else  // better way
+  float3 xDir, yDir;
+  revisedONB(normal, xDir, yDir);
+#endif
   return xDir * x + yDir * y + z * normal;
 }
 
-inline float PdfAtoW( const float aPdfA, const float aDist, const float aCosThere) {
-    return aPdfA * (aDist * aDist) / std::abs(aCosThere);
+inline float PdfAtoW(const float aPdfA, const float aDist,
+                     const float aCosThere) {
+  return aPdfA * (aDist * aDist) / std::abs(aCosThere);
 }
 
 typedef struct {
@@ -284,89 +306,89 @@ void calcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
   N.normalize();
 }
 
-
 class EmissiveFace {
-public:
-    EmissiveFace(unsigned int f=0, unsigned int m=0) : face_(f), mtl_(m) {}
-    unsigned int face_;
-    unsigned int mtl_;
+ public:
+  EmissiveFace(unsigned int f = 0, unsigned int m = 0) : face_(f), mtl_(m) {}
+  unsigned int face_;
+  unsigned int mtl_;
 };
 
 class MeshLight {
-public:
-    MeshLight(const Mesh &mesh, const std::vector<tinyobj::material_t>& materials) : mesh_(mesh), materials_(materials) {
-        for (unsigned int face = 0; face < mesh_.num_faces; face++) {
-            unsigned int mtl_id = mesh_.material_ids[face];
-            const tinyobj::material_t &faceMtl = materials_[mtl_id];
-            
-            if (
-                faceMtl.emission[0] > 0.0f ||
-                faceMtl.emission[1] > 0.0f ||
-                faceMtl.emission[2] > 0.0f ) {
-                EmissiveFace ef(face, mtl_id);
-                emissive_faces_.push_back(ef);
-            }
-        }
+ public:
+  MeshLight(const Mesh &mesh, const std::vector<tinyobj::material_t> &materials)
+      : mesh_(mesh), materials_(materials) {
+    for (unsigned int face = 0; face < mesh_.num_faces; face++) {
+      unsigned int mtl_id = mesh_.material_ids[face];
+      const tinyobj::material_t &faceMtl = materials_[mtl_id];
+
+      if (faceMtl.emission[0] > 0.0f || faceMtl.emission[1] > 0.0f ||
+          faceMtl.emission[2] > 0.0f) {
+        EmissiveFace ef(face, mtl_id);
+        emissive_faces_.push_back(ef);
+      }
     }
+  }
 
-    void sampleDirect(const float3& x, float Xi1, float Xi2, float3& dstDir, float& dstDist, float& dstPdf, float3& dstRadiance) const {
-        unsigned int num_faces = emissive_faces_.size();
-        unsigned int face = std::min(static_cast<unsigned int>(floor(Xi1 * num_faces)), num_faces - 1);
-        float lightPickPdf = 1.0f / float(num_faces);
+  void sampleDirect(const float3 &x, float Xi1, float Xi2, float3 &dstDir,
+                    float &dstDist, float &dstPdf, float3 &dstRadiance) const {
+    unsigned int num_faces = emissive_faces_.size();
+    unsigned int face = std::min(
+        static_cast<unsigned int>(floor(Xi1 * num_faces)), num_faces - 1);
+    float lightPickPdf = 1.0f / float(num_faces);
 
-        //normalize random number
-        Xi1 = Xi1 * num_faces - face;
+    // normalize random number
+    Xi1 = Xi1 * num_faces - face;
 
-        unsigned int fid = emissive_faces_[face].face_;
-        unsigned int mtlid = emissive_faces_[face].mtl_;
+    unsigned int fid = emissive_faces_[face].face_;
+    unsigned int mtlid = emissive_faces_[face].mtl_;
 
-        unsigned int f0 = mesh_.faces[3 * fid + 0];
-        unsigned int f1 = mesh_.faces[3 * fid + 1];
-        unsigned int f2 = mesh_.faces[3 * fid + 2];
+    unsigned int f0 = mesh_.faces[3 * fid + 0];
+    unsigned int f1 = mesh_.faces[3 * fid + 1];
+    unsigned int f2 = mesh_.faces[3 * fid + 2];
 
-        float3 v0, v1, v2;
+    float3 v0, v1, v2;
 
-        v0[0] = mesh_.vertices[3 * f0 + 0];
-        v0[1] = mesh_.vertices[3 * f0 + 1];
-        v0[2] = mesh_.vertices[3 * f0 + 2];
+    v0[0] = mesh_.vertices[3 * f0 + 0];
+    v0[1] = mesh_.vertices[3 * f0 + 1];
+    v0[2] = mesh_.vertices[3 * f0 + 2];
 
-        v1[0] = mesh_.vertices[3 * f1 + 0];
-        v1[1] = mesh_.vertices[3 * f1 + 1];
-        v1[2] = mesh_.vertices[3 * f1 + 2];
-        
-        v2[0] = mesh_.vertices[3 * f2 + 0];
-        v2[1] = mesh_.vertices[3 * f2 + 1];
-        v2[2] = mesh_.vertices[3 * f2 + 2];
+    v1[0] = mesh_.vertices[3 * f1 + 0];
+    v1[1] = mesh_.vertices[3 * f1 + 1];
+    v1[2] = mesh_.vertices[3 * f1 + 2];
 
-        float Xi1_ = std::sqrt(Xi1);
-        float c0 = 1.0f - Xi1_;
-        float c1 = Xi1_ * (1.0 - Xi2);
-        float c2 = Xi1_ * Xi2;
+    v2[0] = mesh_.vertices[3 * f2 + 0];
+    v2[1] = mesh_.vertices[3 * f2 + 1];
+    v2[2] = mesh_.vertices[3 * f2 + 2];
 
-        float3 tmp = vcross(v1 - v0, v2 - v0);
-        float3 norm = normalize(tmp);
-        float area = tmp.length() / 2.0f;
+    float Xi1_ = std::sqrt(Xi1);
+    float c0 = 1.0f - Xi1_;
+    float c1 = Xi1_ * (1.0 - Xi2);
+    float c2 = Xi1_ * Xi2;
 
-        dstPdf = 0.0;
-        float3 lp = c0 * v0 + c1 * v1 + c2 * v2;
-        float areaPdf = lightPickPdf * (1.0f / area);
-        dstDir = lp - x;
-        dstDist = dstDir.length();
+    float3 tmp = vcross(v1 - v0, v2 - v0);
+    float3 norm = normalize(tmp);
+    float area = tmp.length() / 2.0f;
 
-        float3 ll = materials_[mtlid].emission;
-        if (dstDist > 0.000001f) {
-            dstDir.normalize();
-            float cosAtLight = std::max(vdot(-dstDir, norm), 0.0f);
-            dstRadiance = ll * cosAtLight;  //light has cosine edf
+    dstPdf = 0.0;
+    float3 lp = c0 * v0 + c1 * v1 + c2 * v2;
+    float areaPdf = lightPickPdf * (1.0f / area);
+    dstDir = lp - x;
+    dstDist = dstDir.length();
 
-            //convert pdf to solid angle measure
-            dstPdf = PdfAtoW(areaPdf, dstDist, cosAtLight);
-        }
+    float3 ll = materials_[mtlid].emission;
+    if (dstDist > 0.000001f) {
+      dstDir.normalize();
+      float cosAtLight = std::max(vdot(-dstDir, norm), 0.0f);
+      dstRadiance = ll * cosAtLight;  // light has cosine edf
+
+      // convert pdf to solid angle measure
+      dstPdf = PdfAtoW(areaPdf, dstDist, cosAtLight);
     }
+  }
 
-    std::vector<EmissiveFace> emissive_faces_;
-    const Mesh& mesh_;
-    const std::vector<tinyobj::material_t>& materials_;
+  std::vector<EmissiveFace> emissive_faces_;
+  const Mesh &mesh_;
+  const std::vector<tinyobj::material_t> &materials_;
 };
 
 // Save in RAW headerless format, for use when exr tools are not available in
@@ -413,7 +435,7 @@ void SaveImagePNG(const char *filename, const float *rgb, int width,
 }
 
 void SaveImage(const char *filename, const float *rgb, int width, int height) {
-  int ret = SaveEXR(rgb, width, height, /* RGB */3, filename);
+  int ret = SaveEXR(rgb, width, height, /* RGB */ 3, filename);
   if (ret != TINYEXR_SUCCESS) {
     fprintf(stderr, "EXR save error: %d\n", ret);
   } else {
@@ -639,33 +661,35 @@ void progressBar(int tick, int total, int width = 50) {
   std::fflush(stdout);
 }
 
-bool CheckForOccluder(  float3 p1, float3 p2,
-                        const Mesh& mesh, 
-                        const nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> >& accel) {
-    static const float ray_eps = 0.00001f;
+bool CheckForOccluder(
+    float3 p1, float3 p2, const Mesh &mesh,
+    const nanort::BVHAccel<float, nanort::TriangleMesh<float>,
+                           nanort::TriangleSAHPred<float>,
+                           nanort::TriangleIntersector<> > &accel) {
+  static const float ray_eps = 0.00001f;
 
-    float3 dir = p2 - p1;
-    float dist = dir.length();
-    dir.normalize();
+  float3 dir = p2 - p1;
+  float dist = dir.length();
+  dir.normalize();
 
+  nanort::Ray<float> shadow_ray;
+  shadow_ray.min_t = ray_eps;
+  shadow_ray.max_t = dist - ray_eps;
+  shadow_ray.dir[0] = dir[0];
+  shadow_ray.dir[1] = dir[1];
+  shadow_ray.dir[2] = dir[2];
+  shadow_ray.org[0] = p1[0];
+  shadow_ray.org[1] = p1[1];
+  shadow_ray.org[2] = p1[2];
 
-    nanort::Ray<float> shadow_ray;
-    shadow_ray.min_t = ray_eps;
-    shadow_ray.max_t = dist - ray_eps;
-    shadow_ray.dir[0] = dir[0];
-    shadow_ray.dir[1] = dir[1];
-    shadow_ray.dir[2] = dir[2];
-    shadow_ray.org[0] = p1[0];
-    shadow_ray.org[1] = p1[1];
-    shadow_ray.org[2] = p1[2];
+  nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces,
+                                                     sizeof(float) * 3);
+  nanort::BVHTraceOptions trace_options;
+  if (!accel.Traverse(shadow_ray, trace_options, triangle_intersector)) {
+    return false;
+  }
 
-    nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces, sizeof(float) * 3);
-    nanort::BVHTraceOptions trace_options;
-        if (!accel.Traverse(shadow_ray, trace_options, triangle_intersector)) {
-        return false;
-    }
-
-    return true;
+  return true;
 }
 
 int main(int argc, char **argv) {
@@ -774,7 +798,8 @@ int main(int argc, char **argv) {
 
         int b;
 
-        bool do_emmition = true;    //just skit emmition if light sampling was done on previous event (No MIS)
+        bool do_emmition = true;  // just skit emmition if light sampling was
+                                  // done on previous event (No MIS)
         for (b = 0; b < uMaxBounces; ++b) {
           // Russian Roulette
           float rr_fac = 1.0f;
@@ -890,14 +915,16 @@ int main(int argc, char **argv) {
             float3 brdfEval = (1.0f / M_PI) * diffuseColor;
             float3 dl = float3(0.0, 0.0, 0.0), ldir, ll;
             float lpdf, ldist;
-            lights.sampleDirect(rayOrg, uniformFloat(0, 1), uniformFloat(0, 1), ldir, ldist, lpdf, ll);
+            lights.sampleDirect(rayOrg, uniformFloat(0, 1), uniformFloat(0, 1),
+                                ldir, ldist, lpdf, ll);
 
             if (lpdf > 0.0f) {
-                float cosTheta = std::abs(vdot(ldir, norm));
-                float3 directLight = (brdfEval * ll * cosTheta) / lpdf;
-                bool visible = !CheckForOccluder(rayOrg, rayOrg + ldir*ldist, mesh, accel);
+              float cosTheta = std::abs(vdot(ldir, norm));
+              float3 directLight = (brdfEval * ll * cosTheta) / lpdf;
+              bool visible =
+                  !CheckForOccluder(rayOrg, rayOrg + ldir * ldist, mesh, accel);
 
-                color += directLight * visible * weight;
+              color += directLight * visible * weight;
             }
 
             // Sample cosine weighted hemisphere
@@ -916,7 +943,8 @@ int main(int argc, char **argv) {
             // Weight light by cosine factor (surface emits most light in normal
             // direction)
             if (do_emmition) {
-              color += std::max(vdot(originalNorm, -rayDir), 0.0f) * emissiveColor * weight;
+              color += std::max(vdot(originalNorm, -rayDir), 0.0f) *
+                       emissiveColor * weight;
             }
             break;
           }
