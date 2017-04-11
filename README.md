@@ -188,6 +188,7 @@ are required attributes.
 See `examples` directory for example renderer using `NanoRT`.
 
 * [x] [examples/path_tracer](examples/path_tracer) Path tracer example by https://github.com/daseyb 
+  * [x] Better ortho basis generation: Building an Orthonormal Basis, Revisited http://jcgt.org/published/0006/01/01/
 * [x] [examples/bidir_path_tracer](examples/bidir_path_tracer) Bi-directional path tracer example by https://github.com/tatsy
 * [x] [examples/gui](examples/gui) Simple renderer with GUI(using ImGui)
 * [x] [examples/vrcamera](examples/vrcamera) Stereo VR Camera 
