@@ -1,2 +1,2 @@
 Example use of custom geometry.
-Cylinder(line + width) renderer.
+Sphere(position + radius) renderer.
