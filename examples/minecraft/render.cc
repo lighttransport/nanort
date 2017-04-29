@@ -427,6 +427,10 @@ bool LoadMIData(Cubes* cubes, const char* filename, float scale) {
     return false;
   }
 
+  double bmin[3], bmax[3];
+  bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<double>::max();
+  bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<double>::max();
+
   cubes->vertices.clear();
   cubes->color_ids.clear();
   cubes->radiuss.clear();
@@ -464,11 +468,21 @@ bool LoadMIData(Cubes* cubes, const char* filename, float scale) {
 								{
 									++numVoxels;
 
-                  cubes->vertices.push_back(sPos.x);
-                  cubes->vertices.push_back(sPos.y);
-                  cubes->vertices.push_back(sPos.z);
+                  cubes->vertices.push_back(sectionOrigin.x + sPos.x);
+                  cubes->vertices.push_back(sectionOrigin.y + sPos.y);
+                  cubes->vertices.push_back(sectionOrigin.z + sPos.z);
                   cubes->color_ids.push_back(voxel); // voxel value = color index.
-                  cubes->radiuss.push_back(0.5f); // All voxels has uniform voxel size in Minecraft.
+
+                  // Radius will be set after centering/scaling  
+                  //cubes->radiuss.push_back(0.5f);
+
+                  bmin[0] = std::min(bmin[0], double(sectionOrigin.x + sPos.x));
+                  bmin[1] = std::min(bmin[1], double(sectionOrigin.y + sPos.y));
+                  bmin[2] = std::min(bmin[2], double(sectionOrigin.z + sPos.z));
+
+                  bmax[0] = std::max(bmax[0], double(sectionOrigin.x + sPos.x));
+                  bmax[1] = std::max(bmax[1], double(sectionOrigin.x + sPos.x));
+                  bmax[2] = std::max(bmax[2], double(sectionOrigin.x + sPos.x));
                   
 								}
 							}
@@ -487,31 +501,6 @@ bool LoadMIData(Cubes* cubes, const char* filename, float scale) {
 
 	fclose( fp );
  
-  float bmin[3], bmax[3];
-  bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<float>::max();
-  bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<float>::max();
-
-#if 0
-  while (reader.ReadNextPoint())
-  {
-        liblas::Point const& p = reader.GetPoint();
-        liblas::Color const& c = p.GetColor();
-
-        // Zup -> Y up.
-        cubes->vertices.push_back(p.GetX());
-        cubes->vertices.push_back(-p.GetZ());
-        cubes->vertices.push_back(p.GetY());
-
-        bmin[0] = std::min(bmin[0], static_cast<float>(p.GetX()));
-        bmin[1] = std::min(bmin[1], static_cast<float>(-p.GetZ()));
-        bmin[2] = std::min(bmin[2], static_cast<float>(p.GetY()));
-        bmax[0] = std::max(bmax[0], static_cast<float>(p.GetX()));
-        bmax[1] = std::max(bmax[1], static_cast<float>(-p.GetZ()));
-        bmax[2] = std::max(bmax[2], static_cast<float>(p.GetY()));
-
-        // @todo { colors }
-  }
-
   printf("bmin = %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("bmax = %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
 
@@ -533,7 +522,7 @@ bool LoadMIData(Cubes* cubes, const char* filename, float scale) {
     invsize = bsize[2];
   }
 
-  invsize = 1.0f / invsize;
+  invsize = 16.0f / invsize; // FIXME(syoyo): Choose better invscale.
   printf("invsize = %f\n", invsize);
 
   // Centerize & scaling 
@@ -545,7 +534,6 @@ bool LoadMIData(Cubes* cubes, const char* filename, float scale) {
     // Set approximate particle radius.
     cubes->radiuss.push_back(0.5f * invsize);
   }
-#endif
 
   return true;
 }
