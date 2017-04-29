@@ -268,7 +268,7 @@ void mouseMoveCallback(float x, float y) {
       gRenderConfig.eye[2] += dolly_scale * (gMousePosY - y);
       gRenderConfig.look_at[2] += dolly_scale * (gMousePosY - y);
     } else if (gShiftPressed) {
-      const float trans_scale = 0.02;
+      const float trans_scale = 0.01;
       gRenderConfig.eye[0] += trans_scale * (gMousePosX - x);
       gRenderConfig.eye[1] -= trans_scale * (gMousePosY - y);
       gRenderConfig.look_at[0] += trans_scale * (gMousePosX - x);
