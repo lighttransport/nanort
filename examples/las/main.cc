@@ -524,7 +524,7 @@ int main(int argc, char** argv) {
       ImGui::InputFloat("show pos scale", &gUIParam.position_scale);
 
       ImGui::InputFloat2("show depth range", gUIParam.depth_range);
-      ImGui::Checkbox("show depth pesudo color",
+      ImGui::Checkbox("show depth pseudo color",
                       &gUIParam.depth_show_pseudo_color);
     }
 
