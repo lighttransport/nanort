@@ -74,7 +74,7 @@ const float kPI = 3.141592f;
 
 typedef struct {
   std::vector<float> vertices;
-  std::vector<float> colors;
+  std::vector<uint8_t> color_ids;    // color index
   std::vector<float> radiuss;
 } Cubes;
 
@@ -426,28 +426,67 @@ bool LoadMIData(Cubes* cubes, const char* filename, float scale) {
     printf("Failed to open file: %s\n", filename);
     return false;
   }
- 
-  enkiRegionFile regionFile = enkiRegionFileLoad( fp );
-  for( int i = 0; i < ENKI_MI_REGION_CHUNKS_NUMBER; i++ )
-  {
-      enkiNBTDataStream stream;
-      enkiInitNBTDataStreamForChunk( regionFile,  i, &stream );
-      if( stream.dataLength )
-      {
-          enkiChunkBlockData aChunk = enkiNBTReadChunk( &stream );
-          enkiMICoordinate chunkOriginPos = enkiGetChunkOrigin( &aChunk ); // y always 0
-          printf( "Chunk at xyz{ %d, %d, %d }  Number of sections: %d \n",
-              chunkOriginPos.x, chunkOriginPos.y, chunkOriginPos.z, aChunk.countOfSections );
-      }
-      enkiNBTFreeAllocations( &stream );
-  }
-  enkiRegionFileFreeAllocations( &regionFile );
-  fclose( fp );
 
   cubes->vertices.clear();
-  cubes->colors.clear();
+  cubes->color_ids.clear();
   cubes->radiuss.clear();
 
+	enkiRegionFile regionFile = enkiRegionFileLoad( fp );
+
+	for( int i = 0; i < ENKI_MI_REGION_CHUNKS_NUMBER; i++ )
+	{
+		enkiNBTDataStream stream;
+		enkiInitNBTDataStreamForChunk( regionFile,  i, &stream );
+		if( stream.dataLength )
+		{
+			enkiChunkBlockData aChunk = enkiNBTReadChunk( &stream );
+			enkiMICoordinate chunkOriginPos = enkiGetChunkOrigin( &aChunk ); // y always 0
+			printf( "Chunk at xyz{ %d, %d, %d }  Number of sections: %d \n", chunkOriginPos.x, chunkOriginPos.y, chunkOriginPos.z, aChunk.countOfSections );
+
+			// iterate through chunk and count non 0 voxels as a demo
+			int64_t numVoxels = 0;
+			for( int section = 0; section < ENKI_MI_NUM_SECTIONS_PER_CHUNK; ++section )
+			{
+				if( aChunk.sections[ section ] )
+				{
+					enkiMICoordinate sectionOrigin = enkiGetChunkSectionOrigin( &aChunk, section );
+			        printf( "    Non empty section at xyz{ %d, %d, %d } \n", sectionOrigin.x, sectionOrigin.y, sectionOrigin.z );
+					enkiMICoordinate sPos;
+					// note order x then z then y iteration for cache efficiency
+					for( sPos.y = 0; sPos.y < ENKI_MI_NUM_SECTIONS_PER_CHUNK; ++sPos.y )
+					{
+						for( sPos.z = 0; sPos.z < ENKI_MI_NUM_SECTIONS_PER_CHUNK; ++sPos.z )
+						{
+							for( sPos.x = 0; sPos.x < ENKI_MI_NUM_SECTIONS_PER_CHUNK; ++sPos.x )
+							{
+								uint8_t voxel = enkiGetChunkSectionVoxel( &aChunk, section, sPos  );
+								if( voxel )
+								{
+									++numVoxels;
+
+                  cubes->vertices.push_back(sPos.x);
+                  cubes->vertices.push_back(sPos.y);
+                  cubes->vertices.push_back(sPos.z);
+                  cubes->color_ids.push_back(voxel); // voxel value = color index.
+                  cubes->radiuss.push_back(0.5f); // All voxels has uniform voxel size in Minecraft.
+                  
+								}
+							}
+						}
+					}
+				}
+			}
+			printf( "   Chunk has %g non zero voxels\n", (float)numVoxels );
+
+			enkiNBTRewind( &stream );
+		}
+		enkiNBTFreeAllocations( &stream );
+	}
+	
+	enkiRegionFileFreeAllocations( &regionFile );
+
+	fclose( fp );
+ 
   float bmin[3], bmax[3];
   bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<float>::max();
   bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<float>::max();
