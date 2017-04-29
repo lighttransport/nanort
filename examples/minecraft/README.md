@@ -28,7 +28,7 @@ Edit `config.json`, then
 
 ## Licenses
 
-* enkiMI : Minecraft importer. See `License.enkimi.txt` for details
+* enkiMI : Minecraft importer. https://github.com/dougbinks/enkiMI . See `License.enkimi.txt` for details
 * miniz : zlib license.
 * r.1.0.mca : Sample MI model. see `r.1.0.mca.readme.txt` for details.
 
