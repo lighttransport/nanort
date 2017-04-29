@@ -1,6 +1,4 @@
-# Simple raytracing Minecfract model using enkiMI.
-
-![](../../images/las.png)
+# Simple raytracing Minecfract model using enkiMI(W.I.P.).
 
 ## Coordinates
 
