@@ -24,11 +24,11 @@ THE SOFTWARE.
 
 #include "render.h"
 
+#include <algorithm>
 #include <chrono>  // C++11
 #include <sstream>
 #include <thread>  // C++11
 #include <vector>
-#include <algorithm>
 
 #include <iostream>
 
@@ -74,7 +74,7 @@ const float kPI = 3.141592f;
 
 typedef struct {
   std::vector<float> vertices;
-  std::vector<uint8_t> color_ids;    // color index
+  std::vector<uint8_t> color_ids;  // color index
   std::vector<float> widths;
 } Cubes;
 
@@ -83,8 +83,7 @@ typedef nanort::real3<float> float3;
 // Predefined SAH predicator for cube.
 class CubePred {
  public:
-  CubePred(const float *vertices)
-      : axis_(0), pos_(0.0f), vertices_(vertices) {}
+  CubePred(const float* vertices) : axis_(0), pos_(0.0f), vertices_(vertices) {}
 
   void Set(int axis, float pos) const {
     axis_ = axis;
@@ -105,17 +104,17 @@ class CubePred {
  private:
   mutable int axis_;
   mutable float pos_;
-  const float *vertices_;
+  const float* vertices_;
 };
 
 class CubeGeometry {
  public:
-  CubeGeometry(const float *vertices, const float *widths)
+  CubeGeometry(const float* vertices, const float* widths)
       : vertices_(vertices), widths_(widths) {}
 
   /// Compute bounding box for `prim_index`th cube.
   /// This function is called for each primitive in BVH build.
-  void BoundingBox(float3 *bmin, float3 *bmax, unsigned int prim_index) const {
+  void BoundingBox(float3* bmin, float3* bmax, unsigned int prim_index) const {
     (*bmin)[0] = vertices_[3 * prim_index + 0] - widths_[prim_index];
     (*bmin)[1] = vertices_[3 * prim_index + 1] - widths_[prim_index];
     (*bmin)[2] = vertices_[3 * prim_index + 2] - widths_[prim_index];
@@ -124,37 +123,34 @@ class CubeGeometry {
     (*bmax)[2] = vertices_[3 * prim_index + 2] + widths_[prim_index];
   }
 
-  const float *vertices_;
-  const float *widths_;
+  const float* vertices_;
+  const float* widths_;
   mutable float3 ray_org_;
   mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 };
 
-class CubeIntersection
-{
+class CubeIntersection {
  public:
   CubeIntersection() {}
 
   float normal[3];
 
   // Required member variables.
-	float t;
-	unsigned int prim_id;
+  float t;
+  unsigned int prim_id;
 };
 
-template<class I>
-class CubeIntersector
-{
+template <class I>
+class CubeIntersector {
  public:
-  CubeIntersector(const float *vertices, const float *widths)
+  CubeIntersector(const float* vertices, const float* widths)
       : vertices_(vertices), widths_(widths) {}
-
 
   /// Do ray interesection stuff for `prim_index` th primitive and return hit
   /// distance `t`,
   /// Returns true if there's intersection.
-  bool Intersect(float *t_inout, unsigned int prim_index) const {
+  bool Intersect(float* t_inout, unsigned int prim_index) const {
     if ((prim_index < trace_options_.prim_ids_range[0]) ||
         (prim_index >= trace_options_.prim_ids_range[1])) {
       return false;
@@ -164,7 +160,7 @@ class CubeIntersector
     const float width = widths_[prim_index];
 
     const float3 bmin = center - float3(width);
-    const float3 bmax = center + float3( width);
+    const float3 bmax = center + float3(width);
 
     float tmin, tmax;
 
@@ -205,21 +201,19 @@ class CubeIntersector
     return true;
   }
 
-	/// Returns the nearest hit distance.
-	float GetT() const {
-		return intersection.t;
-	}
+  /// Returns the nearest hit distance.
+  float GetT() const { return intersection.t; }
 
-	/// Update is called when a nearest hit is found.
-	void Update(float t, unsigned int prim_idx) const {
+  /// Update is called when a nearest hit is found.
+  void Update(float t, unsigned int prim_idx) const {
     intersection.t = t;
     intersection.prim_id = prim_idx;
-	}
+  }
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
   /// This function is called only once in BVH traversal.
-  void PrepareTraversal(const nanort::Ray<float> &ray,
-                        const nanort::BVHTraceOptions &trace_options) const {
+  void PrepareTraversal(const nanort::Ray<float>& ray,
+                        const nanort::BVHTraceOptions& trace_options) const {
     ray_org_[0] = ray.org[0];
     ray_org_[1] = ray.org[1];
     ray_org_[2] = ray.org[2];
@@ -240,11 +234,10 @@ class CubeIntersector
     trace_options_ = trace_options;
   }
 
-
   /// Post BVH traversal stuff(e.g. compute intersection point information)
   /// This function is called only once in BVH traversal.
   /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray<float> &ray, bool hit) const {
+  void PostTraversal(const nanort::Ray<float>& ray, bool hit) const {
     if (hit) {
       // compute normal. there should be valid intersection point.
       const float3 center(&vertices_[3 * intersection.prim_id]);
@@ -290,8 +283,8 @@ class CubeIntersector
     }
   }
 
-  const float *vertices_;
-  const float *widths_;
+  const float* vertices_;
+  const float* widths_;
   mutable float3 ray_org_;
   mutable float3 ray_dir_;
   mutable float3 ray_inv_dir_;
@@ -301,19 +294,17 @@ class CubeIntersector
   mutable I intersection;
 };
 
-// @fixme { Do not defined as global variable } 
-Cubes gCubes; 
+// @fixme { Do not defined as global variable }
+Cubes gCubes;
 nanort::BVHAccel<float, CubeGeometry, CubePred,
                  CubeIntersector<CubeIntersection> >
     gAccel;
 
-inline float3 Lerp3(float3 v0, float3 v1,
-                            float3 v2, float u, float v) {
+inline float3 Lerp3(float3 v0, float3 v1, float3 v2, float u, float v) {
   return (1.0f - u - v) * v0 + u * v1 + v * v2;
 }
 
-inline void CalcNormal(float3& N, float3 v0, float3 v1,
-                       float3 v2) {
+inline void CalcNormal(float3& N, float3 v0, float3 v1, float3 v2) {
   float3 v10 = v1 - v0;
   float3 v20 = v2 - v0;
 
@@ -321,10 +312,9 @@ inline void CalcNormal(float3& N, float3 v0, float3 v1,
   N = vnormalize(N);
 }
 
-void BuildCameraFrame(float3* origin, float3* corner,
-                      float3* u, float3* v, float quat[4],
-                      float eye[3], float lookat[3], float up[3], float fov,
-                      int width, int height) {
+void BuildCameraFrame(float3* origin, float3* corner, float3* u, float3* v,
+                      float quat[4], float eye[3], float lookat[3], float up[3],
+                      float fov, int width, int height) {
   float e[4][4];
 
   Matrix::LookAt(e, eye, lookat, up);
@@ -420,9 +410,9 @@ void BuildCameraFrame(float3* origin, float3* corner,
   }
 }
 
-nanort::Ray<float> GenerateRay(const float3& origin,
-                        const float3& corner, const float3& du,
-                        const float3& dv, float u, float v) {
+nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
+                               const float3& du, const float3& dv, float u,
+                               float v) {
   float3 dir;
 
   dir[0] = (corner[0] + u * du[0] + v * dv[0]) - origin[0];
@@ -462,43 +452,45 @@ bool LoadMIData(Cubes* cubes, const char* filename, float scale) {
   cubes->color_ids.clear();
   cubes->widths.clear();
 
-	enkiRegionFile regionFile = enkiRegionFileLoad( fp );
+  enkiRegionFile regionFile = enkiRegionFileLoad(fp);
 
-	for( int i = 0; i < ENKI_MI_REGION_CHUNKS_NUMBER; i++ )
-	{
-		enkiNBTDataStream stream;
-		enkiInitNBTDataStreamForChunk( regionFile,  i, &stream );
-		if( stream.dataLength )
-		{
-			enkiChunkBlockData aChunk = enkiNBTReadChunk( &stream );
-			enkiMICoordinate chunkOriginPos = enkiGetChunkOrigin( &aChunk ); // y always 0
-			printf( "Chunk at xyz{ %d, %d, %d }  Number of sections: %d \n", chunkOriginPos.x, chunkOriginPos.y, chunkOriginPos.z, aChunk.countOfSections );
+  for (int i = 0; i < ENKI_MI_REGION_CHUNKS_NUMBER; i++) {
+    enkiNBTDataStream stream;
+    enkiInitNBTDataStreamForChunk(regionFile, i, &stream);
+    if (stream.dataLength) {
+      enkiChunkBlockData aChunk = enkiNBTReadChunk(&stream);
+      enkiMICoordinate chunkOriginPos =
+          enkiGetChunkOrigin(&aChunk);  // y always 0
+      printf("Chunk at xyz{ %d, %d, %d }  Number of sections: %d \n",
+             chunkOriginPos.x, chunkOriginPos.y, chunkOriginPos.z,
+             aChunk.countOfSections);
 
-			// iterate through chunk and count non 0 voxels as a demo
-			int64_t numVoxels = 0;
-			for( int section = 0; section < ENKI_MI_NUM_SECTIONS_PER_CHUNK; ++section )
-			{
-				if( aChunk.sections[ section ] )
-				{
-					enkiMICoordinate sectionOrigin = enkiGetChunkSectionOrigin( &aChunk, section );
-			        printf( "    Non empty section at xyz{ %d, %d, %d } \n", sectionOrigin.x, sectionOrigin.y, sectionOrigin.z );
-					enkiMICoordinate sPos;
-					// note order x then z then y iteration for cache efficiency
-					for( sPos.y = 0; sPos.y < ENKI_MI_NUM_SECTIONS_PER_CHUNK; ++sPos.y )
-					{
-						for( sPos.z = 0; sPos.z < ENKI_MI_NUM_SECTIONS_PER_CHUNK; ++sPos.z )
-						{
-							for( sPos.x = 0; sPos.x < ENKI_MI_NUM_SECTIONS_PER_CHUNK; ++sPos.x )
-							{
-								uint8_t voxel = enkiGetChunkSectionVoxel( &aChunk, section, sPos  );
-								if( voxel )
-								{
-									++numVoxels;
+      // iterate through chunk and count non 0 voxels as a demo
+      int64_t numVoxels = 0;
+      for (int section = 0; section < ENKI_MI_NUM_SECTIONS_PER_CHUNK;
+           ++section) {
+        if (aChunk.sections[section]) {
+          enkiMICoordinate sectionOrigin =
+              enkiGetChunkSectionOrigin(&aChunk, section);
+          printf("    Non empty section at xyz{ %d, %d, %d } \n",
+                 sectionOrigin.x, sectionOrigin.y, sectionOrigin.z);
+          enkiMICoordinate sPos;
+          // note order x then z then y iteration for cache efficiency
+          for (sPos.y = 0; sPos.y < ENKI_MI_NUM_SECTIONS_PER_CHUNK; ++sPos.y) {
+            for (sPos.z = 0; sPos.z < ENKI_MI_NUM_SECTIONS_PER_CHUNK;
+                 ++sPos.z) {
+              for (sPos.x = 0; sPos.x < ENKI_MI_NUM_SECTIONS_PER_CHUNK;
+                   ++sPos.x) {
+                uint8_t voxel =
+                    enkiGetChunkSectionVoxel(&aChunk, section, sPos);
+                if (voxel) {
+                  ++numVoxels;
 
                   cubes->vertices.push_back(sectionOrigin.x + sPos.x);
                   cubes->vertices.push_back(sectionOrigin.y + sPos.y);
                   cubes->vertices.push_back(sectionOrigin.z + sPos.z);
-                  cubes->color_ids.push_back(voxel); // voxel value = color index.
+                  cubes->color_ids.push_back(
+                      voxel);  // voxel value = color index.
 
                   bmin[0] = std::min(bmin[0], double(sectionOrigin.x + sPos.x));
                   bmin[1] = std::min(bmin[1], double(sectionOrigin.y + sPos.y));
@@ -507,24 +499,23 @@ bool LoadMIData(Cubes* cubes, const char* filename, float scale) {
                   bmax[0] = std::max(bmax[0], double(sectionOrigin.x + sPos.x));
                   bmax[1] = std::max(bmax[1], double(sectionOrigin.x + sPos.x));
                   bmax[2] = std::max(bmax[2], double(sectionOrigin.x + sPos.x));
-                  
-								}
-							}
-						}
-					}
-				}
-			}
-			printf( "   Chunk has %g non zero voxels\n", (float)numVoxels );
+                }
+              }
+            }
+          }
+        }
+      }
+      printf("   Chunk has %g non zero voxels\n", (float)numVoxels);
 
-			enkiNBTRewind( &stream );
-		}
-		enkiNBTFreeAllocations( &stream );
-	}
-	
-	enkiRegionFileFreeAllocations( &regionFile );
+      enkiNBTRewind(&stream);
+    }
+    enkiNBTFreeAllocations(&stream);
+  }
 
-	fclose( fp );
- 
+  enkiRegionFileFreeAllocations(&regionFile);
+
+  fclose(fp);
+
   printf("bmin = %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("bmax = %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
 
@@ -546,14 +537,17 @@ bool LoadMIData(Cubes* cubes, const char* filename, float scale) {
     invsize = bsize[2];
   }
 
-  invsize = 16.0f / invsize; // FIXME(syoyo): Choose better invscale.
+  invsize = 16.0f / invsize;  // FIXME(syoyo): Choose better invscale.
   printf("invsize = %f\n", invsize);
 
-  // Centerize & scaling 
+  // Centerize & scaling
   for (size_t i = 0; i < cubes->vertices.size() / 3; i++) {
-    cubes->vertices[3 * i + 0] = (cubes->vertices[3 * i + 0] - bcenter[0]) * invsize;
-    cubes->vertices[3 * i + 1] = (cubes->vertices[3 * i + 1] - bcenter[1]) * invsize;
-    cubes->vertices[3 * i + 2] = (cubes->vertices[3 * i + 2] - bcenter[2]) * invsize;
+    cubes->vertices[3 * i + 0] =
+        (cubes->vertices[3 * i + 0] - bcenter[0]) * invsize;
+    cubes->vertices[3 * i + 1] =
+        (cubes->vertices[3 * i + 1] - bcenter[1]) * invsize;
+    cubes->vertices[3 * i + 2] =
+        (cubes->vertices[3 * i + 2] - bcenter[2]) * invsize;
 
     // Set approximate cube width.
     cubes->widths.push_back(0.5f * invsize);
@@ -585,8 +579,8 @@ bool Renderer::BuildBVH() {
 
   CubeGeometry cube_geom(&gCubes.vertices.at(0), &gCubes.widths.at(0));
   CubePred cube_pred(&gCubes.vertices.at(0));
-  bool ret = gAccel.Build(gCubes.widths.size(), build_options, cube_geom,
-                          cube_pred);
+  bool ret =
+      gAccel.Build(gCubes.widths.size(), build_options, cube_geom, cube_pred);
   assert(ret);
 
   auto t_end = std::chrono::system_clock::now();
@@ -634,7 +628,9 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
 
   uint32_t num_threads = std::max(1U, std::thread::hardware_concurrency());
 
-  uint32_t* color_palette = enkiGetMineCraftPalette(); //returns a 256 array of uint32_t's in uint8_t rgba order.
+  uint32_t* color_palette = enkiGetMineCraftPalette();  // returns a 256 array
+                                                        // of uint32_t's in
+                                                        // uint8_t rgba order.
 
   auto startT = std::chrono::system_clock::now();
 
@@ -680,17 +676,15 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
           ray.max_t = kFar;
 
           CubeIntersector<CubeIntersection> cube_intersector(
-              reinterpret_cast<const float*>(gCubes.vertices.data()), gCubes.widths.data());
+              reinterpret_cast<const float*>(gCubes.vertices.data()),
+              gCubes.widths.data());
           nanort::BVHTraceOptions trace_options;
           bool hit = gAccel.Traverse(ray, trace_options, cube_intersector);
           if (hit) {
             float3 p;
-            p[0] =
-                ray.org[0] + cube_intersector.intersection.t * ray.dir[0];
-            p[1] =
-                ray.org[1] + cube_intersector.intersection.t * ray.dir[1];
-            p[2] =
-                ray.org[2] + cube_intersector.intersection.t * ray.dir[2];
+            p[0] = ray.org[0] + cube_intersector.intersection.t * ray.dir[0];
+            p[1] = ray.org[1] + cube_intersector.intersection.t * ray.dir[1];
+            p[2] = ray.org[2] + cube_intersector.intersection.t * ray.dir[2];
 
             layer->position[4 * (y * config.width + x) + 0] = p.x();
             layer->position[4 * (y * config.width + x) + 1] = p.y();
@@ -724,12 +718,13 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
 
             float diffuse_col[3] = {0.0f, 0.0f, 0.0f};
 
-            uint8_t color_id = gCubes.color_ids[cube_intersector.intersection.prim_id];
+            uint8_t color_id =
+                gCubes.color_ids[cube_intersector.intersection.prim_id];
             uint32_t col = color_palette[color_id];
-          
+
             {
               // FIXME(LTE): Support big endian
-              diffuse_col[0] = float(((col) & 0xFF)) / 255.0f;
+              diffuse_col[0] = float(((col)&0xFF)) / 255.0f;
               diffuse_col[1] = float(((col >> 8) & 0xFF)) / 255.0f;
               diffuse_col[2] = float(((col >> 16) & 0xFF)) / 255.0f;
               // TODO(LTE): Support alpha
