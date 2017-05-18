@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2015 - 2016 Light Transport Entertainment, Inc.
+Copyright (c) 2015 - 2017 Light Transport Entertainment, Inc.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -75,7 +75,7 @@ const float kPI = 3.141592f;
 typedef struct {
   std::vector<float> vertices;
   std::vector<uint8_t> color_ids;    // color index
-  std::vector<float> radiuss;
+  std::vector<float> widths;
 } Cubes;
 
 typedef nanort::real3<float> float3;
@@ -110,22 +110,22 @@ class CubePred {
 
 class CubeGeometry {
  public:
-  CubeGeometry(const float *vertices, const float *radiuss)
-      : vertices_(vertices), radiuss_(radiuss) {}
+  CubeGeometry(const float *vertices, const float *widths)
+      : vertices_(vertices), widths_(widths) {}
 
   /// Compute bounding box for `prim_index`th cube.
   /// This function is called for each primitive in BVH build.
   void BoundingBox(float3 *bmin, float3 *bmax, unsigned int prim_index) const {
-    (*bmin)[0] = vertices_[3 * prim_index + 0] - radiuss_[prim_index];
-    (*bmin)[1] = vertices_[3 * prim_index + 1] - radiuss_[prim_index];
-    (*bmin)[2] = vertices_[3 * prim_index + 2] - radiuss_[prim_index];
-    (*bmax)[0] = vertices_[3 * prim_index + 0] + radiuss_[prim_index];
-    (*bmax)[1] = vertices_[3 * prim_index + 1] + radiuss_[prim_index];
-    (*bmax)[2] = vertices_[3 * prim_index + 2] + radiuss_[prim_index];
+    (*bmin)[0] = vertices_[3 * prim_index + 0] - widths_[prim_index];
+    (*bmin)[1] = vertices_[3 * prim_index + 1] - widths_[prim_index];
+    (*bmin)[2] = vertices_[3 * prim_index + 2] - widths_[prim_index];
+    (*bmax)[0] = vertices_[3 * prim_index + 0] + widths_[prim_index];
+    (*bmax)[1] = vertices_[3 * prim_index + 1] + widths_[prim_index];
+    (*bmax)[2] = vertices_[3 * prim_index + 2] + widths_[prim_index];
   }
 
   const float *vertices_;
-  const float *radiuss_;
+  const float *widths_;
   mutable float3 ray_org_;
   mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
@@ -136,8 +136,7 @@ class CubeIntersection
  public:
   CubeIntersection() {}
 
-	float u;
-	float v;
+  float normal[3];
 
   // Required member variables.
 	float t;
@@ -148,13 +147,12 @@ template<class I>
 class CubeIntersector
 {
  public:
-  CubeIntersector(const float *vertices, const float *radiuss)
-      : vertices_(vertices), radiuss_(radiuss) {}
+  CubeIntersector(const float *vertices, const float *widths)
+      : vertices_(vertices), widths_(widths) {}
 
 
   /// Do ray interesection stuff for `prim_index` th primitive and return hit
   /// distance `t`,
-  /// varycentric coordinate `u` and `v`.
   /// Returns true if there's intersection.
   bool Intersect(float *t_inout, unsigned int prim_index) const {
     if ((prim_index < trace_options_.prim_ids_range[0]) ||
@@ -162,59 +160,41 @@ class CubeIntersector
       return false;
     }
 
-    // http://wiki.cgsociety.org/index.php/Ray_Cube_Intersection
-
     const float3 center(&vertices_[3 * prim_index]);
-    const float radius = radiuss_[prim_index];
+    const float width = widths_[prim_index];
 
-    float3 oc = ray_org_ - center;
+    const float3 bmin = center - float3(width);
+    const float3 bmax = center + float3( width);
 
-    float a = vdot(ray_dir_, ray_dir_);
-    float b = 2.0 * vdot(ray_dir_, oc);
-    float c = vdot(oc, oc) - radius * radius;
+    float tmin, tmax;
 
-    float disc = b * b - 4.0 * a * c;
+    const float min_x = ray_dir_sign_[0] ? bmax[0] : bmin[0];
+    const float min_y = ray_dir_sign_[1] ? bmax[1] : bmin[1];
+    const float min_z = ray_dir_sign_[2] ? bmax[2] : bmin[2];
+    const float max_x = ray_dir_sign_[0] ? bmin[0] : bmax[0];
+    const float max_y = ray_dir_sign_[1] ? bmin[1] : bmax[1];
+    const float max_z = ray_dir_sign_[2] ? bmin[2] : bmax[2];
 
-    float t0, t1;
+    // X
+    const float tmin_x = (min_x - ray_org_[0]) * ray_inv_dir_[0];
+    const float tmax_x = (max_x - ray_org_[0]) * ray_inv_dir_[0];
 
-    if (disc < 0.0) { // no roots
-      return false;
-    } else if (disc == 0.0) {
-      t0 = t1 = -0.5 * (b / a);
-    } else {
-      // compute q as described above
-      float distSqrt = sqrt(disc);
-      float q;
-      if (b < 0)
-        q = (-b - distSqrt) / 2.0;
-      else
-        q = (-b + distSqrt) / 2.0;
+    // Y
+    const float tmin_y = (min_y - ray_org_[1]) * ray_inv_dir_[1];
+    const float tmax_y = (max_y - ray_org_[1]) * ray_inv_dir_[1];
 
-      // compute t0 and t1
-      t0 = q / a;
-      t1 = c / q;
-    }
+    // Z
+    const float tmin_z = (min_z - ray_org_[2]) * ray_inv_dir_[2];
+    const float tmax_z = (max_z - ray_org_[2]) * ray_inv_dir_[2];
 
-    // make sure t0 is smaller than t1
-    if (t0 > t1) {
-      // if t0 is bigger than t1 swap them around
-      float temp = t0;
-      t0 = t1;
-      t1 = temp;
-    }
-  
-    // if t1 is less than zero, the object is in the ray's negative direction
-    // and consequently the ray misses the cube
-    if (t1 < 0) {
+    tmin = nanort::safemax(tmin_z, nanort::safemax(tmin_y, tmin_x));
+    tmax = nanort::safemin(tmax_z, nanort::safemin(tmax_y, tmax_x));
+
+    if (tmin > tmax) {
       return false;
     }
 
-    float t;
-    if (t0 < 0) {
-      t = t1;
-    } else {
-      t = t0;
-    }
+    const float t = tmin;
 
     if (t > (*t_inout)) {
       return false;
@@ -248,6 +228,15 @@ class CubeIntersector
     ray_dir_[1] = ray.dir[1];
     ray_dir_[2] = ray.dir[2];
 
+    // FIXME(syoyo): Consider zero div case.
+    ray_inv_dir_[0] = 1.0f / ray.dir[0];
+    ray_inv_dir_[1] = 1.0f / ray.dir[1];
+    ray_inv_dir_[2] = 1.0f / ray.dir[2];
+
+    ray_dir_sign_[0] = ray.dir[0] < 0.0f ? 1 : 0;
+    ray_dir_sign_[1] = ray.dir[1] < 0.0f ? 1 : 0;
+    ray_dir_sign_[2] = ray.dir[2] < 0.0f ? 1 : 0;
+
     trace_options_ = trace_options;
   }
 
@@ -257,18 +246,56 @@ class CubeIntersector
   /// `hit` = true if there is something hit.
   void PostTraversal(const nanort::Ray<float> &ray, bool hit) const {
     if (hit) {
-      float3 hitP = ray_org_ + intersection.t * ray_dir_;
-      float3 center = float3(&vertices_[3*intersection.prim_id]);
-      float3 n = vnormalize(hitP - center);
-      intersection.u = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
-      intersection.v = acos(n[1]) / M_PI;
-    } 
+      // compute normal. there should be valid intersection point.
+      const float3 center(&vertices_[3 * intersection.prim_id]);
+      const float width = widths_[intersection.prim_id];
+
+      const float3 bmin = center - float3(width);
+      const float3 bmax = center + float3(width);
+
+      float tmin, tmax;
+
+      const float min_x = ray_dir_sign_[0] ? bmax[0] : bmin[0];
+      const float min_y = ray_dir_sign_[1] ? bmax[1] : bmin[1];
+      const float min_z = ray_dir_sign_[2] ? bmax[2] : bmin[2];
+      const float max_x = ray_dir_sign_[0] ? bmin[0] : bmax[0];
+      const float max_y = ray_dir_sign_[1] ? bmin[1] : bmax[1];
+      const float max_z = ray_dir_sign_[2] ? bmin[2] : bmax[2];
+
+      // X
+      const float tmin_x = (min_x - ray_org_[0]) * ray_inv_dir_[0];
+
+      // Y
+      const float tmin_y = (min_y - ray_org_[1]) * ray_inv_dir_[1];
+
+      // Z
+      const float tmin_z = (min_z - ray_org_[2]) * ray_inv_dir_[2];
+
+      int axis = 0;
+      tmin = tmin_x;
+      if (tmin < tmin_y) {
+        axis = 1;
+        tmin = tmin_y;
+      }
+      if (tmin < tmin_z) {
+        axis = 2;
+        tmin = tmin_z;
+      }
+
+      intersection.normal[0] = 0.0f;
+      intersection.normal[1] = 0.0f;
+      intersection.normal[2] = 0.0f;
+
+      intersection.normal[axis] = ray_dir_sign_[axis] ? 1.0f : -1.0f;
+    }
   }
 
   const float *vertices_;
-  const float *radiuss_;
+  const float *widths_;
   mutable float3 ray_org_;
   mutable float3 ray_dir_;
+  mutable float3 ray_inv_dir_;
+  mutable int ray_dir_sign_[3];
   mutable nanort::BVHTraceOptions trace_options_;
 
   mutable I intersection;
@@ -433,7 +460,7 @@ bool LoadMIData(Cubes* cubes, const char* filename, float scale) {
 
   cubes->vertices.clear();
   cubes->color_ids.clear();
-  cubes->radiuss.clear();
+  cubes->widths.clear();
 
 	enkiRegionFile regionFile = enkiRegionFileLoad( fp );
 
@@ -472,9 +499,6 @@ bool LoadMIData(Cubes* cubes, const char* filename, float scale) {
                   cubes->vertices.push_back(sectionOrigin.y + sPos.y);
                   cubes->vertices.push_back(sectionOrigin.z + sPos.z);
                   cubes->color_ids.push_back(voxel); // voxel value = color index.
-
-                  // Radius will be set after centering/scaling  
-                  //cubes->radiuss.push_back(0.5f);
 
                   bmin[0] = std::min(bmin[0], double(sectionOrigin.x + sPos.x));
                   bmin[1] = std::min(bmin[1], double(sectionOrigin.y + sPos.y));
@@ -531,8 +555,8 @@ bool LoadMIData(Cubes* cubes, const char* filename, float scale) {
     cubes->vertices[3 * i + 1] = (cubes->vertices[3 * i + 1] - bcenter[1]) * invsize;
     cubes->vertices[3 * i + 2] = (cubes->vertices[3 * i + 2] - bcenter[2]) * invsize;
 
-    // Set approximate particle radius.
-    cubes->radiuss.push_back(0.5f * invsize);
+    // Set approximate cube width.
+    cubes->widths.push_back(0.5f * invsize);
   }
 
   return true;
@@ -543,7 +567,7 @@ bool Renderer::LoadMI(const char* filename, float scene_scale) {
 }
 
 bool Renderer::BuildBVH() {
-  if (gCubes.radiuss.size() < 1) {
+  if (gCubes.widths.size() < 1) {
     std::cout << "num_points == 0" << std::endl;
     return false;
   }
@@ -559,9 +583,9 @@ bool Renderer::BuildBVH() {
 
   auto t_start = std::chrono::system_clock::now();
 
-  CubeGeometry cube_geom(&gCubes.vertices.at(0), &gCubes.radiuss.at(0));
+  CubeGeometry cube_geom(&gCubes.vertices.at(0), &gCubes.widths.at(0));
   CubePred cube_pred(&gCubes.vertices.at(0));
-  bool ret = gAccel.Build(gCubes.radiuss.size(), build_options, cube_geom,
+  bool ret = gAccel.Build(gCubes.widths.size(), build_options, cube_geom,
                           cube_pred);
   assert(ret);
 
@@ -610,12 +634,14 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
 
   uint32_t num_threads = std::max(1U, std::thread::hardware_concurrency());
 
+  uint32_t* color_palette = enkiGetMineCraftPalette(); //returns a 256 array of uint32_t's in uint8_t rgba order.
+
   auto startT = std::chrono::system_clock::now();
 
-  // Initialize RNG.
-
+  // Multi-threaded rendering using C++11 thread.
   for (auto t = 0; t < num_threads; t++) {
     workers.emplace_back(std::thread([&, t]() {
+      // Initialize RNG.
       pcg32_state_t rng;
       pcg32_srandom(&rng, config.pass,
                     t);  // seed = combination of render pass + thread no.
@@ -654,7 +680,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
           ray.max_t = kFar;
 
           CubeIntersector<CubeIntersection> cube_intersector(
-              reinterpret_cast<const float*>(gCubes.vertices.data()), gCubes.radiuss.data());
+              reinterpret_cast<const float*>(gCubes.vertices.data()), gCubes.widths.data());
           nanort::BVHTraceOptions trace_options;
           bool hit = gAccel.Traverse(ray, trace_options, cube_intersector);
           if (hit) {
@@ -671,17 +697,17 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
             layer->position[4 * (y * config.width + x) + 2] = p.z();
             layer->position[4 * (y * config.width + x) + 3] = 1.0f;
 
-            layer->varycoord[4 * (y * config.width + x) + 0] =
-                cube_intersector.intersection.u;
-            layer->varycoord[4 * (y * config.width + x) + 1] =
-                cube_intersector.intersection.v;
+            layer->varycoord[4 * (y * config.width + x) + 0] = 0.0f;
+            layer->varycoord[4 * (y * config.width + x) + 1] = 0.0f;
             layer->varycoord[4 * (y * config.width + x) + 2] = 0.0f;
             layer->varycoord[4 * (y * config.width + x) + 3] = 1.0f;
 
             unsigned int prim_id = cube_intersector.intersection.prim_id;
 
-            float3 cube_center(&gCubes.vertices[3*prim_id]);
-            float3 N = vnormalize(p - cube_center);
+            float3 N;
+            N[0] = cube_intersector.intersection.normal[0];
+            N[1] = cube_intersector.intersection.normal[1];
+            N[2] = cube_intersector.intersection.normal[2];
 
             layer->normal[4 * (y * config.width + x) + 0] = 0.5 * N[0] + 0.5;
             layer->normal[4 * (y * config.width + x) + 1] = 0.5 * N[1] + 0.5;
@@ -696,8 +722,20 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
                 cube_intersector.intersection.t;
             layer->depth[4 * (y * config.width + x) + 3] = 1.0f;
 
-            // @todo { material }
-            float diffuse_col[3] = {0.5f, 0.5f, 0.5f};
+            float diffuse_col[3] = {0.0f, 0.0f, 0.0f};
+
+            uint8_t color_id = gCubes.color_ids[cube_intersector.intersection.prim_id];
+            uint32_t col = color_palette[color_id];
+          
+            {
+              // FIXME(LTE): Support big endian
+              diffuse_col[0] = float(((col) & 0xFF)) / 255.0f;
+              diffuse_col[1] = float(((col >> 8) & 0xFF)) / 255.0f;
+              diffuse_col[2] = float(((col >> 16) & 0xFF)) / 255.0f;
+              // TODO(LTE): Support alpha
+            }
+
+            // TODO(LTE): Support specular color
             float specular_col[3] = {0.0f, 0.0f, 0.0f};
 
             // Simple shading

@@ -262,6 +262,11 @@ template <typename T = float>
 class real3 {
  public:
   real3() {}
+  real3(T x) {
+    v[0] = x;
+    v[1] = x;
+    v[2] = x;
+  }
   real3(T xx, T yy, T zz) {
     v[0] = xx;
     v[1] = yy;
