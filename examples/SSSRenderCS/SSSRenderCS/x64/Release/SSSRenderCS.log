@@ -1,7 +1,9 @@
-﻿2017/04/02 6:49:41 にビルドを開始しました。
-     1>ノード 2 上のプロジェクト "C:\Program Files\Git\program\nanort\examples\SSSRenderCS\SSSRenderCS\SSSRenderCS.vcxproj" (Build ターゲット)。
+﻿2017/05/15 13:29:21 にビルドを開始しました。
+     1>ノード 2 上のプロジェクト "C:\Program Files\Git\program\nanort\examples\SSSRenderCS\SSSRenderCS\SSSRenderCS.vcxproj" (Rebuild ターゲット)。
      1>ClCompile:
-         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\x86_amd64\CL.exe /c /Zi /nologo /W3 /WX- /sdl /O2 /Oi /GL /D WIN32 /D NDEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm- /EHsc /MD /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /openmp- /Fo"x64\Release\\" /Fd"x64\Release\vc120.pdb" /Gd /TP /errorReport:prompt Source.cpp
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\x86_amd64\CL.exe /c /Zi /nologo /W3 /WX- /sdl /O2 /Oi /GL /D WIN32 /D NDEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm- /EHsc /MD /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /openmp- /Fo"x64\Release\\" /Fd"x64\Release\vc120.pdb" /Gd /TP /errorReport:prompt Ray.cpp Source.cpp stb_image.cpp stb_image_write.cpp tiny_obj_loader.cpp
+         Ray.cpp
+     1>c:\program files\git\program\nanort\examples\sssrendercs\sssrendercs\Ray.h(15): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
          Source.cpp
      1>c:\program files\git\program\nanort\examples\sssrendercs\sssrendercs\Ray.h(15): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
      1>Source.cpp(48): warning C4305: '初期化中' : 'double' から 'const float' へ切り詰めます。
@@ -33,6 +35,9 @@
      1>Source.cpp(1224): warning C4267: '引数' : 'size_t' から 'const unsigned int' に変換しました。データが失われているかもしれません。
      1>Source.cpp(1243): warning C4244: '引数' : 'time_t' から 'unsigned int' への変換です。データが失われる可能性があります。
      1>Source.cpp(1246): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+         stb_image.cpp
+         stb_image_write.cpp
+         tiny_obj_loader.cpp
        Link:
          C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\x86_amd64\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Program Files\Git\program\nanort\examples\SSSRenderCS\x64\Release\SSSRenderCS.exe" /INCREMENTAL:NO /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Program Files\Git\program\nanort\examples\SSSRenderCS\x64\Release\SSSRenderCS.pdb" /SUBSYSTEM:CONSOLE /OPT:REF /OPT:ICF /LTCG /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Program Files\Git\program\nanort\examples\SSSRenderCS\x64\Release\SSSRenderCS.lib" /MACHINE:X64 x64\Release\Ray.obj
          x64\Release\Source.obj
@@ -42,8 +47,8 @@
          コード生成しています。
          コード生成が終了しました。
          SSSRenderCS.vcxproj -> C:\Program Files\Git\program\nanort\examples\SSSRenderCS\x64\Release\SSSRenderCS.exe
-     1>プロジェクト "C:\Program Files\Git\program\nanort\examples\SSSRenderCS\SSSRenderCS\SSSRenderCS.vcxproj" (Build ターゲット) のビルドが完了しました。
+     1>プロジェクト "C:\Program Files\Git\program\nanort\examples\SSSRenderCS\SSSRenderCS\SSSRenderCS.vcxproj" (Rebuild ターゲット) のビルドが完了しました。
 
 ビルドに成功しました。
 
-経過時間 00:00:02.71
+経過時間 00:00:03.42
