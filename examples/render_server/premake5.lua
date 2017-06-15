@@ -1,7 +1,10 @@
 sources = {
    "main.cc",
    "civetweb/src/CivetServer.cpp",
-   "civetweb/src/civetweb.c"
+   "civetweb/src/civetweb.c",
+   "render.cc",
+   "matrix.cc",
+   "../common/trackball.cc"
    }
 
 solution "RenderServerSolution"
@@ -24,7 +27,9 @@ solution "RenderServerSolution"
 
       includedirs { "./", "../../" }
       includedirs { "./civetweb/include/" }
+      includedirs { "../common/", "../common/imgui/" }
 
+      defines { "USE_WEBSOCKET=1" }
       if os.is("Windows") then
          flags { "FatalCompileWarnings" }
          warnings "Extra" -- /W4

@@ -15,49 +15,55 @@
 #else
 #include <unistd.h>
 #endif
+#include <atomic>  // C++11
+#include <chrono>  // C++11
+#include <mutex> // C++11
+#include <thread> // C++11
+
+#include "render.h"
+#include "trackball.h"
 
 #define DOCUMENT_ROOT "."
 #define PORT "8081"
-#define EXAMPLE_URI "/example"
 #define EXIT_URI "/exit"
 bool exitNow = false;
+using json = nlohmann::json;
 
-class ExampleHandler : public CivetHandler
+example::Renderer gRenderer;
+
+std::atomic<bool> gRenderQuit;
+std::atomic<bool> gRenderRefresh;
+std::atomic<bool> gRenderCancel;
+json gRenderConfig;
+std::mutex gMutex;
+
+std::vector<float> gRGBA;
+std::vector<int> gSampleCounts;
+float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+
+
+void InitRender(json& scene)
 {
-  public:
-	bool
-	handleGet(CivetServer *server, struct mg_connection *conn)
-	{
-		(void)server;
+    scene["pass"] = 0;
+    scene["maxPasses"] = 10;
+    int width = scene["resolutionX"];
+    int height = scene["resolutionY"];
+    gRGBA.resize(width * height * 4);
+    std::fill(gRGBA.begin(), gRGBA.end(), 0.0);
+    gSampleCounts.resize(width * height);
+    std::fill(gSampleCounts.begin(), gSampleCounts.end(), 0.0);
+    trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+}
 
-		mg_printf(conn,
-		          "HTTP/1.1 200 OK\r\nContent-Type: "
-		          "text/html\r\nConnection: close\r\n\r\n");
-		mg_printf(conn, "<html><body>\r\n");
-		mg_printf(conn,
-		          "<h2>This is an example text from a C++ handler</h2>\r\n");
-		mg_printf(conn,
-		          "<p>To see a page from the A handler <a "
-		          "href=\"a\">click here</a></p>\r\n");
-		mg_printf(conn,
-		          "<p>To see a page from the A handler with a parameter "
-		          "<a href=\"a?param=1\">click here</a></p>\r\n");
-		mg_printf(conn,
-		          "<p>To see a page from the A/B handler <a "
-		          "href=\"a/b\">click here</a></p>\r\n");
-		mg_printf(conn,
-		          "<p>To see a page from the *.foo handler <a "
-		          "href=\"xy.foo\">click here</a></p>\r\n");
-		mg_printf(conn,
-		          "<p>To see a page from the WebSocket handler <a "
-		          "href=\"ws\">click here</a></p>\r\n");
-		mg_printf(conn,
-		          "<p>To exit <a href=\"%s\">click here</a></p>\r\n",
-		          EXIT_URI);
-		mg_printf(conn, "</body></html>\r\n");
-		return true;
-	}
-};
+void RequestRender() {
+    {
+        std::lock_guard<std::mutex> guard(gMutex);
+        gRenderConfig["pass"] = 0;
+    }
+
+    gRenderRefresh = true;
+    gRenderCancel = true;
+}
 
 class ExitHandler : public CivetHandler
 {
@@ -72,61 +78,6 @@ class ExitHandler : public CivetHandler
 		          "text/plain\r\nConnection: close\r\n\r\n");
 		mg_printf(conn, "Bye!\n");
 		exitNow = true;
-		return true;
-	}
-};
-
-class AHandler : public CivetHandler
-{
-  private:
-	bool
-	handleAll(const char *method,
-	          CivetServer *server,
-	          struct mg_connection *conn)
-	{
-		(void)server;
-
-		std::string s = "";
-		mg_printf(conn,
-		          "HTTP/1.1 200 OK\r\nContent-Type: "
-		          "text/html\r\nConnection: close\r\n\r\n");
-		mg_printf(conn, "<html><body>");
-		mg_printf(conn, "<h2>This is the A handler for \"%s\" !</h2>", method);
-		if (CivetServer::getParam(conn, "param", s)) {
-			mg_printf(conn, "<p>param set to %s</p>", s.c_str());
-		} else {
-			mg_printf(conn, "<p>param not set</p>");
-		}
-		mg_printf(conn, "</body></html>\n");
-		return true;
-	}
-
-  public:
-	bool
-	handleGet(CivetServer *server, struct mg_connection *conn)
-	{
-		return handleAll("GET", server, conn);
-	}
-	bool
-	handlePost(CivetServer *server, struct mg_connection *conn)
-	{
-		return handleAll("POST", server, conn);
-	}
-};
-
-class ABHandler : public CivetHandler
-{
-  public:
-	bool
-	handleGet(CivetServer *server, struct mg_connection *conn)
-	{
-		(void)server;
-		mg_printf(conn,
-		          "HTTP/1.1 200 OK\r\nContent-Type: "
-		          "text/html\r\nConnection: close\r\n\r\n");
-		mg_printf(conn, "<html><body>");
-		mg_printf(conn, "<h2>This is the AB handler!!!</h2>");
-		mg_printf(conn, "</body></html>\n");
 		return true;
 	}
 };
@@ -204,146 +155,8 @@ class FooHandler : public CivetHandler
 
 		return true;
 	}
-
-#define fopen_recursive fopen
-
-    bool
-        handlePut(CivetServer *server, struct mg_connection *conn)
-    {
-		(void)server;
-
-        /* Handler may access the request info using mg_get_request_info */
-        const struct mg_request_info *req_info = mg_get_request_info(conn);
-        long long rlen, wlen;
-        long long nlen = 0;
-        long long tlen = req_info->content_length;
-        FILE * f;
-        char buf[1024];
-        int fail = 0;
-
-#ifdef _WIN32
-        _snprintf_s(buf, sizeof(buf), "D:\\somewhere\\%s\\%s", req_info->remote_user, req_info->local_uri);
-        buf[sizeof(buf)-1] = 0;
-        if (strlen(buf)>255) {
-            /* Windows will not work with path > 260 (MAX_PATH), unless we use
-             * the unicode API. However, this is just an example code: A real
-             * code will probably never store anything to D:\\somewhere and
-             * must be adapted to the specific needs anyhow. */
-            fail = 1;
-            f = NULL;
-        } else {
-			fopen_s(&f, buf, "wb");
-        }
-#else
-        snprintf(buf, sizeof(buf), "~/somewhere/%s/%s", req_info->remote_user, req_info->local_uri);
-        buf[sizeof(buf)-1] = 0;
-        if (strlen(buf)>1020) {
-            /* The string is too long and probably truncated. Make sure an
-             * UTF-8 string is never truncated between the UTF-8 code bytes.
-             * This example code must be adapted to the specific needs. */
-            fail = 1;
-            f = NULL;
-        } else {
-            f = fopen_recursive(buf, "w");
-        }
-#endif
-
-        if (!f) {
-            fail = 1;
-        } else {
-            while (nlen < tlen) {
-                rlen = tlen - nlen;
-                if (rlen > sizeof(buf)) {
-                    rlen = sizeof(buf);
-                }
-                rlen = mg_read(conn, buf, (size_t)rlen);
-                if (rlen <= 0) {
-                    fail = 1;
-                    break;
-                }
-                wlen = fwrite(buf, 1, (size_t)rlen, f);
-                if (wlen != rlen) {
-                    fail = 1;
-                    break;
-                }
-                nlen += wlen;
-            }
-            fclose(f);
-        }
-
-        if (fail) {
-            mg_printf(conn,
-                "HTTP/1.1 409 Conflict\r\n"
-                "Content-Type: text/plain\r\n"
-                "Connection: close\r\n\r\n");
-        } else {
-            mg_printf(conn,
-                "HTTP/1.1 201 Created\r\n"
-                "Content-Type: text/plain\r\n"
-                "Connection: close\r\n\r\n");
-        }
-
-        return true;
-    }
 };
 
-class WsStartHandler : public CivetHandler
-{
-  public:
-	bool
-	handleGet(CivetServer *server, struct mg_connection *conn)
-	{
-		(void)server;
-	mg_printf(conn,
-	          "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: "
-	          "close\r\n\r\n");
-
-	mg_printf(conn, "<!DOCTYPE html>\n");
-	mg_printf(conn, "<html>\n<head>\n");
-	mg_printf(conn, "<meta charset=\"UTF-8\">\n");
-	mg_printf(conn, "<title>Embedded websocket example</title>\n");
-
-#ifdef USE_WEBSOCKET
-	/* mg_printf(conn, "<script type=\"text/javascript\"><![CDATA[\n"); ...
-	 * xhtml style */
-	mg_printf(conn, "<script>\n");
-	mg_printf(
-	    conn,
-	    "var i=0\n"
-	    "function load() {\n"
-	    "  var wsproto = (location.protocol === 'https:') ? 'wss:' : 'ws:';\n"
-	    "  connection = new WebSocket(wsproto + '//' + window.location.host + "
-	    "'/websocket');\n"
-	    "  websock_text_field = "
-	    "document.getElementById('websock_text_field');\n"
-	    "  connection.onmessage = function (e) {\n"
-	    "    websock_text_field.innerHTML=e.data;\n"
-	    "    i=i+1;"
-	    "    connection.send(i);\n"
-	    "  }\n"
-	    "  connection.onerror = function (error) {\n"
-	    "    alert('WebSocket error');\n"
-	    "    connection.close();\n"
-	    "  }\n"
-	    "}\n");
-	/* mg_printf(conn, "]]></script>\n"); ... xhtml style */
-	mg_printf(conn, "</script>\n");
-	mg_printf(conn, "</head>\n<body onload=\"load()\">\n");
-	mg_printf(
-	    conn,
-	    "<div id='websock_text_field'>No websocket connection yet</div>\n");
-#else
-	mg_printf(conn, "</head>\n<body>\n");
-	mg_printf(conn, "Example not compiled with USE_WEBSOCKET\n");
-#endif
-	mg_printf(conn, "</body>\n</html>\n");
-
-	return 1;
-}
-};
-
-
-#ifdef USE_WEBSOCKET
 class WebSocketHandler : public CivetWebSocketHandler {
 
 	virtual bool handleConnection(CivetServer *server,
@@ -365,12 +178,51 @@ class WebSocketHandler : public CivetWebSocketHandler {
 	                        int bits,
 	                        char *data,
 	                        size_t data_len) {
-		printf("WS got %lu bytes: ", (long unsigned)data_len);
+		printf("WS got %lu bytes: \n", (long unsigned)data_len);
 		fwrite(data, 1, data_len, stdout);
+        printf("%s\n", data);
 		printf("\n");
 
-		mg_websocket_write(conn, WEBSOCKET_OPCODE_TEXT, data, data_len);
-		return (data_len<4);
+        json sceneData;
+        try {
+            sceneData = json::parse(data);
+        } catch (std::exception e) {
+            std::cerr << "json parse error\n"  << e.what() << std::endl;
+            return true;
+        }
+
+        gRenderConfig = sceneData["params"];
+        printf("InitRender\n");
+        InitRender(gRenderConfig);
+		printf("Rendering start\n");
+        for(int i = 0 ; i < gRenderConfig["maxPasses"] ; i++){
+            bool ret = gRenderer.Render(&gRGBA.at(0), &gSampleCounts.at(0),
+                                        gCurrQuat, gRenderConfig, gRenderCancel);
+            printf("passed %d\n", i);
+            gRenderConfig["pass"] = (int)gRenderConfig["pass"] + 1;
+        }
+        const int width = gRenderConfig["resolutionX"];
+        const int height = gRenderConfig["resolutionY"];
+        const int n = 3;
+        std::vector<float> buf(width * height * n);
+        for (size_t i = 0; i < gRGBA.size() / 4; i++) {
+            buf[n * i + 0] = gRGBA[4 * i + 0];
+            buf[n * i + 1] = gRGBA[4 * i + 1];
+            buf[n * i + 2] = gRGBA[4 * i + 2];
+//                buf[4 * i + 3] = gRGBA[4 * i + 3];
+            if (gSampleCounts[i] > 0) {
+                buf[n * i + 0] /= static_cast<float>(gSampleCounts[i]);
+                buf[n * i + 1] /= static_cast<float>(gSampleCounts[i]);
+                buf[n * i + 2] /= static_cast<float>(gSampleCounts[i]);
+//                    buf[4 * i + 3] /= static_cast<float>(gSampleCounts[i]);
+            }
+        }
+		printf("Send %dx%d RGB Image \n", width, height);
+        mg_websocket_write(conn, WEBSOCKET_OPCODE_BINARY,
+                           reinterpret_cast<const char*>(&buf.at(0)),
+                           sizeof(float) * width * height * n);
+
+		return true;
 	}
 
 	virtual void handleClose(CivetServer *server,
@@ -378,8 +230,6 @@ class WebSocketHandler : public CivetWebSocketHandler {
 		printf("WS closed\n");
 	}
 };
-#endif
-
 
 int
 main(int argc, char *argv[])
@@ -389,7 +239,7 @@ main(int argc, char *argv[])
 
 	const char *options[] = {
 	    "document_root", DOCUMENT_ROOT, "listening_ports", PORT, 0};
-    
+
     std::vector<std::string> cpp_options;
     for (int i=0; i<(sizeof(options)/sizeof(options[0])-1); i++) {
         cpp_options.push_back(options[i]);
@@ -398,43 +248,23 @@ main(int argc, char *argv[])
 	// CivetServer server(options); // <-- C style start
 	CivetServer server(cpp_options); // <-- C++ style start
 
-	ExampleHandler h_ex;
-	server.addHandler(EXAMPLE_URI, h_ex);
-
 	ExitHandler h_exit;
 	server.addHandler(EXIT_URI, h_exit);
 
-	AHandler h_a;
-	server.addHandler("/a", h_a);
-
-	ABHandler h_ab;
-	server.addHandler("/a/b", h_ab);
-
-	WsStartHandler h_ws;
-	server.addHandler("/ws", h_ws);
-
-#ifdef NO_FILES
-	/* This handler will handle "everything else", including
-	 * requests to files. If this handler is installed,
-	 * NO_FILES should be set. */
-	FooHandler h_foo;
-	server.addHandler("", h_foo);
-
-	printf("See a page from the \"all\" handler at http://localhost:%s/\n", PORT);
-#else
-	FooHandler h_foo;
-	server.addHandler("**.foo", h_foo);
-	printf("Browse files at http://localhost:%s/\n", PORT);
-#endif
-
-#ifdef USE_WEBSOCKET
 	WebSocketHandler h_websocket;
 	server.addWebSocketHandler("/websocket", h_websocket);
-	printf("Run websocket example at http://localhost:%s/ws\n", PORT);
-#endif
+	printf("Run websocket example at http://localhost:%s/websocket\n", PORT);
 
-	printf("Run example at http://localhost:%s%s\n", PORT, EXAMPLE_URI);
-	printf("Exit at http://localhost:%s%s\n", PORT, EXIT_URI);
+    std::string obj_filename = "scene.obj";
+    float scene_scale = 1.0;
+    bool obj_ret = gRenderer.LoadObjMesh(obj_filename.c_str(),
+                                         scene_scale);
+    if (!obj_ret) {
+        fprintf(stderr, "Failed to load [ %s ]\n",
+                obj_filename.c_str());
+        return -1;
+    }
+    gRenderer.BuildBVH();
 
 	while (!exitNow) {
 #ifdef _WIN32
