@@ -1,7 +1,9 @@
-﻿2017/05/22 8:32:21 にビルドを開始しました。
+﻿2017/06/18 8:10:35 にビルドを開始しました。
      1>ノード 2 上のプロジェクト "C:\Program Files\Git\program\nanort\examples\SSSRender\SSSRender\SSSRender.vcxproj" (Build ターゲット)。
      1>ClCompile:
-         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\x86_amd64\CL.exe /c /Zi /nologo /W3 /WX- /sdl /O2 /Oi /GL /D WIN32 /D NDEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm- /EHsc /MD /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /openmp- /Fo"x64\Release\\" /Fd"x64\Release\vc120.pdb" /Gd /TP /errorReport:prompt Source.cpp
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\x86_amd64\CL.exe /c /Zi /nologo /W3 /WX- /sdl /O2 /Oi /GL /D WIN32 /D NDEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm- /EHsc /MD /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /openmp- /Fo"x64\Release\\" /Fd"x64\Release\vc120.pdb" /Gd /TP /errorReport:prompt Ray.cpp Source.cpp stb_image.cpp stb_image_write.cpp tiny_obj_loader.cpp
+         Ray.cpp
+     1>c:\program files\git\program\nanort\examples\sssrender\sssrender\Ray.h(15): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
          Source.cpp
      1>c:\program files\git\program\nanort\examples\sssrender\sssrender\ScopedTimer.h(32): warning C4244: '=' : '__int64' から 'double' への変換です。データが失われる可能性があります。
      1>c:\program files\git\program\nanort\examples\sssrender\sssrender\Ray.h(15): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
@@ -16,27 +18,37 @@
      1>Source.cpp(614): warning C4244: 'return' : 'int' から 'float' への変換です。データが失われる可能性があります。
      1>Source.cpp(647): warning C4244: '初期化中' : 'double' から 'float' への変換です。データが失われる可能性があります。
      1>Source.cpp(704): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
-     1>Source.cpp(805): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
-     1>Source.cpp(841): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(873): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(905): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1012): warning C4305: 'return' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1016): warning C4244: '初期化中' : 'double' から 'float' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1351): warning C4244: '=' : 'double' から 'float' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1389): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1419): warning C4244: '初期化中' : 'double' から 'int' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1446): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1470): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1524): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1534): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1556): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1618): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1619): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1620): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1774): warning C4267: '引数' : 'size_t' から 'const unsigned int' に変換しました。データが失われているかもしれません。
-     1>Source.cpp(1790): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1798): warning C4244: '引数' : 'time_t' から 'unsigned int' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1801): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(753): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(833): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(869): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(901): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(933): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1041): warning C4305: 'return' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1045): warning C4244: '初期化中' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1374): warning C4244: '=' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1409): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1415): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1442): warning C4244: '=' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1478): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1519): warning C4244: '初期化中' : 'double' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1545): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1569): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1623): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1633): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1649): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1736): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1737): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1738): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1796): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1797): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1798): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1836): warning C4267: '引数' : 'size_t' から 'const unsigned int' に変換しました。データが失われているかもしれません。
+     1>Source.cpp(1852): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1860): warning C4244: '引数' : 'time_t' から 'unsigned int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1862): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+         stb_image.cpp
+         stb_image_write.cpp
+         tiny_obj_loader.cpp
        Link:
          C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\x86_amd64\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Program Files\Git\program\nanort\examples\SSSRender\x64\Release\SSSRender.exe" /INCREMENTAL:NO /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Program Files\Git\program\nanort\examples\SSSRender\x64\Release\SSSRender.pdb" /SUBSYSTEM:CONSOLE /OPT:REF /OPT:ICF /LTCG /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Program Files\Git\program\nanort\examples\SSSRender\x64\Release\SSSRender.lib" /MACHINE:X64 x64\Release\Ray.obj
          x64\Release\Source.obj
@@ -44,11 +56,10 @@
          x64\Release\stb_image_write.obj
          x64\Release\tiny_obj_loader.obj
          コード生成しています。
-     1>c:\program files\git\program\nanort\examples\sssrender\sssrender\source.cpp(937): warning C4715: 'LIGHT::LightSourceManager::GetRadianceFromRay' : 値を返さないコントロール パスがあります。
          コード生成が終了しました。
          SSSRender.vcxproj -> C:\Program Files\Git\program\nanort\examples\SSSRender\x64\Release\SSSRender.exe
      1>プロジェクト "C:\Program Files\Git\program\nanort\examples\SSSRender\SSSRender\SSSRender.vcxproj" (Build ターゲット) のビルドが完了しました。
 
 ビルドに成功しました。
 
-経過時間 00:00:02.83
+経過時間 00:00:03.28

@@ -1,7 +1,10 @@
-﻿2017/05/22 3:21:50 にビルドを開始しました。
+﻿2017/06/18 8:06:08 にビルドを開始しました。
      1>ノード 2 上のプロジェクト "C:\Program Files\Git\program\nanort\examples\SSSRender\SSSRender\SSSRender.vcxproj" (Build ターゲット)。
      1>ClCompile:
-         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\x86_amd64\CL.exe /c /Zi /nologo /W3 /WX- /sdl /Od /D WIN32 /D _DEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /openmp- /Fo"x64\Debug\\" /Fd"x64\Debug\vc120.pdb" /Gd /TP /errorReport:prompt Source.cpp
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\x86_amd64\CL.exe /c /Zi /nologo /W3 /WX- /sdl /Od /D WIN32 /D _DEBUG /D _CONSOLE /D _LIB /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /openmp /Fo"x64\Debug\\" /Fd"x64\Debug\vc120.pdb" /Gd /TP /errorReport:prompt Ray.cpp Source.cpp stb_image.cpp stb_image_write.cpp tiny_obj_loader.cpp
+         tiny_obj_loader.cpp
+         stb_image_write.cpp
+         stb_image.cpp
          Source.cpp
      1>c:\program files\git\program\nanort\examples\sssrender\sssrender\ScopedTimer.h(32): warning C4244: '=' : '__int64' から 'double' への変換です。データが失われる可能性があります。
      1>c:\program files\git\program\nanort\examples\sssrender\sssrender\Ray.h(15): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
@@ -16,28 +19,79 @@
      1>Source.cpp(614): warning C4244: 'return' : 'int' から 'float' への変換です。データが失われる可能性があります。
      1>Source.cpp(647): warning C4244: '初期化中' : 'double' から 'float' への変換です。データが失われる可能性があります。
      1>Source.cpp(704): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
-     1>Source.cpp(805): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
-     1>Source.cpp(841): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(873): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(905): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1012): warning C4305: 'return' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1016): warning C4244: '初期化中' : 'double' から 'float' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1351): warning C4244: '=' : 'double' から 'float' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1390): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1419): warning C4244: '初期化中' : 'double' から 'int' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1447): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1471): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1526): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1536): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1544): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1606): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1607): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1608): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1703): warning C4267: '引数' : 'size_t' から 'const unsigned int' に変換しました。データが失われているかもしれません。
-     1>Source.cpp(1719): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>Source.cpp(1727): warning C4244: '引数' : 'time_t' から 'unsigned int' への変換です。データが失われる可能性があります。
-     1>Source.cpp(1730): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
-     1>c:\program files\git\program\nanort\examples\sssrender\sssrender\source.cpp(937): warning C4715: 'LIGHT::LightSourceManager::GetRadianceFromRay' : 値を返さないコントロール パスがあります。
+     1>Source.cpp(753): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(833): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(869): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(901): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(933): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1041): warning C4305: 'return' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1045): warning C4244: '初期化中' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1374): warning C4244: '=' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1409): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1415): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1442): warning C4244: '=' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1478): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1519): warning C4244: '初期化中' : 'double' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1545): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1569): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1623): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1633): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1649): warning C4244: '引数' : 'double' から 'float' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1736): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1737): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1738): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1796): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1797): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1798): warning C4244: '=' : 'float' から 'int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1836): warning C4267: '引数' : 'size_t' から 'const unsigned int' に変換しました。データが失われているかもしれません。
+     1>Source.cpp(1852): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>Source.cpp(1860): warning C4244: '引数' : 'time_t' から 'unsigned int' への変換です。データが失われる可能性があります。
+     1>Source.cpp(1862): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+     1>c:\program files\git\program\nanort\examples\sssrender\sssrender\../../../nanort.h(1566): warning C4267: '+=' : 'size_t' から 'unsigned int' に変換しました。データが失われているかもしれません。
+                 c:\program files\git\program\nanort\examples\sssrender\sssrender\../../../nanort.h(1475): クラス テンプレート のメンバー関数 'bool nanort::BVHAccel<float,nanort::TriangleMesh<float>,nanort::TriangleSAHPred<float>,nanort::TriangleIntersector<float,nanort::TriangleIntersection<T>>>::Build(const unsigned int,const nanort::BVHBuildOptions<T> &,const P &,const Pred &)' のコンパイル中
+                 with
+                 [
+                     T=float
+         ,            P=nanort::TriangleMesh<float>
+         ,            Pred=nanort::TriangleSAHPred<float>
+                 ]
+                 Source.cpp(1836) : コンパイルされたクラスの テンプレート のインスタンス化 'bool nanort::BVHAccel<float,nanort::TriangleMesh<float>,nanort::TriangleSAHPred<float>,nanort::TriangleIntersector<float,nanort::TriangleIntersection<T>>>::Build(const unsigned int,const nanort::BVHBuildOptions<T> &,const P &,const Pred &)' の参照を確認してください
+                 with
+                 [
+                     T=float
+         ,            P=nanort::TriangleMesh<float>
+         ,            Pred=nanort::TriangleSAHPred<float>
+                 ]
+                 Source.cpp(1386) : コンパイルされたクラスの テンプレート のインスタンス化 'nanort::BVHAccel<float,nanort::TriangleMesh<float>,nanort::TriangleSAHPred<float>,nanort::TriangleIntersector<float,nanort::TriangleIntersection<T>>>' の参照を確認してください
+                 with
+                 [
+                     T=float
+                 ]
+     1>c:\program files\git\program\nanort\examples\sssrender\sssrender\../../../nanort.h(1567): warning C4267: '+=' : 'size_t' から 'unsigned int' に変換しました。データが失われているかもしれません。
+     1>c:\program files\git\program\nanort\examples\sssrender\sssrender\../../../nanort.h(1100): warning C4018: '<' : signed と unsigned の数値を比較しようとしました。
+                 c:\program files\git\program\nanort\examples\sssrender\sssrender\../../../nanort.h(1526) : コンパイルされたクラスの テンプレート のインスタンス化 'void nanort::ComputeBoundingBoxOMP<T,P>(nanort::real3<T> *,nanort::real3<T> *,const unsigned int *,unsigned int,unsigned int,const P &)' の参照を確認してください
+                 with
+                 [
+                     T=float
+         ,            P=nanort::TriangleMesh<float>
+                 ]
+                 c:\program files\git\program\nanort\examples\sssrender\sssrender\../../../nanort.h(1475): クラス テンプレート のメンバー関数 'bool nanort::BVHAccel<float,nanort::TriangleMesh<float>,nanort::TriangleSAHPred<float>,nanort::TriangleIntersector<float,nanort::TriangleIntersection<T>>>::Build(const unsigned int,const nanort::BVHBuildOptions<T> &,const P &,const Pred &)' のコンパイル中
+                 with
+                 [
+                     T=float
+         ,            P=nanort::TriangleMesh<float>
+         ,            Pred=nanort::TriangleSAHPred<float>
+                 ]
+                 Source.cpp(1836) : コンパイルされたクラスの テンプレート のインスタンス化 'bool nanort::BVHAccel<float,nanort::TriangleMesh<float>,nanort::TriangleSAHPred<float>,nanort::TriangleIntersector<float,nanort::TriangleIntersection<T>>>::Build(const unsigned int,const nanort::BVHBuildOptions<T> &,const P &,const Pred &)' の参照を確認してください
+                 with
+                 [
+                     T=float
+         ,            P=nanort::TriangleMesh<float>
+         ,            Pred=nanort::TriangleSAHPred<float>
+                 ]
+         Ray.cpp
+     1>c:\program files\git\program\nanort\examples\sssrender\sssrender\Ray.h(15): warning C4305: '引数' : 'double' から 'float' へ切り詰めます。
+         コードを生成中...
        Link:
          C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\x86_amd64\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Program Files\Git\program\nanort\examples\SSSRender\x64\Debug\SSSRender.exe" /INCREMENTAL /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Program Files\Git\program\nanort\examples\SSSRender\x64\Debug\SSSRender.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Program Files\Git\program\nanort\examples\SSSRender\x64\Debug\SSSRender.lib" /MACHINE:X64 x64\Debug\Ray.obj
          x64\Debug\Source.obj
@@ -49,4 +103,4 @@
 
 ビルドに成功しました。
 
-経過時間 00:00:01.55
+経過時間 00:00:02.60
