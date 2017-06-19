@@ -19,7 +19,7 @@ class Renderer {
   bool BuildBVH();
 
   /// Returns false when the rendering was canceled.
-  bool Render(float* rgba, int *sample_counts, float quat[4],
+  bool Render(float* rgba, int *sample_counts,
               const nlohmann::json& config, std::atomic<bool>& cancel_flag);
 };
 };

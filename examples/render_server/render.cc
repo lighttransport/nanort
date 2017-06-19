@@ -28,8 +28,6 @@ THE SOFTWARE.
 #pragma warning(disable : 4477)
 #endif
 
-#include "render.h"
-
 #include <chrono>  // C++11
 #include <sstream>
 #include <thread>  // C++11
@@ -38,7 +36,7 @@ THE SOFTWARE.
 #include <iostream>
 
 #include "../../nanort.h"
-#include "matrix.h"
+#include "render.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
@@ -179,101 +177,37 @@ inline void CalcNormal(float3& N, float3 v0, float3 v1, float3 v2) {
 }
 
 void BuildCameraFrame(float3* origin, float3* corner, float3* u, float3* v,
-                      float quat[4], float eye[3], float lookat[3], float up[3],
+                      float eye[3], float lookat[3], float up[3],
                       float fov, int width, int height) {
-    float e[4][4];
+    float flen =
+        (0.5f * (float)height / tanf(0.5f * (float)(fov * kPI / 180.0f)));
+    float3 look1;
+    look1[0] = lookat[0] - eye[0];
+    look1[1] = lookat[1] - eye[1];
+    look1[2] = lookat[2] - eye[2];
+    look1 = vnormalize(look1);
 
-    Matrix::LookAt(e, eye, lookat, up);
+    float3 up1;
+    up1[0] = up[0];
+    up1[1] = up[1];
+    up1[2] = up[2];
 
-    float r[4][4];
-    build_rotmatrix(r, quat);
+    (*u) = nanort::vcross(look1, up1);
+    (*u) = vnormalize((*u));
 
-    float3 lo;
-    lo[0] = lookat[0] - eye[0];
-    lo[1] = lookat[1] - eye[1];
-    lo[2] = lookat[2] - eye[2];
-    float dist = vlength(lo);
+    (*v) = nanort::vcross(look1, (*u));
+    (*v) = vnormalize((*v));
 
-    float dir[3];
-    dir[0] = 0.0;
-    dir[1] = 0.0;
-    dir[2] = dist;
+    look1[0] = flen * look1[0];
+    look1[1] = flen * look1[1];
+    look1[2] = flen * look1[2];
+    (*corner)[0] = look1[0] - 0.5f * (width * (*u)[0] + height * (*v)[0]);
+    (*corner)[1] = look1[1] - 0.5f * (width * (*u)[1] + height * (*v)[1]);
+    (*corner)[2] = look1[2] - 0.5f * (width * (*u)[2] + height * (*v)[2]);
 
-    Matrix::Inverse(r);
-
-    float rr[4][4];
-    float re[4][4];
-    float zero[3] = {0.0f, 0.0f, 0.0f};
-    float localUp[3] = {0.0f, 1.0f, 0.0f};
-    Matrix::LookAt(re, dir, zero, localUp);
-
-    // translate
-    re[3][0] += eye[0];  // 0.0; //lo[0];
-    re[3][1] += eye[1];  // 0.0; //lo[1];
-    re[3][2] += (eye[2] - dist);
-
-    // rot -> trans
-    Matrix::Mult(rr, r, re);
-
-    float m[4][4];
-    for (int j = 0; j < 4; j++) {
-        for (int i = 0; i < 4; i++) {
-            m[j][i] = rr[j][i];
-        }
-    }
-
-    float vzero[3] = {0.0f, 0.0f, 0.0f};
-    float eye1[3];
-    Matrix::MultV(eye1, m, vzero);
-
-    float lookat1d[3];
-    dir[2] = -dir[2];
-    Matrix::MultV(lookat1d, m, dir);
-    float3 lookat1(lookat1d[0], lookat1d[1], lookat1d[2]);
-
-    float up1d[3];
-    Matrix::MultV(up1d, m, up);
-
-    float3 up1(up1d[0], up1d[1], up1d[2]);
-
-    // absolute -> relative
-    up1[0] -= eye1[0];
-    up1[1] -= eye1[1];
-    up1[2] -= eye1[2];
-    // printf("up1(after) = %f, %f, %f\n", up1[0], up1[1], up1[2]);
-
-    // Use original up vector
-    // up1[0] = up[0];
-    // up1[1] = up[1];
-    // up1[2] = up[2];
-
-    {
-        float flen =
-            (0.5f * (float)height / tanf(0.5f * (float)(fov * kPI / 180.0f)));
-        float3 look1;
-        look1[0] = lookat1[0] - eye1[0];
-        look1[1] = lookat1[1] - eye1[1];
-        look1[2] = lookat1[2] - eye1[2];
-        // vcross(u, up1, look1);
-        // flip
-        (*u) = nanort::vcross(look1, up1);
-        (*u) = vnormalize((*u));
-
-        (*v) = vcross(look1, (*u));
-        (*v) = vnormalize((*v));
-
-        look1 = vnormalize(look1);
-        look1[0] = flen * look1[0] + eye1[0];
-        look1[1] = flen * look1[1] + eye1[1];
-        look1[2] = flen * look1[2] + eye1[2];
-        (*corner)[0] = look1[0] - 0.5f * (width * (*u)[0] + height * (*v)[0]);
-        (*corner)[1] = look1[1] - 0.5f * (width * (*u)[1] + height * (*v)[1]);
-        (*corner)[2] = look1[2] - 0.5f * (width * (*u)[2] + height * (*v)[2]);
-
-        (*origin)[0] = eye1[0];
-        (*origin)[1] = eye1[1];
-        (*origin)[2] = eye1[2];
-    }
+    (*origin)[0] = eye[0];
+    (*origin)[1] = eye[1];
+    (*origin)[2] = eye[2];
 }
 
 nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
@@ -650,7 +584,7 @@ bool Renderer::BuildBVH() {
 }
 
 bool Renderer::Render(float* rgba, int* sample_counts,
-                      float quat[4], const nlohmann::json& config,
+                      const nlohmann::json& config,
                       std::atomic<bool>& cancelFlag) {
     if (!gAccel.IsValid()) {
         return false;
@@ -669,8 +603,8 @@ bool Renderer::Render(float* rgba, int* sample_counts,
     float fov = config["camera"]["fov"];
 
     float3 origin, corner, u, v;
-    BuildCameraFrame(&origin, &corner, &u, &v, quat, eye, look_at, up, fov, width,
-                     height);
+    BuildCameraFrame(&origin, &corner, &u, &v, eye, look_at, up, fov,
+                     width, height);
 
     auto kCancelFlagCheckMilliSeconds = 300;
 
@@ -827,7 +761,7 @@ bool Renderer::Render(float* rgba, int* sample_counts,
                                     sample_counts[y * width + x]++;
                                 }
 
-                            } else {
+                           } else {
                                 {
                                     if (config["pass"] == 0) {
                                         // clear pixel

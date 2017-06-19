@@ -21,7 +21,6 @@
 #include <thread> // C++11
 
 #include "render.h"
-#include "trackball.h"
 
 #define DOCUMENT_ROOT "."
 #define PORT "8081"
@@ -39,7 +38,6 @@ std::mutex gMutex;
 
 std::vector<float> gRGBA;
 std::vector<int> gSampleCounts;
-float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
 
 void InitRender(json& scene)
@@ -52,7 +50,6 @@ void InitRender(json& scene)
     std::fill(gRGBA.begin(), gRGBA.end(), 0.0);
     gSampleCounts.resize(width * height);
     std::fill(gSampleCounts.begin(), gSampleCounts.end(), 0.0);
-    trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 void RequestRender() {
@@ -196,7 +193,7 @@ class WebSocketHandler : public CivetWebSocketHandler {
 		printf("Rendering start\n");
         for(int i = 0 ; i < gRenderConfig["maxPasses"] ; i++){
             bool ret = gRenderer.Render(&gRGBA.at(0), &gSampleCounts.at(0),
-                                        gCurrQuat, gRenderConfig, gRenderCancel);
+                                        gRenderConfig, gRenderCancel);
             printf("passed %d\n", i);
             gRenderConfig["pass"] = (int)gRenderConfig["pass"] + 1;
         }

@@ -3,8 +3,6 @@ sources = {
    "civetweb/src/CivetServer.cpp",
    "civetweb/src/civetweb.c",
    "render.cc",
-   "matrix.cc",
-   "../common/trackball.cc"
    }
 
 solution "RenderServerSolution"
