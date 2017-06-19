@@ -180,12 +180,11 @@ class WebSocketHandler : public CivetWebSocketHandler {
 	                        size_t data_len) {
 		printf("WS got %lu bytes: \n", (long unsigned)data_len);
 		fwrite(data, 1, data_len, stdout);
-        printf("%s\n", data);
 		printf("\n");
 
         json sceneData;
         try {
-            sceneData = json::parse(data);
+            sceneData = json::parse(std::string(data, data + data_len));
         } catch (std::exception e) {
             std::cerr << "json parse error\n"  << e.what() << std::endl;
             return true;
