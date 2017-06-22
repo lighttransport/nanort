@@ -745,18 +745,41 @@ bool Renderer::Render(float* rgba, int* sample_counts,
 
                                 // Simple shading
                                 float NdotV = fabsf(vdot(N, dir));
+                                float lightingFact = NdotV;
+                                if (config["lights"].size() > 0 &&
+                                   config["lights"][0]["type"] == "POINT") {
+                                    nlohmann::json light = config["lights"][0];
+                                    float3 lv;
+                                    lv[0] = (float)light["position"][0] - p[0];
+                                    lv[1] = (float)light["position"][1] - p[1];
+                                    lv[2] = (float)light["position"][2] - p[2];
+                                    float dist = vlength(lv);
+                                    float ld = fabs(vdot(N, vnormalize(lv)));
+                                    if (ld > 0.) {
+                                        lightingFact = ((float)light["energy"] * (ld / (kPI/4. * dist * dist)));
+                                    } else {
+                                        lightingFact = 0;
+                                    }
+                                }
+
+                                if (config["shapes"].size() > 0 &&
+                                    config["shapes"][material_id].count("material")) {
+                                    diffuse_col[0] = config["shapes"][material_id]["material"]["diffuseColor"][0];
+                                    diffuse_col[1] = config["shapes"][material_id]["material"]["diffuseColor"][1];
+                                    diffuse_col[2] = config["shapes"][material_id]["material"]["diffuseColor"][2];
+                                }
 
                                 if (config["pass"] == 0) {
-                                    rgba[4 * (y * width + x) + 0] = NdotV * diffuse_col[0];
-                                    rgba[4 * (y * width + x) + 1] = NdotV * diffuse_col[1];
-                                    rgba[4 * (y * width + x) + 2] = NdotV * diffuse_col[2];
+                                    rgba[4 * (y * width + x) + 0] = lightingFact * diffuse_col[0];
+                                    rgba[4 * (y * width + x) + 1] = lightingFact * diffuse_col[1];
+                                    rgba[4 * (y * width + x) + 2] = lightingFact * diffuse_col[2];
                                     rgba[4 * (y * width + x) + 3] = 1.0f;
                                     sample_counts[y * width + x] =
                                         1;  // Set 1 for the first pass
                                 } else {  // additive.
-                                    rgba[4 * (y * width + x) + 0] += NdotV * diffuse_col[0];
-                                    rgba[4 * (y * width + x) + 1] += NdotV * diffuse_col[1];
-                                    rgba[4 * (y * width + x) + 2] += NdotV * diffuse_col[2];
+                                    rgba[4 * (y * width + x) + 0] += lightingFact * diffuse_col[0];
+                                    rgba[4 * (y * width + x) + 1] += lightingFact * diffuse_col[1];
+                                    rgba[4 * (y * width + x) + 2] += lightingFact * diffuse_col[2];
                                     rgba[4 * (y * width + x) + 3] += 1.0f;
                                     sample_counts[y * width + x]++;
                                 }
