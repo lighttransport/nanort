@@ -27,8 +27,25 @@ THE SOFTWARE.
 
 #include <limits>
 #include <vector>
+#include <iostream>
+
+#include "nanort.h"
 
 namespace nanosg {
+
+template<class T>
+class PrimitiveInterface;
+
+template<class T>
+class PrimitiveInterface{
+public:
+   void print(){ static_cast<T &>(this)->print(); }
+};
+
+class SpherePrimitive : PrimitiveInterface<SpherePrimitive> {
+public:
+    void print(){ std::cout << "Sphere" << std::endl; }
+};
 
 // 4x4 matrix
 template <typename T> class Matrix {
@@ -201,7 +218,10 @@ public:
 typedef Matrix<float> Matrixf;
 typedef Matrix<double> Matrixd;
 
-template<typename T>
+///
+/// Renderable node
+///
+template<typename T, class P, class Pred, class I>
 class Node
 {
  public:
@@ -265,32 +285,65 @@ class Node
 	Matrix<T> inv_xform33_;	// inverse(xform0 with upper-left 3x3 elemets only(for transforming direction vector)
 	Matrix<T> inv_transpose_xform33_; // inverse(transpose(xform)) with upper-left 3x3 elements only(for transforming normal vector)	
 	
+  nanort::BVHAccel<T, P, Pred, I> accel_;
 	
 };
 
-template<typename T>
+template<typename T, class P, class Pred, class I>
 class Scene
 {
  public:
 	Scene();
 	~Scene();
 
-	bool AddNode();
+  ///
+  /// Add renderable node to the scene.
+  ///
+	bool AddNode(const Node<T, P, Pred, I> &node) {
+    nodes_.push_back(node);
+  }
 
-	std::vector<Node<T> > nodes_;
+  ///
+  /// Commit the scene. Must be called before tracing rays into the scene.
+  ///
+  bool Commit() {
+
+    // Update scene bounding box.
+    for (size_t i = 0; i < nodes_.size(); i++) {
+      bmin_[0] = std::min(bmin_[0], nodes_[i].bmin[0]);
+      bmin_[1] = std::min(bmin_[1], nodes_[i].bmin[1]);
+      bmin_[2] = std::min(bmin_[2], nodes_[i].bmin[2]);
+
+      bmax_[0] = std::max(bmax_[0], nodes_[i].bmax[0]);
+      bmax_[1] = std::max(bmax_[1], nodes_[i].bmax[1]);
+      bmax_[2] = std::max(bmax_[2], nodes_[i].bmax[2]);
+    }
+
+    return false;
+  }
+
+  ///
+  /// Get the scene bounding box.
+  ///
+  void GetBoundingBox(T bmin[3], T bmax[3]) const {
+    bmin[0] = bmin_[0];
+    bmin[1] = bmin_[1];
+    bmin[2] = bmin_[2];
+
+    bmax[0] = bmax_[0];
+    bmax[1] = bmax_[1];
+    bmax[2] = bmax_[2];
+  }
+
+ private:
+  // Scene bounding box.
+  // Valid after calling `Commit()`.
+  T bmin_[3];
+  T bmax_[3];
+  
+	std::vector<Node<T, P, Pred, I> > nodes_;
 };
 
 } // namespace nanosg
 
 #endif // NANOSG_H_
-
-#ifdef NANOSG_IMPLEMENTATION
-
-#include "nanort.h"
-
-namespace nanosg {
-
-
-}
-
-#endif // NANOSG_IMPLEMENTATION
