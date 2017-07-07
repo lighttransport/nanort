@@ -25,6 +25,12 @@ THE SOFTWARE.
 #ifndef NANOSG_H_
 #define NANOSG_H_
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+
 #include <limits>
 #include <vector>
 #include <iostream>
@@ -76,6 +82,10 @@ public:
     m[3][1] = 0.0;
     m[3][2] = 0.0;
     m[3][3] = 1.0;
+  }
+
+  static void Copy(T dst[4][4], const T src[4][4]) {
+    memcpy(dst, src, sizeof(T) * 16);
   }
 
   static void Inverse(T m[4][4]) {
@@ -218,21 +228,95 @@ public:
 typedef Matrix<float> Matrixf;
 typedef Matrix<double> Matrixd;
 
+template<typename T>
+static void XformBoundingBox(T xbmin[3], // out
+                                 T xbmax[3], // out
+                                 T bmin[3], T bmax[3],
+                                 T m[4][4]) {
+
+  // create bounding vertex from (bmin, bmax)
+  T b[8][3];
+
+  b[0][0] = bmin[0];
+  b[0][1] = bmin[1];
+  b[0][2] = bmin[2];
+  b[1][0] = bmax[0];
+  b[1][1] = bmin[1];
+  b[1][2] = bmin[2];
+  b[2][0] = bmin[0];
+  b[2][1] = bmax[1];
+  b[2][2] = bmin[2];
+  b[3][0] = bmax[0];
+  b[3][1] = bmax[1];
+  b[3][2] = bmin[2];
+
+  b[4][0] = bmin[0];
+  b[4][1] = bmin[1];
+  b[4][2] = bmax[2];
+  b[5][0] = bmax[0];
+  b[5][1] = bmin[1];
+  b[5][2] = bmax[2];
+  b[6][0] = bmin[0];
+  b[6][1] = bmax[1];
+  b[6][2] = bmax[2];
+  b[7][0] = bmax[0];
+  b[7][1] = bmax[1];
+  b[7][2] = bmax[2];
+
+  T xb[8][3];
+  for (int i = 0; i < 8; i++) {
+    Matrix<T>::MultV(xb[i], m, b[i]);
+  }
+
+  xbmin[0] = xb[0][0];
+  xbmin[1] = xb[0][1];
+  xbmin[2] = xb[0][2];
+  xbmax[0] = xb[0][0];
+  xbmax[1] = xb[0][1];
+  xbmax[2] = xb[0][2];
+
+  for (int i = 1; i < 8; i++) {
+
+    xbmin[0] = std::min(xb[i][0], xbmin[0]);
+    xbmin[1] = std::min(xb[i][1], xbmin[1]);
+    xbmin[2] = std::min(xb[i][2], xbmin[2]);
+
+    xbmax[0] = std::max(xb[i][0], xbmax[0]);
+    xbmax[1] = std::max(xb[i][1], xbmax[1]);
+    xbmax[2] = std::max(xb[i][2], xbmax[2]);
+  }
+}
+
 ///
 /// Renderable node
 ///
-template<typename T, class P, class Pred, class I>
+template<typename T>
 class Node
 {
  public:
-	Node()
-		: id_(-1)
+	explicit Node(const std::vector<nanort::BVHNode<T> > &bvh_nodes, const std::vector<unsigned int > &bvh_indices)
+    : bvh_nodes_(bvh_nodes)
+    , bvh_indices_(bvh_indices)
 	{ 
 		xbmin_[0] = xbmin_[1] = xbmin_[2] = std::numeric_limits<T>::max();
 		xbmax_[0] = xbmax_[1] = xbmax_[2] = -std::numeric_limits<T>::max();
 
 		lbmin_[0] = lbmin_[1] = lbmin_[2] = std::numeric_limits<T>::max();
 		lbmax_[0] = lbmax_[1] = lbmax_[2] = -std::numeric_limits<T>::max();
+
+    Matrix<T>::Identity(xform_);
+    Matrix<T>::Identity(inv_xform_);
+    Matrix<T>::Identity(inv_xform33_); inv_xform33_[3][3] = static_cast<T>(0.0);
+    Matrix<T>::Identity(inv_transpose_xform33_); inv_transpose_xform33_[3][3] = static_cast<T>(0.0);
+
+    if (!bvh_nodes_.empty()) {
+      lbmin_[0] = bvh_nodes_[0].bmin[0];
+      lbmin_[1] = bvh_nodes_[0].bmin[1];
+      lbmin_[2] = bvh_nodes_[0].bmin[2];
+      lbmax_[0] = bvh_nodes_[0].bmax[0];
+      lbmax_[1] = bvh_nodes_[0].bmax[1];
+      lbmax_[2] = bvh_nodes_[0].bmax[2];
+    }
 	}
 
 	~Node() {}
@@ -241,14 +325,31 @@ class Node
 	/// Update internal state.
 	///
 	void Update() {
-		// TODO(LTE): Implement.
+
+    if (bvh_nodes_.empty()) {
+      return;
+    }
+
+    // Compute the bounding box in world coordinate.
+    XformBoundingBox(xbmin_, xbmax_, lbmin_, lbmax_, xform_);
+
+    // Inverse(xform)
+    Matrix<T>::Copy(inv_xform_, xform_);
+    Matrix<T>::Inverse(inv_xform_);
+
+    // Clear translation, then inverse(xform) 
+    Matrix<T>::Copy(inv_xform33_, xform_);
+    inv_xform33_[3][0] = static_cast<T>(0.0);
+    inv_xform33_[3][1] = static_cast<T>(0.0);
+    inv_xform33_[3][2] = static_cast<T>(0.0);
+    Matrix<T>::Inverse(inv_xform33_);
+
+    // Inverse transpose of xform33
+    Matrix<T>::Copy(inv_transpose_xform33_, inv_xform33_);
+    Matrix<T>::Transpose(inv_transpose_xform33_);
 	}
 
-	inline int GetId() const {
-		return id_;
-	}
-
-	inline void GetBoundingBox(T bmin[3], T bmax[3]) const {
+	inline void GetWorldBoundingBox(T bmin[3], T bmax[3]) const {
 		bmin[0] = xbmin_[0];		
 		bmin[1] = xbmin_[1];		
 		bmin[2] = xbmin_[2];		
@@ -270,8 +371,6 @@ class Node
 
  private:
 
-	int id_;
-
 	// bounding box(local space)
 	T lbmin_[3];
 	T lbmax_[3];
@@ -285,7 +384,10 @@ class Node
 	Matrix<T> inv_xform33_;	// inverse(xform0 with upper-left 3x3 elemets only(for transforming direction vector)
 	Matrix<T> inv_transpose_xform33_; // inverse(transpose(xform)) with upper-left 3x3 elements only(for transforming normal vector)	
 	
-  nanort::BVHAccel<T, P, Pred, I> accel_;
+  //nanort::BVHAccel<T, P, Pred, I> accel_;
+
+  const std::vector<nanort::BVHNode<T> > &bvh_nodes_;
+  const std::vector<unsigned int > &bvh_indices_;
 	
 };
 
@@ -299,7 +401,7 @@ class Scene
   ///
   /// Add renderable node to the scene.
   ///
-	bool AddNode(const Node<T, P, Pred, I> &node) {
+	bool AddNode(const Node<T> &node) {
     nodes_.push_back(node);
   }
 
@@ -307,6 +409,11 @@ class Scene
   /// Commit the scene. Must be called before tracing rays into the scene.
   ///
   bool Commit() {
+
+    // Update nodes.
+    for (size_t i = 0; i < nodes_.size(); i++) {
+      nodes_[i].Update();
+    }
 
     // Update scene bounding box.
     for (size_t i = 0; i < nodes_.size(); i++) {
@@ -341,7 +448,7 @@ class Scene
   T bmin_[3];
   T bmax_[3];
   
-	std::vector<Node<T, P, Pred, I> > nodes_;
+	std::vector<Node<T> > nodes_;
 };
 
 } // namespace nanosg

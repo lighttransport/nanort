@@ -1,4 +1,3 @@
-#define NANOSG_IMPLEMENTATION
 #include "nanosg.h"
 
 #include <cstdio>
