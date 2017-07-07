@@ -5,9 +5,10 @@
 #include <ctime>
 #include <iostream>
 #include <vector>
-
+#include<map>
 #include"ScopedTimer.h"
 std::vector<ScopedTimer::ID_TIME> ScopedTimer::m_Table;
+
 
 #if __cplusplus > 199711L
 #include <chrono>
@@ -44,12 +45,32 @@ void setupFPExceptions() {
 #include "../../../nanort.h"
 #include"Ray.h"
 #include"vec3.h"
+#include"Texture.h"
 
 static const float kEps = 0.001f;
 static const float kInf = 1.0e30f;
 static const float kPi = 4.0f * std::atan(1.0f);
 const float PI = 3.141592;
 const float M_PI = 3.141592;
+
+///////////////////////////// Render Param//////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////
+const PTUtility::Vec3 SIGMA_S = PTUtility::Vec3(0.74, 0.88, 1.01);
+const PTUtility::Vec3 SIGMA_A = PTUtility::Vec3(0.032, 0.17, 0.48);
+const float PHASE_G = 0.000001;
+const float TRANSMITTACE_RATIO = 0.4;
+const float SCALE = 10.0;  
+const float INDEX = 1.3;
+///////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////
+
+std::map<std::string, Texture2D*> gTextureTable;
+void ClearTextureTable(){
+	for (auto& t : gTextureTable){
+		delete t.second;
+	}
+	gTextureTable.clear();
+}
 
 class RandomMT{
 
@@ -345,10 +366,6 @@ do {                                                                     \
 		}
 	};
 
-
-
-
-
 	nanort::Ray<float>& As(nanort::Ray<float>& A, const PTUtility::Ray& B){
 		for (int i = 0; i < 3; i++){
 			A.dir[i] = B.m_Dir[i];
@@ -413,12 +430,34 @@ do {                                                                     \
 		}
 	}
 
+	void ResizeObject(std::vector<tinyobj::shape_t>& shapes){
+		float MaxXYZ = -10000.0;
+		float MinXYZ = 10000.0;
+
+		for (const auto& sp : shapes){
+			for (const auto& p : sp.mesh.positions){
+				if (p > MaxXYZ){
+					MaxXYZ = p;
+				}
+				if (p < MinXYZ){
+					MinXYZ = p;
+				}
+			}
+		}
+		for (auto& sp : shapes){
+			for (auto& p : sp.mesh.positions){
+				p = (p - MinXYZ) / (MaxXYZ - MinXYZ) - 0.5f;
+			}
+		}
+	}
+
 	//! OBJ file loader.
 	bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t> &materials,
 		const char *filename, float scale, const char* mtl_path) {
 		std::vector<tinyobj::shape_t> shapes;
 		std::string err;
 		bool success = tinyobj::LoadObj(shapes, materials, err, filename, mtl_path);
+		ResizeObject(shapes);
 
 		if (!err.empty()) {
 			std::cerr << err << std::endl;
@@ -429,8 +468,22 @@ do {                                                                     \
 		}
 
 		std::cout << "[LoadOBJ] # of shapes in .obj : " << shapes.size() << std::endl;
-		std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size()
-			<< std::endl;
+		std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size() << std::endl;
+		for (const auto& mat : materials){
+			if (mat.diffuse_texname.size() > 3){
+				if (gTextureTable.find(mat.diffuse_texname) == gTextureTable.end()){
+					Texture2D* tex = new Texture2D();
+					std::string fileName("OBJ\\");
+					fileName.append(mat.diffuse_texname);
+					if (tex->LoadTextureFromFile(fileName.c_str())){
+						gTextureTable[mat.diffuse_texname] = tex;
+					}
+					else{
+						delete tex;
+					}
+				}
+			}
+		}
 
 		size_t num_vertices = 0;
 		size_t num_faces = 0;
@@ -581,7 +634,6 @@ do {                                                                     \
 					f2 = shapes[i].mesh.indices[3 * f + 2];
 
 					float3 n0, n1, n2;
-
 					n0[0] = shapes[i].mesh.texcoords[2 * f0 + 0];
 					n0[1] = shapes[i].mesh.texcoords[2 * f0 + 1];
 
@@ -635,25 +687,37 @@ bool isLight(const tinyobj::material_t &mat) {
 inline Vec3 Reflect(const Vec3& In, const Vec3& Normal){
 	return In - 2.0f * In.dot(Normal) * Normal;
 }
-inline Vec3 Refract(const Vec3& In, const Vec3& Normal, float eta){
-	float NdotI = Normal.dot(In);
-	float k = 1.0f - eta * eta * (1.0f - NdotI * NdotI);
-	if (k < 0.0f)
-		return Vec3(0, 0, 0);
-	else
-		return eta * In - (eta * NdotI + sqrtf(k)) * Normal;
+
+float Fresnel_Reflectance(const PTUtility::Vec3& InDir, const PTUtility::Vec3& Normal, float In_Index, float Out_Index){
+	return 0.01;
+	float n1_div_n2 = (In_Index / Out_Index);
+	float cosA = Normal.dot(-InDir);
+	float sinA = std::sqrt(1.0000001f - cosA*cosA);
+	float sinB = n1_div_n2 * sinA;
+	if (sinB > 0.999999){
+		return 1.0;
+	}
+	float cosB = std::sqrt(1.0000001f - sinB*sinB);
+
+	float tp, rp, ts, rs;
+	tp = (2.0f * In_Index * cosA) / (Out_Index*cosA + In_Index*cosB);
+	rp = (Out_Index * cosA - In_Index*cosB) / (Out_Index*cosA + In_Index * cosB);
+	ts = (2.0f * In_Index * cosA) / (In_Index*cosA + Out_Index*cosB);
+	rs = (In_Index*cosA - Out_Index*cosB) / (In_Index*cosA + Out_Index*cosB);
+
+	return (0.25f * rs * rs) + (0.25f * rp *rp);
 }
-inline float fresnel_schlick(const Vec3& H, const Vec3& norm, float n1) {
-	float r0 = std::pow((n1 - 1.0) / (n1 + 1.0), 2.0);
-	return r0 + (1 - r0) * pow5(1 - H.dot(norm));
+
+PTUtility::Vec3 Refract(const PTUtility::Vec3& InDir, const PTUtility::Vec3& Normal, float In_Index, float Out_Index){
+	float sn = (In_Index) / (Out_Index);
+	float ns = sn;
+	if (sn > 1){ ns = (Out_Index) / (In_Index); }
+	bool into = InDir.dot(Normal) > 0;
+	PTUtility::Vec3 NN = Normal;
+	if (into){ NN = -Normal; }
+
+	return (-(1 + sn)*NN + sn*InDir).normalized();
 }
-
-
-
-
-
-
-
 
 struct CameraInfo{
 	Vec3 _Pos;
@@ -755,9 +819,27 @@ public:
 
 		return Normal.dot(result) / M_PI;
 	}
-
-
 };
+
+PTUtility::Vec3 Face_Surface_Reflectance(const PTUtility::Vec3& Albedo, const PTUtility::Vec3& InDir, const PTUtility::Vec3& Normal, float In_Index, float Out_Index){
+	return PTUtility::Vec3::Ones() * (1.0 - TRANSMITTACE_RATIO);
+	return Albedo;
+	//return Fresnel_Reflectance(InDir, Normal, In_Index, Out_Index) * Albedo;
+}
+PTUtility::Vec3 Face_Surface_Reflect(const PTUtility::Vec3& InDir, const PTUtility::Vec3& Normal, float In_Index, float Out_Index, RandomMT& MT){
+	PTUtility::Vec3 result;
+	Sample::CosSample(Normal, result, MT);
+	//result = Reflect(InDir, Normal);
+	return result;
+}
+PTUtility::Vec3 Face_Surface_Refract(const PTUtility::Vec3& InDir, const PTUtility::Vec3& Normal, float In_Index, float Out_Index, RandomMT& MT){
+	PTUtility::Vec3 result;
+	Sample::CosSample(-Normal, result, MT);
+	//result = Refract(InDir, Normal, In_Index, Out_Index);
+	return result;
+}
+
+
 
 struct Polygon{
 	PTUtility::Vec3 _P[3];
@@ -1432,7 +1514,6 @@ private:
 		RandomMT& MT, 
 		const LIGHT::LightSourceManager& LightManager
 		){
-
 		const int MAX_DEPTH = 36;
 		pm._Depth++;
 
@@ -1451,6 +1532,7 @@ private:
 		cray.min_t = 0.000000;
 		cray.max_t = 375000.0f;
 		bool Hit = scene.Traverse(cray, TraceOPT, TriIsec);
+
 
 		if (Hit){
 			//if Ray Hits the objects
@@ -1488,10 +1570,23 @@ private:
 			//If this polygon is translucent material
 			bool Translucent = face_material.dissolve < 0.5;
 
-
 			if (Translucent){
 				//PTUtility::Vec3 SurfaceColor = PTUtility::Vec3(face_material.diffuse[0], face_material.diffuse[1], face_material.diffuse[2]);
-				PTUtility::Vec3 SurfaceColor = PTUtility::Vec3::Ones();
+
+				//UV
+				Vec3 UV(0, 0, 0);
+				float3 uvs[3];
+				for (int j = 0; j < 3; j++){
+					uvs[j][0] = mesh.facevarying_uvs[6 * fid + 2 * j + 0];
+					uvs[j][1] = mesh.facevarying_uvs[6 * fid + 2 * j + 1];
+					uvs[j][2] = 0.0f;
+				}
+				As(UV, (1.0 - u - v) * uvs[0] + u * uvs[1] + v * uvs[2]);
+				Vec3 TextureDiffuse(1, 0, 1);
+				if (face_material.diffuse_texname.size() > 3){
+					TextureDiffuse = gTextureTable.at(face_material.diffuse_texname)->GetColor(UV.x(), 1.0 - UV.y()) * 5.0;
+				}
+				PTUtility::Vec3 SurfaceColor = TextureDiffuse;
 
 				//if ray is in out of  translucent material, it may intersect light source
 				if (pm._Stat == PTParam::Ray_Stat::OUTSIDE_TRANSLUCENT){
@@ -1528,13 +1623,18 @@ private:
 					if (pdf_dist > t){
 						//Ray may exit from the object
 
-						Vec3 Reflec = Reflect(pm._CRay.m_Dir, -NNormal).normalized();
-						Vec3 Refrac = Refract(pm._CRay.m_Dir, -NNormal, 1.0f / pm._Index).normalized();
-						float ReflectRatio = 1.0;
-						if (Refrac.norm2() > 0.5){
-							ReflectRatio = fresnel_schlick(pm._CRay.m_Dir, NNormal, pm._Index / mat._Index);
-							ReflectRatio = std::max(std::min(1.0f, ReflectRatio), 0.0f);
+						Vec3 Reflec = Face_Surface_Reflect(pm._CRay.m_Dir, -NNormal, mat._Index, 1.000, MT).normalized();
+						Vec3 Refrac = Face_Surface_Refract(pm._CRay.m_Dir, -NNormal, mat._Index, 1.000, MT).normalized();
+
+						Vec3 FSR = Face_Surface_Reflectance(SurfaceColor, pm._CRay.m_Dir, -NNormal, mat._Index, 1.000);
+						float ReflectRatio = 0.333333 * (FSR.x() + FSR.y() + FSR.z());
+						if (MT.genrand64_real1() > ReflectRatio){
+							pm._NextRay.m_Dir = Refrac;
 						}
+						else{
+							pm._NextRay.m_Dir = Reflec;
+						}
+						pm._NextRay.m_Org = pos + pm._NextRay.m_Dir * 0.0001;
 
 						if (MT.genrand64_real1() > ReflectRatio){
 							//Ray exit from the objects
@@ -1560,7 +1660,7 @@ private:
 							pm._Weight /= pp;
 							pm._Weight /= rus_pdf;
 
-							pm._Weight.MultVec(SurfaceColor);
+							//pm._Weight.MultVec(SurfaceColor);
 						}
 						else{
 							//Ray is reflected at the boundery and remains in the objects
@@ -1603,38 +1703,37 @@ private:
 				else if (pm._Stat == PTParam::Ray_Stat::OUTSIDE_TRANSLUCENT){
 					//If Ray outside the object
 
-					Vec3 Reflec = Reflect(pm._CRay.m_Dir, -NNormal).normalized();
-					Vec3 Refrac = Refract(pm._CRay.m_Dir, -NNormal, mat._Index / pm._Index);
-					float ReflectRatio = 1.0;
-					if (Refrac.norm2() > 0.5){
-						ReflectRatio = fresnel_schlick(pm._CRay.m_Dir, NNormal, mat._Index);
-						ReflectRatio = std::max(std::min(1.0f, ReflectRatio), 0.0f);
-					}
+					Vec3 Reflec = Face_Surface_Reflect(pm._CRay.m_Dir, -NNormal, 1.000, mat._Index, MT).normalized();
+					Vec3 Refrac = Face_Surface_Refract(pm._CRay.m_Dir, -NNormal, 1.000, mat._Index, MT).normalized();
 
+					Vec3 FSR = Face_Surface_Reflectance(SurfaceColor, pm._CRay.m_Dir, -NNormal, 1.000, mat._Index);
+					float ReflectRatio = 0.333333 * (FSR.x() + FSR.y() + FSR.z());
 					if (ReflectRatio < MT.genrand64_real1()){
 						//Ray enter the objects
 						pm._Stat = PTParam::Ray_Stat::INSIDE_TRANSLUCENT;
 						pm._Index = mat._Index;
 
-						pm._Weight.MultVec(SurfaceColor);
+						//pm._Weight.MultVec(SurfaceColor);
 
 						Refrac.normalize();
 						pm._NextRay.m_Dir = Refrac;
 						pm._NextRay.m_Org = pos + pm._NextRay.m_Dir * 0.001;
-
 					}
 					else{
 						//Ray is reflected at the boundery and remains outside the objects
 						pm._Stat = PTParam::Ray_Stat::OUTSIDE_TRANSLUCENT;
 						pm._Index = 1.0f;
 
-						//pm._Weight *= ReflectRatio;
+						pm._Weight.MultVec(SurfaceColor);
 						pm._NextRay.m_Dir = Reflec;
 						pm._NextRay.m_Org = pos + pm._NextRay.m_Dir * 0.001;
 					}
 				}
 			}
 			else if (!Translucent){
+				pm._NextRay = Ray(pos + pm._CRay.m_Dir * 0.001, pm._CRay.m_Dir);
+				return Vec3::Zero();
+
 				bool diffuse = true;
 				if (diffuse){
 					PTUtility::Vec3 DiffuseColor = PTUtility::Vec3(face_material.diffuse[0], face_material.diffuse[1], face_material.diffuse[2]);
@@ -1820,14 +1919,15 @@ public:
 };
 
 
-//Render Dragon Scene
+
+//Render Emily
 int main(){
 
 	//Create Scene
 	nanort::BVHBuildOptions<float> options;
 	std::vector<tinyobj::material_t> MatL;
 	Mesh Scene;
-	LoadObj(Scene, MatL, "OBJ\\BunnyRoom.obj", 1.0f, "OBJ\\");
+	LoadObj(Scene, MatL, "OBJ\\Emily_2_1.obj", 1.0f, "OBJ\\");
 
 	nanort::TriangleMesh<float> TriMesh(&Scene.vertices[0], &Scene.faces[0], sizeof(float) * 3);
 	nanort::TriangleSAHPred<float> TriPred(&Scene.vertices[0], &Scene.faces[0], sizeof(float) * 3);
@@ -1843,28 +1943,30 @@ int main(){
 	printf("    # of branch nodes: %d\n", stat.num_branch_nodes);
 	printf("  Max tree depth   : %d\n", stat.max_tree_depth);
 
-
 	//Ray Tracing
 
-	CameraInfo camera(Vec3(0, 5.0, 50.0), 5.0f, 5.0f, Vec3(0, -0.0, 0), 50.0f);
+	CameraInfo camera(Vec3(0, 0.0, 10.0), 1.0f, 1.0f, Vec3(0, 0.0, 0), 9.0f);
 	//LIGHT::LightSource* AreaLight1 = new LIGHT::AreaLightY(PTUtility::Vec3(1, 1, 1) * 6.283, PTUtility::Vec3(0, 0.501, 0.0), PTUtility::Vec3(1.0, 1.0, 1.0));
 	//LIGHT::LightSource* AreaLight2 = new LIGHT::AreaLightZ(PTUtility::Vec3(1, 1, 1) * 2.0 * M_PI, PTUtility::Vec3(0, 0.00, 0.501), PTUtility::Vec3(1.0, 1.0, 1.0));
-	LIGHT::LightSource* AreaLight3 = new LIGHT::AreaLightX(PTUtility::Vec3(1, 1, 1) * 2.0 * M_PI, PTUtility::Vec3(1.501, 0.00, 0.0), PTUtility::Vec3(4.0, 4.0, 4.0));
+	LIGHT::LightSource* AreaLight3 = new LIGHT::AreaLightX(PTUtility::Vec3(1, 1, 1) * 15.0 * M_PI, PTUtility::Vec3(1.501, 0.00, 0.0), PTUtility::Vec3(4.0, 4.0, 4.0));
 	LIGHT::LightSourceManager Lmanage;
-	//Lmanage.AddLightSource(AreaLight3);
+	Lmanage.AddLightSource(AreaLight3);
 
-	const int WD = 256;
-	const int HD = 256;
+	const int WD = 512;
+	const int HD = 512;
 	char* image = new char[WD * HD * 4];
 
 	srand(time(NULL));
-	const float SCALE = 1.0;
-	VolumePathTrace::SSSParam mat(Vec3(0.03, 0.02, 0.015) * SCALE, Vec3(8.9, 12.2, 9.0) * SCALE, 0.00001, 1.000001);
+
+	//Parameter for Subsurface scattering
+	VolumePathTrace::SSSParam mat(SIGMA_A * SCALE, SIGMA_S * SCALE, PHASE_G, INDEX);
+
 	VolumePathTrace VoLPath(WD, HD, 1);
 
+	printf("Start Render", stat.max_tree_depth);
 	{
 		ScopedTimer _prof("Volume Path Tracing");
-		VoLPath.RenderImage(camera, Scene, MatL, acc, mat, Lmanage, 512);
+		VoLPath.RenderImage(camera, Scene, MatL, acc, mat, Lmanage, 1500);
 	}
 
 	for (int i = 0; i < WD * HD * 4; i++){
@@ -1872,13 +1974,75 @@ int main(){
 		image[i] = std::max(0, std::min(255, ig));
 	}
 
-	stbi_write_bmp("resultImage.bmp", WD, HD, 4, image);
+	stbi_write_bmp("RenderImage.bmp", WD, HD, 4, image);
+	ClearTextureTable();
 	delete[] image;
 
 	ScopedTimer::PrintTimeTable(std::cout);
 
 	return  0;
 }
+
+
+////Render Dragon Scene
+//int main(){
+//
+//	//Create Scene
+//	nanort::BVHBuildOptions<float> options;
+//	std::vector<tinyobj::material_t> MatL;
+//	Mesh Scene;
+//	LoadObj(Scene, MatL, "OBJ\\CornelBox.obj", 1.0f, "OBJ\\");
+//
+//	nanort::TriangleMesh<float> TriMesh(&Scene.vertices[0], &Scene.faces[0], sizeof(float) * 3);
+//	nanort::TriangleSAHPred<float> TriPred(&Scene.vertices[0], &Scene.faces[0], sizeof(float) * 3);
+//
+//	nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<>> acc;
+//	bool ret = acc.Build(Scene.num_faces, options, TriMesh, TriPred);
+//	assert(ret);
+//
+//	nanort::BVHBuildStatistics stat = acc.GetStatistics();
+//
+//	printf("  BVH statistics:\n");
+//	printf("    # of leaf   nodes: %d\n", stat.num_leaf_nodes);
+//	printf("    # of branch nodes: %d\n", stat.num_branch_nodes);
+//	printf("  Max tree depth   : %d\n", stat.max_tree_depth);
+//
+//
+//	//Ray Tracing
+//
+//	CameraInfo camera(Vec3(0, 1.0, 4.0), 3.0f, 3.0f, Vec3(0, 1.0, 0), 4.0f);
+//	//LIGHT::LightSource* AreaLight1 = new LIGHT::AreaLightY(PTUtility::Vec3(1, 1, 1) * 6.283, PTUtility::Vec3(0, 0.501, 0.0), PTUtility::Vec3(1.0, 1.0, 1.0));
+//	//LIGHT::LightSource* AreaLight2 = new LIGHT::AreaLightZ(PTUtility::Vec3(1, 1, 1) * 2.0 * M_PI, PTUtility::Vec3(0, 0.00, 0.501), PTUtility::Vec3(1.0, 1.0, 1.0));
+//	LIGHT::LightSource* AreaLight3 = new LIGHT::AreaLightX(PTUtility::Vec3(1, 1, 1) * 2.0 * M_PI, PTUtility::Vec3(1.501, 0.00, 0.0), PTUtility::Vec3(4.0, 4.0, 4.0));
+//	LIGHT::LightSourceManager Lmanage;
+//	//Lmanage.AddLightSource(AreaLight3);
+//
+//	const int WD = 256;
+//	const int HD = 256;
+//	char* image = new char[WD * HD * 4];
+//
+//	srand(time(NULL));
+//	const float SCALE = 1.0;
+//	VolumePathTrace::SSSParam mat(Vec3(1, 1, 1) * SCALE, Vec3(9, 9, 9) * SCALE, 0.00001, 1.000001);
+//	VolumePathTrace VoLPath(WD, HD, 1);
+//
+//	{
+//		ScopedTimer _prof("Volume Path Tracing");
+//		VoLPath.RenderImage(camera, Scene, MatL, acc, mat, Lmanage, 1000);
+//	}
+//
+//	for (int i = 0; i < WD * HD * 4; i++){
+//		int ig = VoLPath.GetImage()[i];
+//		image[i] = std::max(0, std::min(255, ig));
+//	}
+//
+//	stbi_write_bmp("RenderImage.bmp", WD, HD, 4, image);
+//	delete[] image;
+//
+//	ScopedTimer::PrintTimeTable(std::cout);
+//
+//	return  0;
+//}
 
 
 

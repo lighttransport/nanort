@@ -755,7 +755,6 @@ namespace tinyobj {
 		std::vector<material_t> &materials, // [output]
 		std::string &err, const char *filename, const char *mtl_basepath,
 		unsigned int flags) {
-
 		shapes.clear();
 
 		std::stringstream errss;

@@ -26,6 +26,8 @@
     <ClInclude Include="ScopedTimer.h" />
     <ClInclude Include="stb_image.hpp" />
     <ClInclude Include="stb_image_write.h" />
+    <ClInclude Include="Texture.h" />
+    <ClInclude Include="TextureSampler.h" />
     <ClInclude Include="tiny_obj_loader.h" />
     <ClInclude Include="Vec3.h" />
   </ItemGroup>
@@ -34,6 +36,7 @@
     <ClCompile Include="Source.cpp" />
     <ClCompile Include="stb_image.cpp" />
     <ClCompile Include="stb_image_write.cpp" />
+    <ClCompile Include="Texture.cpp" />
     <ClCompile Include="tiny_obj_loader.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
