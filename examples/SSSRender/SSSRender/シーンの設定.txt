@@ -1,0 +1,50 @@
+Line 58~63
+表面下散乱のパラメータ設定
+
+SIGMA_S			: 散乱係数[mm-1]
+SIGMA_A			: 吸収係数[mm-1]
+PHASE_G 		: 位相関数に与えるg (0で等方散乱)
+TRANSMITTACE_RATIO	: 表面に入射した光のうち、内部に入る割合(0.0で不透明)
+SCALE 			: obj内での長さ1.0が何mmに相当するか
+INDEX			: 屈折率
+
+
+
+Line 1948
+カメラの設定　ほぼ平行投影
+
+
+
+
+Line 1951~1953
+ライトの設定
+
+LIGHT::AreaLightX でx軸に垂直な長方形の面光源を作成して、LIGHT::LightSourceManager に渡すことで設定する
+
+
+
+
+
+
+
+Face_OnlyDiffuseConponent.bmp -------------------------------------------------
+const PTUtility::Vec3 SIGMA_S = PTUtility::Vec3(0.74, 0.88, 1.01);
+const PTUtility::Vec3 SIGMA_A = PTUtility::Vec3(0.032, 0.17, 0.48);
+const float PHASE_G = 0.000001;
+const float TRANSMITTACE_RATIO = 0.0;
+const float SCALE = 10.0;  
+const float INDEX = 1.3;
+LIGHT::LightSource* AreaLight3 = new LIGHT::AreaLightX(PTUtility::Vec3(1, 1, 1) * 15.0 * M_PI, PTUtility::Vec3(1.501, 0.00, 0.0), PTUtility::Vec3(4.0, 4.0, 4.0));
+--------------------------------------------------------------------------------
+
+
+Face_DiffuseSSS.bmp ------------------------------------------------------------
+const PTUtility::Vec3 SIGMA_S = PTUtility::Vec3(0.74, 0.88, 1.01);
+const PTUtility::Vec3 SIGMA_A = PTUtility::Vec3(0.032, 0.17, 0.48);
+const float PHASE_G = 0.000001;
+const float TRANSMITTACE_RATIO = 0.4;
+const float SCALE = 10.0;  
+const float INDEX = 1.3;
+LIGHT::LightSource* AreaLight3 = new LIGHT::AreaLightX(PTUtility::Vec3(1, 1, 1) * 15.0 * M_PI, PTUtility::Vec3(1.501, 0.00, 0.0), PTUtility::Vec3(4.0, 4.0, 4.0));
+サンプル数　1500
+--------------------------------------------------------------------------------
