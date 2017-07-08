@@ -379,10 +379,10 @@ class Node
 	T xbmin_[3];
 	T xbmax_[3];
 	
-	Matrix<T> xform_;				// Transformation matrix. local -> world.
-	Matrix<T> inv_xform_;		// inverse(xform). world -> local
-	Matrix<T> inv_xform33_;	// inverse(xform0 with upper-left 3x3 elemets only(for transforming direction vector)
-	Matrix<T> inv_transpose_xform33_; // inverse(transpose(xform)) with upper-left 3x3 elements only(for transforming normal vector)	
+	T xform_[4][4];				// Transformation matrix. local -> world.
+	T inv_xform_[4][4];		// inverse(xform). world -> local
+	T inv_xform33_[4][4];	// inverse(xform0 with upper-left 3x3 elemets only(for transforming direction vector)
+	T inv_transpose_xform33_[4][4]; // inverse(transpose(xform)) with upper-left 3x3 elements only(for transforming normal vector)	
 	
   //nanort::BVHAccel<T, P, Pred, I> accel_;
 
@@ -391,12 +391,186 @@ class Node
 	
 };
 
-template<typename T, class P, class Pred, class I>
+// -------------------------------------------------
+
+// Predefined SAH predicator for cube.
+template<typename T = float>
+class NodeBBoxPred {
+ public:
+  NodeBBoxPred(const std::vector<Node<T> >* nodes) : axis_(0), pos_(0.0f), nodes_(nodes) {}
+
+  void Set(int axis, float pos) const {
+    axis_ = axis;
+    pos_ = pos;
+  }
+
+  bool operator()(unsigned int i) const {
+    int axis = axis_;
+    float pos = pos_;
+
+    T bmin[3], bmax[3];
+
+	  (*nodes_)[i].GetWorldBoundingBox(bmin, bmax);
+    
+    T center = bmax[axis] - bmin[axis];
+
+    return (center < pos);
+  }
+
+ private:
+  mutable int axis_;
+  mutable float pos_;
+  const std::vector<Node<T> > *nodes_;
+};
+
+template<typename T = float>
+class NodeBBoxGeometry {
+ public:
+  NodeBBoxGeometry(const std::vector<Node<T> >* nodes)
+      : nodes_(nodes) {}
+
+  /// Compute bounding box for `prim_index`th cube.
+  /// This function is called for each primitive in BVH build.
+  void BoundingBox(nanort::real3<T>* bmin, nanort::real3<T>* bmax, unsigned int prim_index) const {
+    T a[3], b[3];
+    (*nodes_)[prim_index].GetWorldBoundingBox(a, b);
+    (*bmin)[0] = a[0];
+    (*bmin)[1] = a[1];
+    (*bmin)[2] = a[2];
+    (*bmax)[0] = b[0];
+    (*bmax)[1] = b[1];
+    (*bmax)[2] = b[2];
+  }
+
+  const std::vector<Node<T> >* nodes_;
+  mutable nanort::real3<T> ray_org_;
+  mutable nanort::real3<T> ray_dir_;
+  mutable nanort::BVHTraceOptions trace_options_;
+};
+
+class NodeBBoxIntersection {
+ public:
+  NodeBBoxIntersection() {}
+
+  // Required member variables.
+  float t;
+  unsigned int prim_id;
+};
+
+template <class I, typename T = float>
+class NodeBBoxIntersector {
+ public:
+  NodeBBoxIntersector(const Node<T> *nodes)
+      : nodes_(nodes) {}
+
+  /// Do ray interesection stuff for `prim_index` th primitive and return hit
+  /// distance `t`,
+  /// Returns true if there's intersection.
+  bool Intersect(T* t_inout, unsigned int prim_index) const {
+    if ((prim_index < trace_options_.prim_ids_range[0]) ||
+        (prim_index >= trace_options_.prim_ids_range[1])) {
+      return false;
+    }
+
+    T bmin[3], bmax[3];
+    nodes_[prim_index].GetWorldBoundingBox(bmin, bmax);
+
+    T tmin, tmax;
+
+    const T min_x = ray_dir_sign_[0] ? bmax[0] : bmin[0];
+    const T min_y = ray_dir_sign_[1] ? bmax[1] : bmin[1];
+    const T min_z = ray_dir_sign_[2] ? bmax[2] : bmin[2];
+    const T max_x = ray_dir_sign_[0] ? bmin[0] : bmax[0];
+    const T max_y = ray_dir_sign_[1] ? bmin[1] : bmax[1];
+    const T max_z = ray_dir_sign_[2] ? bmin[2] : bmax[2];
+
+    // X
+    const T tmin_x = (min_x - ray_org_[0]) * ray_inv_dir_[0];
+    const T tmax_x = (max_x - ray_org_[0]) * ray_inv_dir_[0];
+
+    // Y
+    const T tmin_y = (min_y - ray_org_[1]) * ray_inv_dir_[1];
+    const T tmax_y = (max_y - ray_org_[1]) * ray_inv_dir_[1];
+
+    // Z
+    const T tmin_z = (min_z - ray_org_[2]) * ray_inv_dir_[2];
+    const T tmax_z = (max_z - ray_org_[2]) * ray_inv_dir_[2];
+
+    tmin = nanort::safemax(tmin_z, nanort::safemax(tmin_y, tmin_x));
+    tmax = nanort::safemin(tmax_z, nanort::safemin(tmax_y, tmax_x));
+
+    if (tmin > tmax) {
+      return false;
+    }
+
+    const T t = tmin;
+
+    if (t > (*t_inout)) {
+      return false;
+    }
+
+    (*t_inout) = t;
+
+    return true;
+  }
+
+  /// Returns the nearest hit distance.
+  T GetT() const { return intersection.t; }
+
+  /// Update is called when a nearest hit is found.
+  void Update(T t, unsigned int prim_idx) const {
+    intersection.t = t;
+    intersection.prim_id = prim_idx;
+  }
+
+  /// Prepare BVH traversal(e.g. compute inverse ray direction)
+  /// This function is called only once in BVH traversal.
+  void PrepareTraversal(const nanort::Ray<T>& ray,
+                        const nanort::BVHTraceOptions& trace_options) const {
+    ray_org_[0] = ray.org[0];
+    ray_org_[1] = ray.org[1];
+    ray_org_[2] = ray.org[2];
+
+    ray_dir_[0] = ray.dir[0];
+    ray_dir_[1] = ray.dir[1];
+    ray_dir_[2] = ray.dir[2];
+
+    // FIXME(syoyo): Consider zero div case.
+    ray_inv_dir_[0] = 1.0f / ray.dir[0];
+    ray_inv_dir_[1] = 1.0f / ray.dir[1];
+    ray_inv_dir_[2] = 1.0f / ray.dir[2];
+
+    ray_dir_sign_[0] = ray.dir[0] < 0.0f ? 1 : 0;
+    ray_dir_sign_[1] = ray.dir[1] < 0.0f ? 1 : 0;
+    ray_dir_sign_[2] = ray.dir[2] < 0.0f ? 1 : 0;
+
+    trace_options_ = trace_options;
+  }
+
+  /// Post BVH traversal stuff(e.g. compute intersection point information)
+  /// This function is called only once in BVH traversal.
+  /// `hit` = true if there is something hit.
+  void PostTraversal(const nanort::Ray<T>& ray, bool hit) const {
+    (void)ray;
+    (void)hit;
+  }
+
+  const Node<T>* nodes_;
+  mutable nanort::real3<T> ray_org_;
+  mutable nanort::real3<T> ray_dir_;
+  mutable nanort::real3<T> ray_inv_dir_;
+  mutable int ray_dir_sign_[3];
+  mutable nanort::BVHTraceOptions trace_options_;
+
+  mutable I intersection;
+};
+
+template<typename T = float>
 class Scene
 {
  public:
-	Scene();
-	~Scene();
+	Scene() {};
+	~Scene() {};
 
   ///
   /// Add renderable node to the scene.
@@ -415,18 +589,25 @@ class Scene
       nodes_[i].Update();
     }
 
-    // Update scene bounding box.
-    for (size_t i = 0; i < nodes_.size(); i++) {
-      bmin_[0] = std::min(bmin_[0], nodes_[i].bmin[0]);
-      bmin_[1] = std::min(bmin_[1], nodes_[i].bmin[1]);
-      bmin_[2] = std::min(bmin_[2], nodes_[i].bmin[2]);
+    // Build toplevel BVH.
+    NodeBBoxGeometry<T> geom(&nodes_);
+    NodeBBoxPred<T> pred(&nodes_);
+    bool ret = toplevel_accel_.Build(static_cast<unsigned int>(nodes_.size()), geom, pred);
 
-      bmax_[0] = std::max(bmax_[0], nodes_[i].bmax[0]);
-      bmax_[1] = std::max(bmax_[1], nodes_[i].bmax[1]);
-      bmax_[2] = std::max(bmax_[2], nodes_[i].bmax[2]);
+    if (ret) {
+      toplevel_accel_.BoundingBox(bmin_, bmax_); 
+    } else {
+      // Set invalid bbox value.
+      bmin_[0] = std::numeric_limits<T>::max();
+      bmin_[1] = std::numeric_limits<T>::max();
+      bmin_[2] = std::numeric_limits<T>::max();
+
+      bmax_[0] = -std::numeric_limits<T>::max();
+      bmax_[1] = -std::numeric_limits<T>::max();
+      bmax_[2] = -std::numeric_limits<T>::max();
     }
 
-    return false;
+    return ret;
   }
 
   ///
@@ -442,6 +623,24 @@ class Scene
     bmax[2] = bmax_[2];
   }
 
+  ///
+  /// Trace the ray into the scene.
+  /// First find the intersection of nodes' bounding box using toplevel BVH.
+  /// Then, trace into the hit node to find the intersection of the primitive.
+  ///
+  bool Traverse(nanort::Ray<T> &ray) {
+    
+    if (!toplevel_accel_.IsValid()) {
+      return false;
+    }
+
+    NodeBBoxIntersector<NodeBBoxIntersection, T> node_bbox_intersector;
+    bool hit = toplevel_accel_.Travese(ray, node_bbox_intersector);
+
+    return hit;
+
+  }
+
  private:
   // Scene bounding box.
   // Valid after calling `Commit()`.
@@ -449,6 +648,9 @@ class Scene
   T bmax_[3];
   
 	std::vector<Node<T> > nodes_;
+  
+  // Toplevel BVH accel.
+  nanort::BVHAccel<T, NodeBBoxGeometry<T>, NodeBBoxPred<T>, NodeBBoxIntersector<NodeBBoxIntersection, T> > toplevel_accel_;
 };
 
 } // namespace nanosg

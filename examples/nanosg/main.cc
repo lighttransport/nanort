@@ -6,5 +6,9 @@
 int
 main(int argc, char **argv)
 {
+  nanosg::Scene<float> scene;
+
+  scene.Commit();
+
 	return EXIT_SUCCESS;
 }

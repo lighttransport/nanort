@@ -1,7 +1,7 @@
 #include "nanort.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "../common/stb_image_write.h"
 
 #include <stdint.h>
 
@@ -448,7 +448,7 @@ int main(int argc, char **argv) {
   nanort::BVHAccel<float, CylinderGeometry, CylinderPred,
                    CylinderIntersector<CylinderIntersection> >
       accel;
-  bool ret = accel.Build(n, options, cylinder_geom, cylinder_pred);
+  bool ret = accel.Build(n, cylinder_geom, cylinder_pred, options);
   assert(ret);
 
   nanort::BVHBuildStatistics stats = accel.GetStatistics();
@@ -487,10 +487,9 @@ int main(int argc, char **argv) {
       ray.min_t = 0.0f;
       ray.max_t = kFar;
 
-      nanort::BVHTraceOptions trace_options;
       CylinderIntersector<CylinderIntersection> isector(&vertices.at(0),
                                                         &radiuss.at(0));
-      bool hit = accel.Traverse(ray, trace_options, isector);
+      bool hit = accel.Traverse(ray, isector);
       if (hit) {
         // Flip Y
         rgb[3 * ((height - y - 1) * width + x) + 0] =

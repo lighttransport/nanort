@@ -385,8 +385,8 @@ bool Renderer::BuildBVH() {
 
   printf("num_triangles = %lu\n", gMesh.num_faces);
 
-  bool ret = gAccel.Build(gMesh.num_faces, build_options, triangle_mesh,
-                          triangle_pred);
+  bool ret = gAccel.Build(gMesh.num_faces, triangle_mesh,
+                          triangle_pred, build_options);
   assert(ret);
 
   auto t_end = std::chrono::system_clock::now();
@@ -479,8 +479,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
 
           nanort::TriangleIntersector<> triangle_intersector(
               reinterpret_cast<const float*>(gMesh.vertices.data()), gMesh.faces.data(), gMesh.vertex_stride_bytes);
-          nanort::BVHTraceOptions trace_options;
-          bool hit = gAccel.Traverse(ray, trace_options, triangle_intersector);
+          bool hit = gAccel.Traverse(ray, triangle_intersector);
           if (hit) {
             float3 p;
             p[0] =

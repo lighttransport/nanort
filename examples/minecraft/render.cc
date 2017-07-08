@@ -580,7 +580,7 @@ bool Renderer::BuildBVH() {
   CubeGeometry cube_geom(&gCubes.vertices.at(0), &gCubes.widths.at(0));
   CubePred cube_pred(&gCubes.vertices.at(0));
   bool ret =
-      gAccel.Build(gCubes.widths.size(), build_options, cube_geom, cube_pred);
+      gAccel.Build(gCubes.widths.size(), cube_geom, cube_pred, build_options);
   assert(ret);
 
   auto t_end = std::chrono::system_clock::now();
@@ -678,8 +678,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
           CubeIntersector<CubeIntersection> cube_intersector(
               reinterpret_cast<const float*>(gCubes.vertices.data()),
               gCubes.widths.data());
-          nanort::BVHTraceOptions trace_options;
-          bool hit = gAccel.Traverse(ray, trace_options, cube_intersector);
+          bool hit = gAccel.Traverse(ray, cube_intersector);
           if (hit) {
             float3 p;
             p[0] = ray.org[0] + cube_intersector.intersection.t * ray.dir[0];

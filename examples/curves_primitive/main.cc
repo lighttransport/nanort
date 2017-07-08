@@ -667,7 +667,7 @@ int main(int argc, char **argv) {
   unsigned int num_curves = thicknesses.size() / 4;
 
   nanort::BVHAccel<float, CurveGeometry, CurvePred, CurveIntersector<CurveIntersection> > accel;
-  bool ret = accel.Build(num_curves, options, curves_geom, curves_pred);
+  bool ret = accel.Build(num_curves, curves_geom, curves_pred, options);
   assert(ret);
 
   nanort::BVHBuildStatistics stats = accel.GetStatistics();
@@ -707,9 +707,8 @@ int main(int argc, char **argv) {
       ray.min_t = 0.0f;
       ray.max_t = kFar;
 
-      nanort::BVHTraceOptions trace_options;
       CurveIntersector<CurveIntersection> isector(&vertices.at(0), &thicknesses.at(0));
-      bool hit = accel.Traverse(ray, trace_options, isector);
+      bool hit = accel.Traverse(ray, isector);
       if (hit) {
         // Write your shader here.
         float3 P;

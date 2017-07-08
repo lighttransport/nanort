@@ -485,7 +485,7 @@ bool Renderer::BuildBVH() {
   SpherePred sphere_pred(&vertices_.at(0));
 
   bool ret =
-      gAccel.Build(radiuss_.size(), build_options, sphere_geom, sphere_pred);
+      gAccel.Build(radiuss_.size(), sphere_geom, sphere_pred, build_options);
   assert(ret);
 
   auto t_end = std::chrono::system_clock::now();
@@ -585,10 +585,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           ray.min_t = 0.0f;
           ray.max_t = kFar;
 
-          nanort::BVHTraceOptions trace_options;
           SphereIntersector<SphereIntersection> isector(&vertices_.at(0),
                                                         &radiuss_.at(0));
-          bool hit = gAccel.Traverse(ray, trace_options, isector);
+          bool hit = gAccel.Traverse(ray, isector);
           if (hit) {
             float3 p;
             p[0] = ray.org[0] + isector.intersection.t * ray.dir[0];

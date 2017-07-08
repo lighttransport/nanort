@@ -684,8 +684,7 @@ bool CheckForOccluder(
 
   nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces,
                                                      sizeof(float) * 3);
-  nanort::BVHTraceOptions trace_options;
-  if (!accel.Traverse(shadow_ray, trace_options, triangle_intersector)) {
+  if (!accel.Traverse(shadow_ray, triangle_intersector)) {
     return false;
   }
 
@@ -754,7 +753,7 @@ int main(int argc, char **argv) {
                    nanort::TriangleIntersector<> >
       accel;
   ret =
-      accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
+      accel.Build(mesh.num_faces, triangle_mesh, triangle_pred, build_options);
   assert(ret);
 
   t.end();
@@ -827,8 +826,7 @@ int main(int argc, char **argv) {
 
           nanort::TriangleIntersector<> triangle_intersector(
               mesh.vertices, mesh.faces, sizeof(float) * 3);
-          nanort::BVHTraceOptions trace_options;
-          bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
+          bool hit = accel.Traverse(ray, triangle_intersector);
 
           if (!hit) {
             break;

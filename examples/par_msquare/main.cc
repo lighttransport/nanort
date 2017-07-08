@@ -323,8 +323,7 @@ float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
       ray.max_t = std::numeric_limits<float>::max();
 
       nanort::TriangleIntersector<float> isecter(triangleMesh.vertices_, triangleMesh.faces_, sizeof(float) * 3);
-      nanort::BVHTraceOptions traceOptions;
-      bool hit = accel.Traverse(ray, traceOptions, isecter);
+      bool hit = accel.Traverse(ray, isecter);
       if (hit) {
         occlusion += 1.0f;
       }
@@ -371,7 +370,7 @@ int main(int argc, char **argv) {
   nanort::TriangleMesh<float> triangleMesh(&mesh.vertices.at(0), &mesh.faces.at(0), sizeof(float) * 3);
   nanort::TriangleSAHPred<float> trianglePred(&mesh.vertices.at(0), &mesh.faces.at(0), sizeof(float) * 3);
   nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> > accel;
-  ret = accel.Build(mesh.faces.size() / 3, options, triangleMesh, trianglePred);
+  ret = accel.Build(mesh.faces.size() / 3, triangleMesh, trianglePred, options);
   assert(ret);
 
   t.end();
@@ -475,8 +474,7 @@ int main(int argc, char **argv) {
           float tFar = 1.0e+30f;
           ray.min_t = 0.0f;
           ray.max_t = tFar;
-          nanort::BVHTraceOptions traceOptions;
-          bool hit = accel.Traverse(ray, traceOptions, isector);
+          bool hit = accel.Traverse(ray, isector);
           if (hit) {
             // Write your shader here.
             float3 P;

@@ -315,7 +315,7 @@ int main(int argc, char **argv) {
   nanort::BVHAccel<float, SphereGeometry, SpherePred,
                    SphereIntersector<SphereIntersection> >
       accel;
-  bool ret = accel.Build(radiuss.size(), options, sphere_geom, sphere_pred);
+  bool ret = accel.Build(radiuss.size(), sphere_geom, sphere_pred, options);
   assert(ret);
 
   nanort::BVHBuildStatistics stats = accel.GetStatistics();
@@ -354,10 +354,9 @@ int main(int argc, char **argv) {
       ray.min_t = 0.0f;
       ray.max_t = kFar;
 
-      nanort::BVHTraceOptions trace_options;
       SphereIntersector<SphereIntersection> isecter(&vertices.at(0),
                                                     &radiuss.at(0));
-      bool hit = accel.Traverse(ray, trace_options, isecter);
+      bool hit = accel.Traverse(ray, isecter);
       if (hit) {
         // Write your shader here.
         float3 P;

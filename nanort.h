@@ -477,7 +477,7 @@ class BVHAccel {
 
   /// Build BVH for input primitives.
   bool Build(const unsigned int num_primitives,
-             const BVHBuildOptions<T> &options, const P &p, const Pred &pred);
+             const P &p, const Pred &pred, const BVHBuildOptions<T> &options = BVHBuildOptions<T>());
 
   /// Get statistics of built BVH tree. Valid after Build()
   BVHBuildStatistics GetStatistics() const { return stats_; }
@@ -490,8 +490,9 @@ class BVHAccel {
 
   /// Traverse into BVH along ray and find closest hit point & primitive if
   /// found
-  bool Traverse(const Ray<T> &ray, const BVHTraceOptions &options,
-                const I &intersector) const;
+  bool Traverse(const Ray<T> &ray,
+                const I &intersector,
+                const BVHTraceOptions& options = BVHTraceOptions()) const;
 
   /// Multi-hit ray traversal
   /// Returns `max_intersections` frontmost intersections
@@ -1476,8 +1477,8 @@ unsigned int BVHAccel<T, P, Pred, I>::BuildTree(
 
 template <typename T, class P, class Pred, class I>
 bool BVHAccel<T, P, Pred, I>::Build(unsigned int num_primitives,
-                                    const BVHBuildOptions<T> &options,
-                                    const P &p, const Pred &pred) {
+                                    const P &p, const Pred &pred,
+                                    const BVHBuildOptions<T> &options) {
   options_ = options;
   stats_ = BVHBuildStatistics();
 
@@ -1827,8 +1828,8 @@ bool BVHAccel<T, P, Pred, I>::MultiHitTestLeafNode(const BVHNode &node,
 
 template <typename T, class P, class Pred, class I>
 bool BVHAccel<T, P, Pred, I>::Traverse(const Ray<T> &ray,
-                                       const BVHTraceOptions &options,
-                                       const I &intersector) const {
+                                       const I &intersector,
+                                       const BVHTraceOptions &options) const {
   const int kMaxStackDepth = 512;
 
   T hit_t = ray.max_t;

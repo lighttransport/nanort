@@ -911,8 +911,7 @@ void raytrace(const Mesh &mesh, const Accel &accel,
 
     nanort::TriangleIntersector<> triangle_intersector(
         mesh.vertices, mesh.faces, sizeof(float) * 3);
-    nanort::BVHTraceOptions trace_options;
-    bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
+    bool hit = accel.Traverse(ray, triangle_intersector);
 
     if (!hit) {
       break;
@@ -1224,8 +1223,7 @@ float calcG(const Vertex &v1, const Vertex &v2, const Mesh &mesh,
 
   nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces,
                                                      sizeof(float) * 3);
-  nanort::BVHTraceOptions trace_options;
-  bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
+  bool hit = accel.Traverse(ray, triangle_intersector);
   if (!hit) {
     return 0.0f;
   }
@@ -1346,7 +1344,7 @@ int main(int argc, char **argv) {
 
   Accel accel;
   ret =
-      accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
+      accel.Build(mesh.num_faces, triangle_mesh, triangle_pred, build_options);
   assert(ret);
 
   printf("  BVH build time: %f secs\n", t.stop() / 1000.0);
