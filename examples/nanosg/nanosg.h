@@ -569,11 +569,15 @@ template<typename T = float>
 class Scene
 {
  public:
-	Scene() {};
+	Scene() {
+    bmin_[0] = bmin_[1] = bmin_[2] = std::numeric_limits<T>::max();
+    bmax_[0] = bmax_[1] = bmax_[2] = -std::numeric_limits<T>::max();
+  }
+
 	~Scene() {};
 
   ///
-  /// Add renderable node to the scene.
+  /// Add intersectable node to the scene.
   ///
 	bool AddNode(const Node<T> &node) {
     nodes_.push_back(node);

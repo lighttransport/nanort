@@ -285,7 +285,7 @@ void OrthoBasis(float3 basis[3], const float3 &n) {
 }
 
 float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
-               nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> > &accel, const nanort::TriangleMesh<float>& triangleMesh)
+               nanort::BVHAccel<float> &accel, const nanort::TriangleMesh<float>& triangleMesh)
 {
   const int ntheta = 16;
   const int nphi = 32;
@@ -323,7 +323,8 @@ float3 ShadeAO(const float3 &P, const float3 &N, pcg32_state_t *rng,
       ray.max_t = std::numeric_limits<float>::max();
 
       nanort::TriangleIntersector<float> isecter(triangleMesh.vertices_, triangleMesh.faces_, sizeof(float) * 3);
-      bool hit = accel.Traverse(ray, isecter);
+      nanort::TriangleIntersection<float> isect;
+      bool hit = accel.Traverse(ray, isecter, &isect);
       if (hit) {
         occlusion += 1.0f;
       }
@@ -369,7 +370,7 @@ int main(int argc, char **argv) {
 
   nanort::TriangleMesh<float> triangleMesh(&mesh.vertices.at(0), &mesh.faces.at(0), sizeof(float) * 3);
   nanort::TriangleSAHPred<float> trianglePred(&mesh.vertices.at(0), &mesh.faces.at(0), sizeof(float) * 3);
-  nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> > accel;
+  nanort::BVHAccel<float> accel;
   ret = accel.Build(mesh.faces.size() / 3, triangleMesh, trianglePred, options);
   assert(ret);
 
@@ -474,12 +475,13 @@ int main(int argc, char **argv) {
           float tFar = 1.0e+30f;
           ray.min_t = 0.0f;
           ray.max_t = tFar;
-          bool hit = accel.Traverse(ray, isector);
+          nanort::TriangleIntersection<> isect;
+          bool hit = accel.Traverse(ray, isector, &isect);
           if (hit) {
             // Write your shader here.
             float3 P;
             float3 N;
-            unsigned int fid = isector.intersection.prim_id;
+            unsigned int fid = isect.prim_id;
             unsigned int f0, f1, f2;
             f0 = mesh.faces[3 * fid + 0];
             f1 = mesh.faces[3 * fid + 1];

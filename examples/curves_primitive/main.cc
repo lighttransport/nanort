@@ -421,7 +421,7 @@ class CurveIntersection
   float3 normal; // perpendicular to the curve
 };
 
-template<class I>
+template<class H>
 class CurveIntersector
 {
   // Evaluate bezier curve as N segmnet lines.
@@ -558,16 +558,16 @@ class CurveIntersector
 
 	/// Returns the nearest hit distance.
 	float GetT() const {
-		return intersection.t;
+		return t_;
 	}
 
 	/// Update is called when a nearest hit is found.
 	void Update(float t, unsigned int prim_idx) const {
-    intersection.t = t;
-    intersection.prim_id = prim_idx;
+    t_ = t;
+    prim_id_ = prim_idx;
 
-    intersection.u = u_param;
-    intersection.v = v_param;
+    u_ = u_param;
+    v_ = v_param;
 	}
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
@@ -586,15 +586,13 @@ class CurveIntersector
   }
 
 
-  /// Post BVH traversal stuff(e.g. compute intersection point information)
-  /// This function is called only once in BVH traversal.
-  /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray<float> &ray, bool hit) const {
-    if (hit) {
+  /// Post BVH traversal stuff
+  void PostTraversal(const nanort::Ray<float> &ray, bool hit, H *isect) const {
+    if (hit && isect) {
 
       float3 cps[4];
 
-      unsigned int prim_index = intersection.prim_id;
+      unsigned int prim_index = prim_id_;
 
       cps[0][0] = vertices_[12 * prim_index + 0];
       cps[0][1] = vertices_[12 * prim_index + 1];
@@ -614,10 +612,15 @@ class CurveIntersector
 
       // Compute tangent
       float3 Dv;
-      EvaluateBezierTangent(cps, intersection.u, &Dv);
-      intersection.tangent = vnormalize(Dv);
+      EvaluateBezierTangent(cps, u_, &Dv);
+      (*isect).tangent = vnormalize(Dv);
 
-      intersection.normal = vnormalize(vcross(vcross(ray_dir_, intersection.tangent), intersection.tangent));
+      (*isect).normal = vnormalize(vcross(vcross(ray_dir_, (*isect).tangent), (*isect).tangent));
+
+      (*isect).t = t_;
+      (*isect).u = u_;
+      (*isect).v = v_;
+      (*isect).prim_id = prim_id_;
     } 
   }
 
@@ -628,7 +631,11 @@ class CurveIntersector
   mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 
-  mutable I intersection;
+ private:
+  mutable float t_;
+  mutable float u_;
+  mutable float v_;
+  mutable unsigned int prim_id_;
   mutable float u_param;
   mutable float v_param;
 };
@@ -666,7 +673,7 @@ int main(int argc, char **argv) {
 
   unsigned int num_curves = thicknesses.size() / 4;
 
-  nanort::BVHAccel<float, CurveGeometry, CurvePred, CurveIntersector<CurveIntersection> > accel;
+  nanort::BVHAccel<float> accel;
   bool ret = accel.Build(num_curves, curves_geom, curves_pred, options);
   assert(ret);
 
@@ -708,11 +715,12 @@ int main(int argc, char **argv) {
       ray.max_t = kFar;
 
       CurveIntersector<CurveIntersection> isector(&vertices.at(0), &thicknesses.at(0));
-      bool hit = accel.Traverse(ray, isector);
+      CurveIntersection isect;
+      bool hit = accel.Traverse(ray, isector, &isect);
       if (hit) {
         // Write your shader here.
         float3 P;
-        float3 v = isector.intersection.normal;
+        float3 v = isect.normal;
         //float3 v;
         //v[0] = isector.intersection.u;
         //v[1] = isector.intersection.u;
