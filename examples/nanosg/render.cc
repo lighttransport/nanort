@@ -163,9 +163,9 @@ struct Texture {
 Mesh gMesh;
 std::vector<Material> gMaterials;
 std::vector<Texture> gTextures;
-nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>,
-                 nanort::TriangleIntersector<> >
-    gAccel;
+//nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>,
+//                 nanort::TriangleIntersector<> >
+//    gAccel;
 
 typedef nanort::real3<float> float3;
 
@@ -629,15 +629,16 @@ bool Renderer::BuildBVH() {
 
   printf("num_triangles = %lu\n", gMesh.num_faces);
 
-  bool ret = gAccel.Build(gMesh.num_faces, triangle_mesh,
-                          triangle_pred, build_options);
-  assert(ret);
+  //bool ret = gAccel.Build(gMesh.num_faces, triangle_mesh,
+  //                        triangle_pred, build_options);
+  //assert(ret);
 
   auto t_end = std::chrono::system_clock::now();
 
   std::chrono::duration<double, std::milli> ms = t_end - t_start;
   std::cout << "BVH build time: " << ms.count() << " [ms]\n";
 
+#if 0
   nanort::BVHBuildStatistics stats = gAccel.GetStatistics();
 
   printf("  BVH statistics:\n");
@@ -648,16 +649,18 @@ bool Renderer::BuildBVH() {
   gAccel.BoundingBox(bmin, bmax);
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
+#endif
 
   return true;
 }
 
 bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
-                      float quat[4], const RenderConfig& config,
+                      float quat[4], 
+                      const nanosg::Scene<float> &scene, const RenderConfig& config,
                       std::atomic<bool>& cancelFlag) {
-  if (!gAccel.IsValid()) {
-    return false;
-  }
+  //if (!gAccel.IsValid()) {
+  //  return false;
+  //}
 
   int width = config.width;
   int height = config.height;
@@ -730,6 +733,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           ray.min_t = 0.0f;
           ray.max_t = kFar;
 
+#if 0
           nanort::TriangleIntersector<> triangle_intersector(
               gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
           bool hit = gAccel.Traverse(ray, triangle_intersector);
@@ -905,6 +909,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               config.varycoordImage[4 * (y * config.width + x) + 3] = 0.0f;
             }
           }
+#endif
         }
 
         for (int x = 0; x < config.width; x++) {

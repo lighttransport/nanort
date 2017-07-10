@@ -499,12 +499,12 @@ class BVHAccel {
 
   /// Multi-hit ray traversal
   /// Returns `max_intersections` frontmost intersections
-  template<class I, class H>
+  template<class I, class H, class Comp>
   bool MultiHitTraverse(const Ray<T> &ray,
                         int max_intersections,
                         const I &intersector,
                         StackVector<H, 128> *isects,
-                        const BVHTraceOptions &options) const;
+                        const BVHTraceOptions &options = BVHTraceOptions()) const;
 
   const std::vector<BVHNode<T> > &GetNodes() const { return nodes_; }
   const std::vector<unsigned int> &GetIndices() const { return indices_; }
@@ -557,8 +557,8 @@ class BVHAccel {
   bool TestLeafNode(const BVHNode<T> &node, const Ray<T> &ray,
                     const I &intersector) const;
 
-  template<class I>
-  bool MultiHitTestLeafNode(std::priority_queue<I, std::vector<I>, IntersectComparator<I> > *isect_pq,
+  template<class I, class H, class Comp>
+  bool MultiHitTestLeafNode(std::priority_queue<H, std::vector<H>, Comp> *isect_pq,
                             int max_intersections,
                             const BVHNode<T> &node, const Ray<T> &ray,
                             const I &intersector) const;
@@ -1775,10 +1775,9 @@ inline bool BVHAccel<T>::TestLeafNode(const BVHNode<T> &node,
   return hit;
 }
 
-#if 0
-template <typename T, class P, class Pred, class I, class H>
-bool BVHAccel<T, P, Pred, I, H>::MultiHitTestLeafNode(
-  std::priority_queue<I, std::vector<I>, IntersectComparator<I> >  *hit_pq,
+template <typename T> template<class I, class H, class Comp>
+bool BVHAccel<T>::MultiHitTestLeafNode(
+  std::priority_queue<H, std::vector<H>, Comp>  *isect_pq,
   int max_intersections,
   const BVHNode<T> &node,
   const Ray<T> &ray,
@@ -1824,9 +1823,9 @@ bool BVHAccel<T, P, Pred, I, H>::MultiHitTestLeafNode(
 
           hit = true;
         } else {
-          if (local_t < isects->top().t) {
+          if (local_t < isect_pq->top().t) {
             // delete furthest intersection and add new intersection.
-            isects->pop();
+            isect_pq->pop();
 
             H hit;
             hit.t = local_t;
@@ -1836,7 +1835,7 @@ bool BVHAccel<T, P, Pred, I, H>::MultiHitTestLeafNode(
             isect_pq->push(hit);
 
             // Update furthest hit distance
-            t = isects->top().t;
+            t = isect_pq->top().t;
 
             hit = true;
           }
@@ -1847,7 +1846,6 @@ bool BVHAccel<T, P, Pred, I, H>::MultiHitTestLeafNode(
 
   return hit;
 }
-#endif
 
 template <typename T> template<class I, class H>
 bool BVHAccel<T>::Traverse(const Ray<T> &ray,
@@ -1921,9 +1919,8 @@ bool BVHAccel<T>::Traverse(const Ray<T> &ray,
   return hit;
 }
 
-#if 0
-template <typename T, class P, class Pred, class I, class H>
-bool BVHAccel<T, P, Pred, I, H>::MultiHitTraverse(const Ray<T> &ray,
+template <typename T> template<class I, class H, class Comp>
+bool BVHAccel<T>::MultiHitTraverse(const Ray<T> &ray,
                                          int max_intersections,
                                          const I &intersector,
                                          StackVector<H, 128> *hits,
@@ -1937,7 +1934,7 @@ bool BVHAccel<T, P, Pred, I, H>::MultiHitTraverse(const Ray<T> &ray,
   node_stack[0] = 0;
 
   // Stores furthest intersection at top
-  std::priority_queue<I, std::vector<I>, IntersectComparator<I> >  isect_pq;
+  std::priority_queue<H, std::vector<H>, Comp >  isect_pq;
 
   (*hits)->clear();
 
@@ -1984,7 +1981,7 @@ bool BVHAccel<T, P, Pred, I, H>::MultiHitTraverse(const Ray<T> &ray,
 
     } else {  // leaf node
       if (hit) {
-        if (MultiHitTestLeafNode(&isect_pq, max_intersections, node, ray, p)) {
+        if (MultiHitTestLeafNode(&isect_pq, max_intersections, node, ray, intersector)) {
           // Only update `hit_t` when queue is full.
           if (isect_pq.size() >= static_cast<size_t>(max_intersections)) {
             hit_t = isect_pq.top().t;
@@ -2000,10 +1997,10 @@ bool BVHAccel<T, P, Pred, I, H>::MultiHitTraverse(const Ray<T> &ray,
   if (!isect_pq.empty()) {
     // Store intesection in reverse order(make it frontmost order)
     size_t n = isect_pq.size();
-    (*isects)->resize(n);
+    (*hits)->resize(n);
     for (size_t i = 0; i < n; i++) {
-      const Intersection &isect = isect_pq.top();
-      (*isects)[n - i - 1] = isect;
+      const H &isect = isect_pq.top();
+      (*hits)[n - i - 1] = isect;
       isect_pq.pop();
     }
 
@@ -2012,7 +2009,6 @@ bool BVHAccel<T, P, Pred, I, H>::MultiHitTraverse(const Ray<T> &ray,
 
   return false;
 }
-#endif
 
 }  // namespace nanort
 

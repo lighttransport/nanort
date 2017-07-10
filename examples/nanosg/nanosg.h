@@ -66,22 +66,22 @@ public:
   }
 
   static void Identity(T m[4][4]) {
-    m[0][0] = 1.0;
-    m[0][1] = 0.0;
-    m[0][2] = 0.0;
-    m[0][3] = 0.0;
-    m[1][0] = 0.0;
-    m[1][1] = 1.0;
-    m[1][2] = 0.0;
-    m[1][3] = 0.0;
-    m[2][0] = 0.0;
-    m[2][1] = 0.0;
-    m[2][2] = 1.0;
-    m[2][3] = 0.0;
-    m[3][0] = 0.0;
-    m[3][1] = 0.0;
-    m[3][2] = 0.0;
-    m[3][3] = 1.0;
+    m[0][0] = static_cast<T>(1);
+    m[0][1] = static_cast<T>(0);
+    m[0][2] = static_cast<T>(0);
+    m[0][3] = static_cast<T>(0);
+    m[1][0] = static_cast<T>(0);
+    m[1][1] = static_cast<T>(1);
+    m[1][2] = static_cast<T>(0);
+    m[1][3] = static_cast<T>(0);
+    m[2][0] = static_cast<T>(0);
+    m[2][1] = static_cast<T>(0);
+    m[2][2] = static_cast<T>(1);
+    m[2][3] = static_cast<T>(0);
+    m[3][0] = static_cast<T>(0);
+    m[3][1] = static_cast<T>(0);
+    m[3][2] = static_cast<T>(0);
+    m[3][3] = static_cast<T>(1);
   }
 
   static void Copy(T dst[4][4], const T src[4][4]) {
@@ -175,7 +175,7 @@ public:
           tsrc[3] * m[0][3];
 
     /* calculate matrix inverse */
-    det = 1.0 / det;
+    det = static_cast<T>(1.0) / det;
 
     for (j = 0; j < 4; j++) {
       for (i = 0; i < 4; i++) {
@@ -448,13 +448,24 @@ class NodeBBoxGeometry {
   mutable nanort::BVHTraceOptions trace_options_;
 };
 
+template<typename T = float>
 class NodeBBoxIntersection {
  public:
   NodeBBoxIntersection() {}
 
+	// hit distance to bbox min and bbox max.
+	T t_min;
+	T t_max;
+
   // Required member variables.
-  float t;
+  T t;
   unsigned int prim_id;
+};
+
+template<typename T = float>
+class NodeBBoxIntersectComparator {
+ public:
+  bool operator()(const NodeBBoxIntersection<T> &a, const NodeBBoxIntersection<T> &b) const { return a.t_min < b.t_max; }
 };
 
 template <class I, typename T = float>
@@ -515,12 +526,12 @@ class NodeBBoxIntersector {
   }
 
   /// Returns the nearest hit distance.
-  T GetT() const { return intersection.t; }
+  T GetT() const { return t_; }
 
   /// Update is called when a nearest hit is found.
   void Update(T t, unsigned int prim_idx) const {
-    intersection.t = t;
-    intersection.prim_id = prim_idx;
+    t_ = t;
+    prim_id_ = prim_idx;
   }
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
@@ -555,6 +566,8 @@ class NodeBBoxIntersector {
     (void)hit;
   }
 
+ private:
+
   const Node<T>* nodes_;
   mutable nanort::real3<T> ray_org_;
   mutable nanort::real3<T> ray_dir_;
@@ -562,7 +575,8 @@ class NodeBBoxIntersector {
   mutable int ray_dir_sign_[3];
   mutable nanort::BVHTraceOptions trace_options_;
 
-  mutable I intersection;
+  mutable T t_;
+	mutable unsigned int prim_id_;
 };
 
 template<typename T = float>
@@ -638,8 +652,26 @@ class Scene
       return false;
     }
 
-    NodeBBoxIntersector<NodeBBoxIntersection, T> node_bbox_intersector;
-    bool hit = toplevel_accel_.Travese(ray, node_bbox_intersector);
+    NodeBBoxIntersector<NodeBBoxIntersection<T>, T> node_bbox_intersector;
+		nanort::StackVector<NodeBBoxIntersection<T>, 128> isects;
+
+		const int kMaxIntersections = 64;
+		
+    bool hit = toplevel_accel_.MultiHitTravese(ray, kMaxIntersections, node_bbox_intersector, &isects);
+
+		if (hit) {
+			T t_max = std::numeric_limits<T>::max();
+			T t_nearst = t_max;
+
+			// Find precise intersection point.
+			for (size_t i = 0; i < isects->size(); i++) {
+				
+				// Early cull test.
+				// TODO(LTE): Implement
+
+			}
+
+		}
 
     return hit;
 
@@ -654,7 +686,7 @@ class Scene
 	std::vector<Node<T> > nodes_;
   
   // Toplevel BVH accel.
-  nanort::BVHAccel<T, NodeBBoxGeometry<T>, NodeBBoxPred<T>, NodeBBoxIntersector<NodeBBoxIntersection, T> > toplevel_accel_;
+  nanort::BVHAccel<T> toplevel_accel_;
 };
 
 } // namespace nanosg
