@@ -384,7 +384,7 @@ class Node
 	T inv_xform33_[4][4];	// inverse(xform0 with upper-left 3x3 elemets only(for transforming direction vector)
 	T inv_transpose_xform33_[4][4]; // inverse(transpose(xform)) with upper-left 3x3 elements only(for transforming normal vector)	
 	
-  //nanort::BVHAccel<T, P, Pred, I> accel_;
+  nanort::BVHAccel<T> accel_;
 
   const std::vector<nanort::BVHNode<T> > &bvh_nodes_;
   const std::vector<unsigned int > &bvh_indices_;
@@ -448,6 +448,7 @@ class NodeBBoxGeometry {
   mutable nanort::BVHTraceOptions trace_options_;
 };
 
+#if 0
 template<typename T = float>
 class NodeBBoxIntersection {
  public:
@@ -522,6 +523,9 @@ class NodeBBoxIntersector {
 
     (*t_inout) = t;
 
+    t_min_ = tmin;
+    t_max_ = tmax;
+
     return true;
   }
 
@@ -558,12 +562,15 @@ class NodeBBoxIntersector {
     trace_options_ = trace_options;
   }
 
-  /// Post BVH traversal stuff(e.g. compute intersection point information)
-  /// This function is called only once in BVH traversal.
-  /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray<T>& ray, bool hit) const {
-    (void)ray;
-    (void)hit;
+  /// Post intersection test stuff
+  /// This function is called when a hit was found.
+  /// Describe full intersection information.
+  void PostIntersect(const nanort::Ray<T>& ray, H *hit) const {
+    hit->t = t_;
+    hit->prim_id = prim_id_;
+
+    hit->t_min = t_min_;
+    hit->t_max = t_max_;
   }
 
  private:
@@ -575,9 +582,13 @@ class NodeBBoxIntersector {
   mutable int ray_dir_sign_[3];
   mutable nanort::BVHTraceOptions trace_options_;
 
+  mutable T t_min_;
+  mutable T t_max_;
+
   mutable T t_;
 	mutable unsigned int prim_id_;
 };
+#endif
 
 template<typename T = float>
 class Scene
@@ -646,34 +657,90 @@ class Scene
   /// First find the intersection of nodes' bounding box using toplevel BVH.
   /// Then, trace into the hit node to find the intersection of the primitive.
   ///
-  bool Traverse(nanort::Ray<T> &ray) {
+  template<class H>
+  bool Traverse(nanort::Ray<T> &ray, H *isect, const bool cull_back_face = false) {
     
     if (!toplevel_accel_.IsValid()) {
       return false;
     }
 
-    NodeBBoxIntersector<NodeBBoxIntersection<T>, T> node_bbox_intersector;
-		nanort::StackVector<NodeBBoxIntersection<T>, 128> isects;
-
 		const int kMaxIntersections = 64;
-		
-    bool hit = toplevel_accel_.MultiHitTravese(ray, kMaxIntersections, node_bbox_intersector, &isects);
 
-		if (hit) {
+    bool has_hit = false;
+    //H local_isect;
+		
+    nanort::StackVector<nanort::NodeHit<T>, 128> node_hits;
+    bool may_hit = toplevel_accel_.ListNodeIntersections(ray, kMaxIntersections, &node_hits);
+
+		if (may_hit) {
 			T t_max = std::numeric_limits<T>::max();
-			T t_nearst = t_max;
+			T t_nearest = t_max;
+
+      nanort::BVHTraceOptions trace_options;
+      trace_options.cull_back_face = cull_back_face;
 
 			// Find precise intersection point.
-			for (size_t i = 0; i < isects->size(); i++) {
+			for (size_t i = 0; i < node_hits->size(); i++) {
 				
 				// Early cull test.
-				// TODO(LTE): Implement
+        if (t_nearest < node_hits[i].t_min) {
+          continue;
+        }
+
+        Node<T> &node = nodes_[node_hits[i].node_id];
+
+        // Transform ray into node's local space
+        T local_ray_org[3];
+        T local_ray_dir[3];
+
+        nanort::Ray<T> local_ray;
+        Matrix<T>::MultV(local_ray.origin, node.inv_xform_, ray.orgin);
+        Matrix<T>::MultV(local_ray.dir, node.inv_xform33_, ray.dir);
+
+        nanort::TriangleIntersector<T, H> triangle_intersector(node.vertices, node.faces, sizeof(T) * 3);
+        H local_isect;
+
+        bool hit = node.accel_.Traverse(local_ray, triangle_intersector, &local_isect);
+
+        if (hit) {
+          // Calulcate hit distance in world coordiante.
+          T local_P[3];
+          local_P[0] = local_ray.origin[0] + local_isect.t * local_ray.dir[0];
+          local_P[1] = local_ray.origin[1] + local_isect.t * local_ray.dir[1];
+          local_P[2] = local_ray.origin[2] + local_isect.t * local_ray.dir[2];
+
+          T world_P[3];
+          Matrixd::MultV(world_P, node.xform_, local_P);
+
+          nanort::real3<T> po;
+          po[0] = world_P[0] - ray.origin[0];
+          po[1] = world_P[1] - ray.origin[1];
+          po[2] = world_P[2] - ray.origin[2];
+
+          float t_world = vlength(po);
+
+          if (t_world < t_nearest) {
+            t_nearest = t_world;
+            has_hit = true;
+            (*isect) = local_isect;
+            isect->node_id = node_hits[i].node_id;
+                
+            // Convert position and normal into world coordinate.
+            isect->t = t_world;
+            Matrix<T>::MultV(isect->position, node.xform_, isect->position);
+            Matrix<T>::MultV(isect->geometric, node.inv_transpose_xform33_,
+                           isect->geometric);
+            Matrix<T>::MultV(isect->normal, node.inv_transpose_xform33_,
+                           isect->normal);
+          }  
+
+        }
 
 			}
 
 		}
 
-    return hit;
+    return has_hit;
 
   }
 

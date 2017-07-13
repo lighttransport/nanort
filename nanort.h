@@ -360,25 +360,25 @@ inline const real *get_vertex_addr(const real *p, const size_t idx,
       reinterpret_cast<const unsigned char *>(p) + idx * stride_bytes);
 }
 
-template <typename real = float>
+template <typename T = float>
 class Ray {
  public:
-  real org[3];      // must set
-  real dir[3];      // must set
-  real min_t;       // minium ray hit distance. must set.
-  real max_t;       // maximum ray hit distance. must set.
-  real inv_dir[3];  // filled internally
+  T org[3];      // must set
+  T dir[3];      // must set
+  T min_t;       // minium ray hit distance. must set.
+  T max_t;       // maximum ray hit distance. must set.
+  T inv_dir[3];  // filled internally
   int dir_sign[3];  // filled internally
 };
 
-template <typename real = float>
+template <typename T = float>
 class BVHNode {
  public:
   BVHNode() {}
   ~BVHNode() {}
 
-  real bmin[3];
-  real bmax[3];
+  T bmin[3];
+  T bmax[3];
 
   int flag;  // 1 = leaf node, 0 = branch node
   int axis;
@@ -469,6 +469,32 @@ class BBox {
   }
 };
 
+template<typename T>
+class NodeHit
+{
+ public:
+  NodeHit()
+    : t_min(std::numeric_limits<T>::max())
+    , t_max(-std::numeric_limits<T>::max())
+    , node_id(static_cast<unsigned int>(-1)) {
+  }
+
+  ~NodeHit() {}
+
+  T t_min;
+  T t_max;
+  unsigned int node_id;
+};
+
+template<typename T>
+class NodeHitComparator
+{
+ public:
+  inline bool operator()(const NodeHit<T> &a, const NodeHit<T> &b) {
+    return a.t_min < b.t_min;
+  }
+};
+
 template <typename T>
 class BVHAccel {
  public:
@@ -497,6 +523,7 @@ class BVHAccel {
                 H *isect,
                 const BVHTraceOptions& options = BVHTraceOptions()) const;
 
+#if 0
   /// Multi-hit ray traversal
   /// Returns `max_intersections` frontmost intersections
   template<class I, class H, class Comp>
@@ -505,6 +532,15 @@ class BVHAccel {
                         const I &intersector,
                         StackVector<H, 128> *isects,
                         const BVHTraceOptions &options = BVHTraceOptions()) const;
+#endif
+
+  ///
+  /// List up nodes which intersects along the ray.
+  /// This function is useful for two-level BVH traversal.
+  ///
+  bool ListNodeIntersections(const Ray<T> &ray,
+                             int max_intersections,
+                             StackVector<NodeHit<T>, 128> *hits) const;
 
   const std::vector<BVHNode<T> > &GetNodes() const { return nodes_; }
   const std::vector<unsigned int> &GetIndices() const { return indices_; }
@@ -557,11 +593,13 @@ class BVHAccel {
   bool TestLeafNode(const BVHNode<T> &node, const Ray<T> &ray,
                     const I &intersector) const;
 
+#if 0
   template<class I, class H, class Comp>
   bool MultiHitTestLeafNode(std::priority_queue<H, std::vector<H>, Comp> *isect_pq,
                             int max_intersections,
                             const BVHNode<T> &node, const Ray<T> &ray,
                             const I &intersector) const;
+#endif
 
   std::vector<BVHNode<T> > nodes_;
   std::vector<unsigned int> indices_;  // max 4G triangles.
@@ -1775,6 +1813,7 @@ inline bool BVHAccel<T>::TestLeafNode(const BVHNode<T> &node,
   return hit;
 }
 
+#if 0 // TODO(LTE): Implement
 template <typename T> template<class I, class H, class Comp>
 bool BVHAccel<T>::MultiHitTestLeafNode(
   std::priority_queue<H, std::vector<H>, Comp>  *isect_pq,
@@ -1846,6 +1885,7 @@ bool BVHAccel<T>::MultiHitTestLeafNode(
 
   return hit;
 }
+#endif
 
 template <typename T> template<class I, class H>
 bool BVHAccel<T>::Traverse(const Ray<T> &ray,
@@ -1918,7 +1958,109 @@ bool BVHAccel<T>::Traverse(const Ray<T> &ray,
 
   return hit;
 }
+  
 
+template <typename T>
+bool BVHAccel<T>::ListNodeIntersections(const Ray<T> &ray,
+                                         int max_intersections,
+                                         StackVector<NodeHit<T>, 128> *hits) const {
+  const int kMaxStackDepth = 512;
+
+  T hit_t = ray.max_t;
+
+  int node_stack_index = 0;
+  unsigned int node_stack[512];
+  node_stack[0] = 0;
+
+  // Stores furthest intersection at top
+  std::priority_queue<NodeHit<T>, std::vector<NodeHit<T> >, NodeHitComparator<T> >  isect_pq;
+
+  (*hits)->clear();
+
+  int dir_sign[3];
+  dir_sign[0] = ray.dir[0] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
+  dir_sign[1] = ray.dir[1] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
+  dir_sign[2] = ray.dir[2] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
+
+  // @fixme { Check edge case; i.e., 1/0 }
+  real3<T> ray_inv_dir;
+  ray_inv_dir[0] = static_cast<T>(1.0) / ray.dir[0];
+  ray_inv_dir[1] = static_cast<T>(1.0) / ray.dir[1];
+  ray_inv_dir[2] = static_cast<T>(1.0) / ray.dir[2];
+
+  real3<T> ray_org;
+  ray_org[0] = ray.org[0];
+  ray_org[1] = ray.org[1];
+  ray_org[2] = ray.org[2];
+
+  T min_t, max_t;
+  while (node_stack_index >= 0) {
+    unsigned int index = node_stack[node_stack_index];
+    const BVHNode<T> &node = nodes_[static_cast<size_t>(index)];
+
+    node_stack_index--;
+
+    bool hit = IntersectRayAABB(&min_t, &max_t, ray.min_t, hit_t, node.bmin,
+                                node.bmax, ray_org, ray_inv_dir, dir_sign);
+
+    if (node.flag == 0) {  // branch node
+      if (hit) {
+        int order_near = dir_sign[node.axis];
+        int order_far = 1 - order_near;
+
+        // Traverse near first.
+        node_stack[++node_stack_index] = node.data[order_far];
+        node_stack[++node_stack_index] = node.data[order_near];
+      }
+
+    } else {  // leaf node
+      if (hit) {
+
+        NodeHit<T> hit;
+        hit.t_min = min_t;
+        hit.t_max = max_t;
+        hit.node_id = index;
+
+        if (isect_pq->size() < static_cast<size_t>(max_intersections)) {
+          isect_pq->push(hit);
+
+          // Update `t' to the furthest distance.
+          hit_t = ray.max_t;
+        } else {
+          if (min_t < isect_pq->top().t_min) {
+            // delete the furthest intersection and add a new intersection.
+            isect_pq->pop();
+
+            isect_pq->push(hit);
+
+            // Update furthest hit distance
+            hit_t = isect_pq->top().t_min;
+          }
+        }
+      }
+    }
+  }
+
+  assert(node_stack_index < kMaxStackDepth);
+  (void)kMaxStackDepth;
+
+  if (!isect_pq.empty()) {
+    // Store intesection in reverse order(make it frontmost order)
+    size_t n = isect_pq.size();
+    (*hits)->resize(n);
+    for (size_t i = 0; i < n; i++) {
+      const NodeHit<T> &isect = isect_pq.top();
+      (*hits)[n - i - 1] = isect;
+      isect_pq.pop();
+    }
+
+    return true;
+  }
+
+  return false;
+}
+
+#if 0 // TODO(LTE): Implement
 template <typename T> template<class I, class H, class Comp>
 bool BVHAccel<T>::MultiHitTraverse(const Ray<T> &ray,
                                          int max_intersections,
@@ -1934,7 +2076,7 @@ bool BVHAccel<T>::MultiHitTraverse(const Ray<T> &ray,
   node_stack[0] = 0;
 
   // Stores furthest intersection at top
-  std::priority_queue<H, std::vector<H>, Comp >  isect_pq;
+  std::priority_queue<H, std::vector<H>, Comp>  isect_pq;
 
   (*hits)->clear();
 
@@ -2009,6 +2151,7 @@ bool BVHAccel<T>::MultiHitTraverse(const Ray<T> &ray,
 
   return false;
 }
+#endif
 
 }  // namespace nanort
 
