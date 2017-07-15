@@ -90,20 +90,6 @@ void pcg32_srandom(pcg32_state_t* rng, uint64_t initstate, uint64_t initseq) {
 
 const float kPI = 3.141592f;
 
-typedef struct {
-  size_t num_vertices;
-  size_t num_faces;
-  std::vector<float> vertices;               /// [xyz] * num_vertices
-  std::vector<float> facevarying_normals;    /// [xyz] * 3(triangle) * num_faces
-  std::vector<float> facevarying_tangents;   /// [xyz] * 3(triangle) * num_faces
-  std::vector<float> facevarying_binormals;  /// [xyz] * 3(triangle) * num_faces
-  std::vector<float> facevarying_uvs;        /// [xy]  * 3(triangle) * num_faces
-  std::vector<float>
-      facevarying_vertex_colors;           /// [xyz] * 3(triangle) * num_faces
-  std::vector<unsigned int> faces;         /// triangle x num_faces
-  std::vector<unsigned int> material_ids;  /// index x num_faces
-} Mesh;
-
 struct Material {
   // float ambient[3];
   float diffuse[3];
@@ -160,7 +146,7 @@ struct Texture {
   }
 };
 
-Mesh gMesh;
+Mesh<float> gMesh;
 std::vector<Material> gMaterials;
 std::vector<Texture> gTextures;
 //nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>,
@@ -344,7 +330,7 @@ int LoadTexture(const std::string& filename) {
   return -1;
 }
 
-bool LoadObj(Mesh& mesh, const char* filename, float scale) {
+bool LoadObj(Mesh<float>& mesh, const char* filename, float scale) {
   tinyobj::attrib_t attrib;
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
@@ -391,8 +377,6 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   std::cout << "[LoadOBJ] # of vertices: " << num_vertices << std::endl;
 
   // Shape -> Mesh
-  mesh.num_faces = num_faces;
-  mesh.num_vertices = num_vertices;
   mesh.vertices.resize(num_vertices * 3, 0.0f);
   mesh.faces.resize(num_faces * 3, 0);
   mesh.material_ids.resize(num_faces, 0);
@@ -627,7 +611,7 @@ bool Renderer::BuildBVH() {
   nanort::TriangleSAHPred<float> triangle_pred(gMesh.vertices.data(),
                                                gMesh.faces.data(), sizeof(float) * 3);
 
-  printf("num_triangles = %lu\n", gMesh.num_faces);
+  printf("num_triangles = %lu\n", gMesh.faces.size() / 3);
 
   //bool ret = gAccel.Build(gMesh.num_faces, triangle_mesh,
   //                        triangle_pred, build_options);
@@ -656,7 +640,7 @@ bool Renderer::BuildBVH() {
 
 bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
                       float quat[4], 
-                      const nanosg::Scene<float> &scene, const RenderConfig& config,
+                      const nanosg::Scene<float, example::Mesh<float>> &scene, const RenderConfig& config,
                       std::atomic<bool>& cancelFlag) {
   //if (!gAccel.IsValid()) {
   //  return false;
@@ -732,6 +716,10 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           float kFar = 1.0e+30f;
           ray.min_t = 0.0f;
           ray.max_t = kFar;
+
+          
+          nanosg::Intersection<float> isect;
+          bool hit = scene.Traverse(ray, &isect, /* cull_back_face */false);
 
 #if 0
           nanort::TriangleIntersector<> triangle_intersector(

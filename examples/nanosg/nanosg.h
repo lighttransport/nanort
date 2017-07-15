@@ -223,10 +223,20 @@ public:
     dst[2] = tmp[2];
   }
 
+  static void MultV(nanort::real3<T> &dst, const T m[4][4], const T v[3]) {
+    T tmp[3];
+    tmp[0] = m[0][0] * v[0] + m[1][0] * v[1] + m[2][0] * v[2] + m[3][0];
+    tmp[1] = m[0][1] * v[0] + m[1][1] * v[1] + m[2][1] * v[2] + m[3][1];
+    tmp[2] = m[0][2] * v[0] + m[1][2] * v[1] + m[2][2] * v[2] + m[3][2];
+    dst[0] = tmp[0];
+    dst[1] = tmp[1];
+    dst[2] = tmp[2];
+  }
+
 };
 
-typedef Matrix<float> Matrixf;
-typedef Matrix<double> Matrixd;
+//typedef Matrix<float> Matrixf;
+//typedef Matrix<double> Matrixd;
 
 template<typename T>
 static void XformBoundingBox(T xbmin[3], // out
@@ -287,16 +297,30 @@ static void XformBoundingBox(T xbmin[3], // out
   }
 }
 
+template<typename T>
+struct Intersection
+{
+  // required fields.
+  T                t;       // hit distance
+  unsigned int     prim_id; // primitive ID of the hit
+  float            u;
+  float            v;
+
+  unsigned int     node_id; // node ID of the hit.
+  nanort::real3<T> P;       // intersection point
+  nanort::real3<T> Ns;      // shading normal
+  nanort::real3<T> Ng;      // geometric normal
+};
+
 ///
 /// Renderable node
 ///
-template<typename T>
+template<typename T, class M>
 class Node
 {
  public:
-	explicit Node(const std::vector<nanort::BVHNode<T> > &bvh_nodes, const std::vector<unsigned int > &bvh_indices)
-    : bvh_nodes_(bvh_nodes)
-    , bvh_indices_(bvh_indices)
+	explicit Node(const M *mesh)
+    : mesh_(mesh)
 	{ 
 		xbmin_[0] = xbmin_[1] = xbmin_[2] = std::numeric_limits<T>::max();
 		xbmax_[0] = xbmax_[1] = xbmax_[2] = -std::numeric_limits<T>::max();
@@ -309,14 +333,6 @@ class Node
     Matrix<T>::Identity(inv_xform33_); inv_xform33_[3][3] = static_cast<T>(0.0);
     Matrix<T>::Identity(inv_transpose_xform33_); inv_transpose_xform33_[3][3] = static_cast<T>(0.0);
 
-    if (!bvh_nodes_.empty()) {
-      lbmin_[0] = bvh_nodes_[0].bmin[0];
-      lbmin_[1] = bvh_nodes_[0].bmin[1];
-      lbmin_[2] = bvh_nodes_[0].bmin[2];
-      lbmax_[0] = bvh_nodes_[0].bmax[0];
-      lbmax_[1] = bvh_nodes_[0].bmax[1];
-      lbmax_[2] = bvh_nodes_[0].bmax[2];
-    }
 	}
 
 	~Node() {}
@@ -326,8 +342,13 @@ class Node
 	///
 	void Update() {
 
-    if (bvh_nodes_.empty()) {
-      return;
+    if (!accel_.IsValid() && mesh_ && (mesh_->vertices.size() > 3) && (mesh_->faces.size() >= 3)) {
+      
+      // Assume mesh is composed of triangle faces only.
+      nanort::TriangleMesh<float> triangle_mesh(mesh_->vertices.data(), mesh_->faces.data(), sizeof(float) * 3);
+      nanort::TriangleSAHPred<float> triangle_pred(mesh_->vertices.data(), mesh_->faces.data(), sizeof(float) * 3);
+
+      accel_.Build(mesh_->faces.size() / 3, triangle_mesh, triangle_pred);
     }
 
     // Compute the bounding box in world coordinate.
@@ -349,6 +370,22 @@ class Node
     Matrix<T>::Transpose(inv_transpose_xform33_);
 	}
 
+  void SetXform(T xform[4][4]) {
+    memcpy(xform_, xform, sizeof(float) * 16);
+  }
+
+  M *GetMesh() {
+    return mesh_;
+  }
+
+  const M *GetMesh() const {
+    return mesh_;
+  }
+
+  const nanort::BVHAccel<T> &GetAccel() const {
+    return accel_;
+  }
+
 	inline void GetWorldBoundingBox(T bmin[3], T bmax[3]) const {
 		bmin[0] = xbmin_[0];		
 		bmin[1] = xbmin_[1];		
@@ -369,6 +406,11 @@ class Node
 		bmax[2] = lbmax_[2];		
 	}
 
+	T xform_[4][4];				// Transformation matrix. local -> world.
+	T inv_xform_[4][4];		// inverse(xform). world -> local
+	T inv_xform33_[4][4];	// inverse(xform0 with upper-left 3x3 elemets only(for transforming direction vector)
+	T inv_transpose_xform33_[4][4]; // inverse(transpose(xform)) with upper-left 3x3 elements only(for transforming normal vector)	
+
  private:
 
 	// bounding box(local space)
@@ -379,25 +421,23 @@ class Node
 	T xbmin_[3];
 	T xbmax_[3];
 	
-	T xform_[4][4];				// Transformation matrix. local -> world.
-	T inv_xform_[4][4];		// inverse(xform). world -> local
-	T inv_xform33_[4][4];	// inverse(xform0 with upper-left 3x3 elemets only(for transforming direction vector)
-	T inv_transpose_xform33_[4][4]; // inverse(transpose(xform)) with upper-left 3x3 elements only(for transforming normal vector)	
 	
   nanort::BVHAccel<T> accel_;
 
-  const std::vector<nanort::BVHNode<T> > &bvh_nodes_;
-  const std::vector<unsigned int > &bvh_indices_;
+  M *mesh_;
+
+  //const std::vector<nanort::BVHNode<T> > &bvh_nodes_;
+  //const std::vector<unsigned int > &bvh_indices_;
 	
 };
 
 // -------------------------------------------------
 
 // Predefined SAH predicator for cube.
-template<typename T = float>
+template<typename T, class M>
 class NodeBBoxPred {
  public:
-  NodeBBoxPred(const std::vector<Node<T> >* nodes) : axis_(0), pos_(0.0f), nodes_(nodes) {}
+  NodeBBoxPred(const std::vector<Node<T, M> >* nodes) : axis_(0), pos_(0.0f), nodes_(nodes) {}
 
   void Set(int axis, float pos) const {
     axis_ = axis;
@@ -420,13 +460,13 @@ class NodeBBoxPred {
  private:
   mutable int axis_;
   mutable float pos_;
-  const std::vector<Node<T> > *nodes_;
+  const std::vector<Node<T, M> > *nodes_;
 };
 
-template<typename T = float>
+template<typename T, class M>
 class NodeBBoxGeometry {
  public:
-  NodeBBoxGeometry(const std::vector<Node<T> >* nodes)
+  NodeBBoxGeometry(const std::vector<Node<T, M> >* nodes)
       : nodes_(nodes) {}
 
   /// Compute bounding box for `prim_index`th cube.
@@ -442,7 +482,7 @@ class NodeBBoxGeometry {
     (*bmax)[2] = b[2];
   }
 
-  const std::vector<Node<T> >* nodes_;
+  const std::vector<Node<T, M> >* nodes_;
   mutable nanort::real3<T> ray_org_;
   mutable nanort::real3<T> ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
@@ -590,7 +630,7 @@ class NodeBBoxIntersector {
 };
 #endif
 
-template<typename T = float>
+template<typename T, class M>
 class Scene
 {
  public:
@@ -604,7 +644,7 @@ class Scene
   ///
   /// Add intersectable node to the scene.
   ///
-	bool AddNode(const Node<T> &node) {
+	bool AddNode(const Node<T, M> &node) {
     nodes_.push_back(node);
   }
 
@@ -619,8 +659,8 @@ class Scene
     }
 
     // Build toplevel BVH.
-    NodeBBoxGeometry<T> geom(&nodes_);
-    NodeBBoxPred<T> pred(&nodes_);
+    NodeBBoxGeometry<T, M> geom(&nodes_);
+    NodeBBoxPred<T, M> pred(&nodes_);
     bool ret = toplevel_accel_.Build(static_cast<unsigned int>(nodes_.size()), geom, pred);
 
     if (ret) {
@@ -658,7 +698,7 @@ class Scene
   /// Then, trace into the hit node to find the intersection of the primitive.
   ///
   template<class H>
-  bool Traverse(nanort::Ray<T> &ray, H *isect, const bool cull_back_face = false) {
+  bool Traverse(nanort::Ray<T> &ray, H *isect, const bool cull_back_face = false) const {
     
     if (!toplevel_accel_.IsValid()) {
       return false;
@@ -667,7 +707,6 @@ class Scene
 		const int kMaxIntersections = 64;
 
     bool has_hit = false;
-    //H local_isect;
 		
     nanort::StackVector<nanort::NodeHit<T>, 128> node_hits;
     bool may_hit = toplevel_accel_.ListNodeIntersections(ray, kMaxIntersections, &node_hits);
@@ -679,7 +718,7 @@ class Scene
       nanort::BVHTraceOptions trace_options;
       trace_options.cull_back_face = cull_back_face;
 
-			// Find precise intersection point.
+			// Find actual intersection point.
 			for (size_t i = 0; i < node_hits->size(); i++) {
 				
 				// Early cull test.
@@ -687,51 +726,54 @@ class Scene
           continue;
         }
 
-        Node<T> &node = nodes_[node_hits[i].node_id];
+        const Node<T, M> &node = nodes_[node_hits[i].node_id];
 
         // Transform ray into node's local space
         T local_ray_org[3];
         T local_ray_dir[3];
 
         nanort::Ray<T> local_ray;
-        Matrix<T>::MultV(local_ray.origin, node.inv_xform_, ray.orgin);
+        Matrix<T>::MultV(local_ray.org, node.inv_xform_, ray.org);
         Matrix<T>::MultV(local_ray.dir, node.inv_xform33_, ray.dir);
 
-        nanort::TriangleIntersector<T, H> triangle_intersector(node.vertices, node.faces, sizeof(T) * 3);
+        nanort::TriangleIntersector<T, H> triangle_intersector(node.GetMesh()->vertices.data(), node.GetMesh()->faces.data(), sizeof(T) * 3);
         H local_isect;
 
-        bool hit = node.accel_.Traverse(local_ray, triangle_intersector, &local_isect);
+        bool hit = node.GetAccel().Traverse(local_ray, triangle_intersector, &local_isect);
 
         if (hit) {
           // Calulcate hit distance in world coordiante.
           T local_P[3];
-          local_P[0] = local_ray.origin[0] + local_isect.t * local_ray.dir[0];
-          local_P[1] = local_ray.origin[1] + local_isect.t * local_ray.dir[1];
-          local_P[2] = local_ray.origin[2] + local_isect.t * local_ray.dir[2];
+          local_P[0] = local_ray.org[0] + local_isect.t * local_ray.dir[0];
+          local_P[1] = local_ray.org[1] + local_isect.t * local_ray.dir[1];
+          local_P[2] = local_ray.org[2] + local_isect.t * local_ray.dir[2];
 
           T world_P[3];
-          Matrixd::MultV(world_P, node.xform_, local_P);
+          Matrix<T>::MultV(world_P, node.xform_, local_P);
 
           nanort::real3<T> po;
-          po[0] = world_P[0] - ray.origin[0];
-          po[1] = world_P[1] - ray.origin[1];
-          po[2] = world_P[2] - ray.origin[2];
+          po[0] = world_P[0] - ray.org[0];
+          po[1] = world_P[1] - ray.org[1];
+          po[2] = world_P[2] - ray.org[2];
 
           float t_world = vlength(po);
 
           if (t_world < t_nearest) {
             t_nearest = t_world;
             has_hit = true;
-            (*isect) = local_isect;
+            //(*isect) = local_isect;
             isect->node_id = node_hits[i].node_id;
+
+            // TODO(LTE): Implement
+            T Ng[3], Ns[3]; // geometric normal, shading normal.
                 
             // Convert position and normal into world coordinate.
             isect->t = t_world;
-            Matrix<T>::MultV(isect->position, node.xform_, isect->position);
-            Matrix<T>::MultV(isect->geometric, node.inv_transpose_xform33_,
-                           isect->geometric);
-            Matrix<T>::MultV(isect->normal, node.inv_transpose_xform33_,
-                           isect->normal);
+            Matrix<T>::MultV(isect->P, node.xform_, local_P);
+            Matrix<T>::MultV(isect->Ng, node.inv_transpose_xform33_,
+                           Ng);
+            Matrix<T>::MultV(isect->Ns, node.inv_transpose_xform33_,
+                           Ns);
           }  
 
         }
@@ -750,10 +792,9 @@ class Scene
   T bmin_[3];
   T bmax_[3];
   
-	std::vector<Node<T> > nodes_;
-  
   // Toplevel BVH accel.
   nanort::BVHAccel<T> toplevel_accel_;
+	std::vector<Node<T, M> > nodes_;
 };
 
 } // namespace nanosg
