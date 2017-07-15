@@ -2021,20 +2021,20 @@ bool BVHAccel<T>::ListNodeIntersections(const Ray<T> &ray,
         hit.t_max = max_t;
         hit.node_id = index;
 
-        if (isect_pq->size() < static_cast<size_t>(max_intersections)) {
-          isect_pq->push(hit);
+        if (isect_pq.size() < static_cast<size_t>(max_intersections)) {
+          isect_pq.push(hit);
 
           // Update `t' to the furthest distance.
           hit_t = ray.max_t;
         } else {
-          if (min_t < isect_pq->top().t_min) {
+          if (min_t < isect_pq.top().t_min) {
             // delete the furthest intersection and add a new intersection.
-            isect_pq->pop();
+            isect_pq.pop();
 
-            isect_pq->push(hit);
+            isect_pq.push(hit);
 
             // Update furthest hit distance
-            hit_t = isect_pq->top().t_min;
+            hit_t = isect_pq.top().t_min;
           }
         }
       }
