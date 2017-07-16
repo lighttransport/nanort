@@ -319,6 +319,8 @@ template<typename T, class M>
 class Node
 {
  public:
+  typedef Node<T, M> type;
+
 	explicit Node(const M *mesh)
     : mesh_(mesh)
 	{ 
@@ -328,6 +330,7 @@ class Node
 		lbmin_[0] = lbmin_[1] = lbmin_[2] = std::numeric_limits<T>::max();
 		lbmax_[0] = lbmax_[1] = lbmax_[2] = -std::numeric_limits<T>::max();
 
+    Matrix<T>::Identity(local_xform_);
     Matrix<T>::Identity(xform_);
     Matrix<T>::Identity(inv_xform_);
     Matrix<T>::Identity(inv_xform33_); inv_xform33_[3][3] = static_cast<T>(0.0);
@@ -337,19 +340,71 @@ class Node
 
 	~Node() {}
 
+  void Copy(const type &rhs) {
+    Matrix<T>::Copy(local_xform_, rhs.local_xform_);
+    Matrix<T>::Copy(xform_, rhs.xform_);
+    Matrix<T>::Copy(inv_xform_, rhs.inv_xform_);
+    Matrix<T>::Copy(inv_xform33_, rhs.inv_xform33_);
+    Matrix<T>::Copy(inv_transpose_xform33_, rhs.inv_transpose_xform33_);
+
+    lbmin_[0] = rhs.lbmin_[0];
+    lbmin_[1] = rhs.lbmin_[1];
+    lbmin_[2] = rhs.lbmin_[2];
+
+    lbmax_[0] = rhs.lbmax_[0];
+    lbmax_[1] = rhs.lbmax_[1];
+    lbmax_[2] = rhs.lbmax_[2];
+
+    xbmin_[0] = rhs.xbmin_[0];
+    xbmin_[1] = rhs.xbmin_[1];
+    xbmin_[2] = rhs.xbmin_[2];
+
+    xbmax_[0] = rhs.xbmax_[0];
+    xbmax_[1] = rhs.xbmax_[1];
+    xbmax_[2] = rhs.xbmax_[2];
+
+    mesh_ = rhs.mesh_;
+
+    children_ = rhs.children_;
+  }
+
+  Node(const type &rhs) {
+    Copy(rhs);
+  }
+
+  const type &operator=(type &rhs) {
+    Copy(rhs);
+    return (*this);
+  }
+
+  ///
+  /// Add child node.
+  ///
+  void AddChild(const type &child) {
+    children_.push_back(child);
+  }
+
 	///
 	/// Update internal state.
 	///
-	void Update() {
+	void Update(const T parent_xform[4][4]) {
 
     if (!accel_.IsValid() && mesh_ && (mesh_->vertices.size() > 3) && (mesh_->faces.size() >= 3)) {
-      
+
       // Assume mesh is composed of triangle faces only.
       nanort::TriangleMesh<float> triangle_mesh(mesh_->vertices.data(), mesh_->faces.data(), sizeof(float) * 3);
       nanort::TriangleSAHPred<float> triangle_pred(mesh_->vertices.data(), mesh_->faces.data(), sizeof(float) * 3);
 
-      accel_.Build(mesh_->faces.size() / 3, triangle_mesh, triangle_pred);
+      bool ret = accel_.Build(mesh_->faces.size() / 3, triangle_mesh, triangle_pred);
+
+      // Update local bbox.
+      if (ret) {
+        accel_.BoundingBox(lbmin_, lbmax_);
+      }
     }
+
+    // xform = parent_xform x local_xform
+    Matrix<T>::Mult(xform_, parent_xform, local_xform_);
 
     // Compute the bounding box in world coordinate.
     XformBoundingBox(xbmin_, xbmax_, lbmin_, lbmax_, xform_);
@@ -368,14 +423,15 @@ class Node
     // Inverse transpose of xform33
     Matrix<T>::Copy(inv_transpose_xform33_, inv_xform33_);
     Matrix<T>::Transpose(inv_transpose_xform33_);
+
+    // Update children nodes
+    for (size_t i = 0; i < children_.size(); i++) {
+      children_[i].Update(xform_);
+    }
 	}
 
   void SetXform(T xform[4][4]) {
-    memcpy(xform_, xform, sizeof(float) * 16);
-  }
-
-  M *GetMesh() {
-    return mesh_;
+    memcpy(local_xform_, xform, sizeof(float) * 16);
   }
 
   const M *GetMesh() const {
@@ -406,7 +462,8 @@ class Node
 		bmax[2] = lbmax_[2];		
 	}
 
-	T xform_[4][4];				// Transformation matrix. local -> world.
+	T local_xform_[4][4];	// Node's local transformation matrix.
+  T xform_[4][4];       // Parent xform x local_xform.
 	T inv_xform_[4][4];		// inverse(xform). world -> local
 	T inv_xform33_[4][4];	// inverse(xform0 with upper-left 3x3 elemets only(for transforming direction vector)
 	T inv_transpose_xform33_[4][4]; // inverse(transpose(xform)) with upper-left 3x3 elements only(for transforming normal vector)	
@@ -421,13 +478,11 @@ class Node
 	T xbmin_[3];
 	T xbmax_[3];
 	
-	
   nanort::BVHAccel<T> accel_;
 
-  M *mesh_;
+  const M *mesh_;
 
-  //const std::vector<nanort::BVHNode<T> > &bvh_nodes_;
-  //const std::vector<unsigned int > &bvh_indices_;
+  std::vector<type> children_;
 	
 };
 
@@ -646,6 +701,7 @@ class Scene
   ///
 	bool AddNode(const Node<T, M> &node) {
     nodes_.push_back(node);
+    return true;
   }
 
   ///
@@ -655,7 +711,10 @@ class Scene
 
     // Update nodes.
     for (size_t i = 0; i < nodes_.size(); i++) {
-      nodes_[i].Update();
+      T ident[4][4];
+      Matrix<T>::Identity(ident);
+
+      nodes_[i].Update(ident);
     }
 
     // Build toplevel BVH.
@@ -723,6 +782,7 @@ class Scene
 				
 				// Early cull test.
         if (t_nearest < node_hits[i].t_min) {
+          //printf("early cull: %f, %f\n", t_nearest, node_hits[i].t_min);
           continue;
         }
 
@@ -731,7 +791,8 @@ class Scene
         // Transform ray into node's local space
         T local_ray_org[3];
         T local_ray_dir[3];
-
+  
+        // TODO(LTE): Set ray tmin and tmax
         nanort::Ray<T> local_ray;
         Matrix<T>::MultV(local_ray.org, node.inv_xform_, ray.org);
         Matrix<T>::MultV(local_ray.dir, node.inv_xform33_, ray.dir);

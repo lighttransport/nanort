@@ -233,8 +233,7 @@ void FetchTexture(const Texture &texture, float u, float v, float* col) {
 bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
                       float quat[4], 
                       const nanosg::Scene<float, example::Mesh<float>> &scene,
-                      const std::vector<Material> &materials,
-                      const std::vector<Texture> &textures,
+                      const example::Asset &asset,
                       const RenderConfig& config,
                       std::atomic<bool>& cancelFlag) {
   //if (!gAccel.IsValid()) {
@@ -317,6 +316,11 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           bool hit = scene.Traverse(ray, &isect, /* cull_back_face */false);
 
           if (hit) {
+
+            const std::vector<Material> &materials = asset.materials;
+            const std::vector<Texture> &textures = asset.textures;
+            const Mesh<float> &mesh = asset.meshes[isect.node_id];
+
             float3 p;
             p[0] =
                 ray.org[0] + isect.t * ray.dir[0];
@@ -338,7 +342,6 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             config.varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             unsigned int prim_id = isect.prim_id;
-            const Mesh<float> mesh; // TODO(LTE): Implement
 
             float3 N;
             if (mesh.facevarying_normals.size() > 0) {

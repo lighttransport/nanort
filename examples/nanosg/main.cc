@@ -100,8 +100,8 @@ float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
 static nanosg::Scene<float, example::Mesh<float> > gScene;
-static std::vector<example::Material> gMaterials;
-static std::vector<example::Texture> gTextures;
+static example::Asset gAsset;
+static std::vector<nanosg::Node<float, example::Mesh<float> > > gNodes;
 
 std::atomic<bool> gRenderQuit;
 std::atomic<bool> gRenderRefresh;
@@ -161,7 +161,7 @@ void RenderThread() {
 
     bool ret =
         example::Renderer::Render(&gRGBA.at(0), &gAuxRGBA.at(0), &gSampleCounts.at(0),
-                         gCurrQuat, gScene, gMaterials, gTextures, gRenderConfig, gRenderCancel);
+                         gCurrQuat, gScene, gAsset, gRenderConfig, gRenderCancel);
 
     if (ret) {
       std::lock_guard<std::mutex> guard(gMutex);
@@ -421,7 +421,26 @@ int main(int argc, char** argv) {
       return -1;
     }
 
-    //gScene.AddNode(
+    size_t mesh_id = gAsset.meshes.size();
+    gAsset.meshes.push_back(mesh);
+    gAsset.materials = materials;
+    gAsset.textures = textures;
+
+    nanosg::Node<float, example::Mesh<float> > node(&gAsset.meshes[mesh_id]);
+    gNodes.push_back(node);
+     
+    gScene.AddNode(node);
+
+    if (!gScene.Commit()) {
+      std::cerr << "Failed to commit the scene." << std::endl;
+      return -1;
+    }
+
+    float bmin[3], bmax[3];
+    gScene.GetBoundingBox(bmin, bmax);
+    printf("  # of nodes               : %d\n", int(gNodes.size()));
+    printf("  Scene Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
+    printf("  Scene Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
 
   }
   

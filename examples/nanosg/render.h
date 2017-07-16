@@ -10,6 +10,12 @@
 
 namespace example {
 
+struct Asset {
+  std::vector<Mesh<float> > meshes;
+  std::vector<Material> materials;
+  std::vector<Texture> textures;
+};
+
 class Renderer {
  public:
   Renderer() {}
@@ -17,7 +23,7 @@ class Renderer {
 
   /// Returns false when the rendering was canceled.
   static bool Render(float* rgba, float* aux_rgba, int *sample_counts, float quat[4],
-              const nanosg::Scene<float, Mesh<float>> &scene, const std::vector<Material> &materials, const std::vector<Texture> &textures, const RenderConfig& config, std::atomic<bool>& cancel_flag);
+              const nanosg::Scene<float, Mesh<float>> &scene, const Asset &asset, const RenderConfig& config, std::atomic<bool>& cancel_flag);
 };
 };
 

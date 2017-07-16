@@ -52,6 +52,7 @@ solution "GUISolution"
 
       if _OPTIONS['asan'] then
          buildoptions { "-fsanitize=address" }
+         linkoptions { "-fsanitize=address" }
       end
 
       if os.is("Windows") then
