@@ -3,10 +3,16 @@ newoption {
    description = "Build with native file dialog support(GTK3 required. Linux only)"
 }
 
+newoption {
+   trigger = "asan",
+   description = "Enable Address Sanitizer(gcc5+ ang clang only)"
+}
+
 sources = {
    "main.cc",
    "render.cc",
    "render-config.cc",
+   "obj-loader.cc",
    "matrix.cc",
    "../common/trackball.cc",
    "../common/imgui/imgui.cpp",
@@ -43,6 +49,10 @@ solution "GUISolution"
       includedirs { "../common" }
       includedirs { "../common/imgui" }
       --includedirs { "../common/nativefiledialog/src/include" }
+
+      if _OPTIONS['asan'] then
+         buildoptions { "-fsanitize=address" }
+      end
 
       if os.is("Windows") then
          flags { "FatalCompileWarnings" }
@@ -91,10 +101,11 @@ solution "GUISolution"
 
       configuration "Debug"
          defines { "DEBUG" } -- -DDEBUG
-         flags { "Symbols" }
+         symbols "On"
          targetname "view_debug"
 
       configuration "Release"
          -- defines { "NDEBUG" } -- -NDEBUG
-         flags { "Symbols", "Optimize" }
+         symbols "On"
+	 optimize "On"
          targetname "view"

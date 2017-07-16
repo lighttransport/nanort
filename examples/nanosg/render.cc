@@ -43,14 +43,12 @@ THE SOFTWARE.
 
 #include "../../nanort.h"
 #include "matrix.h"
+#include "material.h"
+#include "mesh.h"
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include "tiny_obj_loader.h"
 
 #include "trackball.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 
 #ifdef WIN32
 #undef min
@@ -89,69 +87,6 @@ void pcg32_srandom(pcg32_state_t* rng, uint64_t initstate, uint64_t initseq) {
 }
 
 const float kPI = 3.141592f;
-
-struct Material {
-  // float ambient[3];
-  float diffuse[3];
-  float specular[3];
-  // float reflection[3];
-  // float refraction[3];
-  int id;
-  int diffuse_texid;
-  int specular_texid;
-  // int reflection_texid;
-  // int transparency_texid;
-  // int bump_texid;
-  // int normal_texid;  // normal map
-  // int alpha_texid;  // alpha map
-
-  Material() {
-    // ambient[0] = 0.0;
-    // ambient[1] = 0.0;
-    // ambient[2] = 0.0;
-    diffuse[0] = 0.5;
-    diffuse[1] = 0.5;
-    diffuse[2] = 0.5;
-    specular[0] = 0.5;
-    specular[1] = 0.5;
-    specular[2] = 0.5;
-    // reflection[0] = 0.0;
-    // reflection[1] = 0.0;
-    // reflection[2] = 0.0;
-    // refraction[0] = 0.0;
-    // refraction[1] = 0.0;
-    // refraction[2] = 0.0;
-    id = -1;
-    diffuse_texid = -1;
-    specular_texid = -1;
-    // reflection_texid = -1;
-    // transparency_texid = -1;
-    // bump_texid = -1;
-    // normal_texid = -1;
-    // alpha_texid = -1;
-  }
-};
-
-struct Texture {
-  int width;
-  int height;
-  int components;
-  unsigned char* image;
-
-  Texture() {
-    width = -1;
-    height = -1;
-    components = -1;
-    image = NULL;
-  }
-};
-
-Mesh<float> gMesh;
-std::vector<Material> gMaterials;
-std::vector<Texture> gTextures;
-//nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>,
-//                 nanort::TriangleIntersector<> >
-//    gAccel;
 
 typedef nanort::real3<float> float3;
 
@@ -286,9 +221,7 @@ nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
   return ray;
 }
 
-void FetchTexture(int tex_idx, float u, float v, float* col) {
-  assert(tex_idx >= 0);
-  Texture& texture = gTextures[tex_idx];
+void FetchTexture(const Texture &texture, float u, float v, float* col) {
   int tx = u * texture.width;
   int ty = (1.0f - v) * texture.height;
   int idx_offset = (ty * texture.width + tx) * texture.components;
@@ -297,350 +230,12 @@ void FetchTexture(int tex_idx, float u, float v, float* col) {
   col[2] = texture.image[idx_offset + 2] / 255.f;
 }
 
-static std::string GetBaseDir(const std::string &filepath) {
-  if (filepath.find_last_of("/\\") != std::string::npos)
-    return filepath.substr(0, filepath.find_last_of("/\\"));
-  return "";
-}
-
-int LoadTexture(const std::string& filename) {
-  if (filename.empty()) return -1;
-
-  printf("  Loading texture : %s\n", filename.c_str());
-  Texture texture;
-
-  int w, h, n;
-  unsigned char* data = stbi_load(filename.c_str(), &w, &h, &n, 0);
-  if (data) {
-    texture.width = w;
-    texture.height = h;
-    texture.components = n;
-
-    size_t n_elem = w * h * n;
-    texture.image = new unsigned char[n_elem];
-    for (size_t i = 0; i < n_elem; i++) {
-      texture.image[i] = data[i];
-    }
-
-    gTextures.push_back(texture);
-    return gTextures.size() - 1;
-  }
-
-  printf("  Failed to load : %s\n", filename.c_str());
-  return -1;
-}
-
-bool LoadObj(Mesh<float>& mesh, const char* filename, float scale) {
-  tinyobj::attrib_t attrib;
-  std::vector<tinyobj::shape_t> shapes;
-  std::vector<tinyobj::material_t> materials;
-  std::string err;
-
-  std::string basedir = GetBaseDir(filename) + "/";
-  const char* basepath = (basedir.compare("/") == 0) ? NULL : basedir.c_str();
-
-  auto t_start = std::chrono::system_clock::now();
-
-
-  bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename,
-                              basepath, /* triangulate */ true);
-
-  auto t_end = std::chrono::system_clock::now();
-  std::chrono::duration<double, std::milli> ms = t_end - t_start;
-
-  if (!err.empty()) {
-    std::cerr << err << std::endl;
-    return false;
-  }
-
-  std::cout << "[LoadOBJ] Parse time : " << ms.count() << " [msecs]"
-            << std::endl;
-
-  std::cout << "[LoadOBJ] # of shapes in .obj : " << shapes.size() << std::endl;
-  std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size()
-            << std::endl;
-
-  size_t num_vertices = 0;
-  size_t num_faces = 0;
-
-  num_vertices = attrib.vertices.size() / 3;
-  printf("  vertices: %ld\n", attrib.vertices.size() / 3);
-
-  for (size_t i = 0; i < shapes.size(); i++) {
-    printf("  shape[%ld].name = %s\n", i, shapes[i].name.c_str());
-    printf("  shape[%ld].indices: %ld\n", i, shapes[i].mesh.indices.size());
-    assert((shapes[i].mesh.indices.size() % 3) == 0);
-
-    num_faces += shapes[i].mesh.indices.size() / 3;
-  }
-  std::cout << "[LoadOBJ] # of faces: " << num_faces << std::endl;
-  std::cout << "[LoadOBJ] # of vertices: " << num_vertices << std::endl;
-
-  // Shape -> Mesh
-  mesh.vertices.resize(num_vertices * 3, 0.0f);
-  mesh.faces.resize(num_faces * 3, 0);
-  mesh.material_ids.resize(num_faces, 0);
-  mesh.facevarying_normals.resize(num_faces * 3 * 3, 0.0f);
-  mesh.facevarying_uvs.resize(num_faces * 3 * 2, 0.0f);
-
-  // @todo {}
-  // mesh.facevarying_tangents = NULL;
-  // mesh.facevarying_binormals = NULL;
-
-  //size_t vertexIdxOffset = 0;
-  size_t faceIdxOffset = 0;
-
-  for (size_t i = 0; i < attrib.vertices.size(); i++) {
-    mesh.vertices[i] = scale * attrib.vertices[i];
-  }
-
-  for (size_t i = 0; i < shapes.size(); i++) {
-    for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
-      mesh.faces[3 * (faceIdxOffset + f) + 0] =
-          shapes[i].mesh.indices[3 * f + 0].vertex_index;
-      mesh.faces[3 * (faceIdxOffset + f) + 1] =
-          shapes[i].mesh.indices[3 * f + 1].vertex_index;
-      mesh.faces[3 * (faceIdxOffset + f) + 2] =
-          shapes[i].mesh.indices[3 * f + 2].vertex_index;
-
-      mesh.material_ids[faceIdxOffset + f] = shapes[i].mesh.material_ids[f];
-    }
-
-    if (attrib.normals.size() > 0) {
-      for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
-        int f0, f1, f2;
-
-        f0 = shapes[i].mesh.indices[3 * f + 0].normal_index;
-        f1 = shapes[i].mesh.indices[3 * f + 1].normal_index;
-        f2 = shapes[i].mesh.indices[3 * f + 2].normal_index;
-
-        if (f0 > 0 && f1 > 0 && f2 > 0) {
-          float3 n0, n1, n2;
-
-          n0[0] = attrib.normals[3 * f0 + 0];
-          n0[1] = attrib.normals[3 * f0 + 1];
-          n0[2] = attrib.normals[3 * f0 + 2];
-
-          n1[0] = attrib.normals[3 * f1 + 0];
-          n1[1] = attrib.normals[3 * f1 + 1];
-          n1[2] = attrib.normals[3 * f1 + 2];
-
-          n2[0] = attrib.normals[3 * f2 + 0];
-          n2[1] = attrib.normals[3 * f2 + 1];
-          n2[2] = attrib.normals[3 * f2 + 2];
-
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] =
-              n0[0];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] =
-              n0[1];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] =
-              n0[2];
-
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] =
-              n1[0];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] =
-              n1[1];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] =
-              n1[2];
-
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] =
-              n2[0];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] =
-              n2[1];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] =
-              n2[2];
-        } else {  // face contains invalid normal index. calc geometric normal.
-          f0 = shapes[i].mesh.indices[3 * f + 0].vertex_index;
-          f1 = shapes[i].mesh.indices[3 * f + 1].vertex_index;
-          f2 = shapes[i].mesh.indices[3 * f + 2].vertex_index;
-
-          float3 v0, v1, v2;
-
-          v0[0] = attrib.vertices[3 * f0 + 0];
-          v0[1] = attrib.vertices[3 * f0 + 1];
-          v0[2] = attrib.vertices[3 * f0 + 2];
-
-          v1[0] = attrib.vertices[3 * f1 + 0];
-          v1[1] = attrib.vertices[3 * f1 + 1];
-          v1[2] = attrib.vertices[3 * f1 + 2];
-
-          v2[0] = attrib.vertices[3 * f2 + 0];
-          v2[1] = attrib.vertices[3 * f2 + 1];
-          v2[2] = attrib.vertices[3 * f2 + 2];
-
-          float3 N;
-          CalcNormal(N, v0, v1, v2);
-
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] =
-              N[0];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] =
-              N[1];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] =
-              N[2];
-
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] =
-              N[0];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] =
-              N[1];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] =
-              N[2];
-
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] =
-              N[0];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] =
-              N[1];
-          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] =
-              N[2];
-        }
-      }
-    } else {
-      // calc geometric normal
-      for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
-        int f0, f1, f2;
-
-        f0 = shapes[i].mesh.indices[3 * f + 0].vertex_index;
-        f1 = shapes[i].mesh.indices[3 * f + 1].vertex_index;
-        f2 = shapes[i].mesh.indices[3 * f + 2].vertex_index;
-
-        float3 v0, v1, v2;
-
-        v0[0] = attrib.vertices[3 * f0 + 0];
-        v0[1] = attrib.vertices[3 * f0 + 1];
-        v0[2] = attrib.vertices[3 * f0 + 2];
-
-        v1[0] = attrib.vertices[3 * f1 + 0];
-        v1[1] = attrib.vertices[3 * f1 + 1];
-        v1[2] = attrib.vertices[3 * f1 + 2];
-
-        v2[0] = attrib.vertices[3 * f2 + 0];
-        v2[1] = attrib.vertices[3 * f2 + 1];
-        v2[2] = attrib.vertices[3 * f2 + 2];
-
-        float3 N;
-        CalcNormal(N, v0, v1, v2);
-
-        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] = N[0];
-        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] = N[1];
-        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] = N[2];
-
-        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] = N[0];
-        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] = N[1];
-        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] = N[2];
-
-        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] = N[0];
-        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] = N[1];
-        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] = N[2];
-      }
-    }
-
-    if (attrib.texcoords.size() > 0) {
-      for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
-        int f0, f1, f2;
-
-        f0 = shapes[i].mesh.indices[3 * f + 0].texcoord_index;
-        f1 = shapes[i].mesh.indices[3 * f + 1].texcoord_index;
-        f2 = shapes[i].mesh.indices[3 * f + 2].texcoord_index;
-
-        if (f0 > 0 && f1 > 0 && f2 > 0) {
-          float3 n0, n1, n2;
-
-          n0[0] = attrib.texcoords[2 * f0 + 0];
-          n0[1] = attrib.texcoords[2 * f0 + 1];
-
-          n1[0] = attrib.texcoords[2 * f1 + 0];
-          n1[1] = attrib.texcoords[2 * f1 + 1];
-
-          n2[0] = attrib.texcoords[2 * f2 + 0];
-          n2[1] = attrib.texcoords[2 * f2 + 1];
-
-          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 0) + 0] = n0[0];
-          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 0) + 1] = n0[1];
-
-          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 1) + 0] = n1[0];
-          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 1) + 1] = n1[1];
-
-          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 2) + 0] = n2[0];
-          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 2) + 1] = n2[1];
-        }
-      }
-    }
-
-    faceIdxOffset += shapes[i].mesh.indices.size() / 3;
-  }
-
-  // material_t -> Material and Texture
-  gMaterials.resize(materials.size());
-  gTextures.resize(0);
-  for (size_t i = 0; i < materials.size(); i++) {
-    gMaterials[i].diffuse[0] = materials[i].diffuse[0];
-    gMaterials[i].diffuse[1] = materials[i].diffuse[1];
-    gMaterials[i].diffuse[2] = materials[i].diffuse[2];
-    gMaterials[i].specular[0] = materials[i].specular[0];
-    gMaterials[i].specular[1] = materials[i].specular[1];
-    gMaterials[i].specular[2] = materials[i].specular[2];
-
-    gMaterials[i].id = i;
-
-    // map_Kd
-    gMaterials[i].diffuse_texid = LoadTexture(materials[i].diffuse_texname);
-    // map_Ks
-    gMaterials[i].specular_texid = LoadTexture(materials[i].specular_texname);
-  }
-
-  return true;
-}
-
-bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale) {
-  return LoadObj(gMesh, obj_filename, scene_scale);
-}
-
-bool Renderer::BuildBVH() {
-  std::cout << "[Build BVH] " << std::endl;
-
-  nanort::BVHBuildOptions<float> build_options;  // Use default option
-  build_options.cache_bbox = false;
-
-  printf("  BVH build option:\n");
-  printf("    # of leaf primitives: %d\n", build_options.min_leaf_primitives);
-  printf("    SAH binsize         : %d\n", build_options.bin_size);
-
-  auto t_start = std::chrono::system_clock::now();
-
-  nanort::TriangleMesh<float> triangle_mesh(gMesh.vertices.data(),
-                                            gMesh.faces.data(), sizeof(float) * 3);
-  nanort::TriangleSAHPred<float> triangle_pred(gMesh.vertices.data(),
-                                               gMesh.faces.data(), sizeof(float) * 3);
-
-  printf("num_triangles = %lu\n", gMesh.faces.size() / 3);
-
-  //bool ret = gAccel.Build(gMesh.num_faces, triangle_mesh,
-  //                        triangle_pred, build_options);
-  //assert(ret);
-
-  auto t_end = std::chrono::system_clock::now();
-
-  std::chrono::duration<double, std::milli> ms = t_end - t_start;
-  std::cout << "BVH build time: " << ms.count() << " [ms]\n";
-
-#if 0
-  nanort::BVHBuildStatistics stats = gAccel.GetStatistics();
-
-  printf("  BVH statistics:\n");
-  printf("    # of leaf   nodes: %d\n", stats.num_leaf_nodes);
-  printf("    # of branch nodes: %d\n", stats.num_branch_nodes);
-  printf("  Max tree depth     : %d\n", stats.max_tree_depth);
-  float bmin[3], bmax[3];
-  gAccel.BoundingBox(bmin, bmax);
-  printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
-  printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
-#endif
-
-  return true;
-}
-
 bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
                       float quat[4], 
-                      const nanosg::Scene<float, example::Mesh<float>> &scene, const RenderConfig& config,
+                      const nanosg::Scene<float, example::Mesh<float>> &scene,
+                      const std::vector<Material> &materials,
+                      const std::vector<Texture> &textures,
+                      const RenderConfig& config,
                       std::atomic<bool>& cancelFlag) {
   //if (!gAccel.IsValid()) {
   //  return false;
@@ -721,18 +316,14 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           nanosg::Intersection<float> isect;
           bool hit = scene.Traverse(ray, &isect, /* cull_back_face */false);
 
-#if 0
-          nanort::TriangleIntersector<> triangle_intersector(
-              gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
-          bool hit = gAccel.Traverse(ray, triangle_intersector);
           if (hit) {
             float3 p;
             p[0] =
-                ray.org[0] + triangle_intersector.intersection.t * ray.dir[0];
+                ray.org[0] + isect.t * ray.dir[0];
             p[1] =
-                ray.org[1] + triangle_intersector.intersection.t * ray.dir[1];
+                ray.org[1] + isect.t * ray.dir[1];
             p[2] =
-                ray.org[2] + triangle_intersector.intersection.t * ray.dir[2];
+                ray.org[2] + isect.t * ray.dir[2];
 
             config.positionImage[4 * (y * config.width + x) + 0] = p.x();
             config.positionImage[4 * (y * config.width + x) + 1] = p.y();
@@ -740,44 +331,44 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             config.positionImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             config.varycoordImage[4 * (y * config.width + x) + 0] =
-                triangle_intersector.intersection.u;
+                isect.u;
             config.varycoordImage[4 * (y * config.width + x) + 1] =
-                triangle_intersector.intersection.v;
+                isect.v;
             config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
             config.varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
 
-            unsigned int prim_id = triangle_intersector.intersection.prim_id;
+            unsigned int prim_id = isect.prim_id;
+            const Mesh<float> mesh; // TODO(LTE): Implement
 
             float3 N;
-            if (gMesh.facevarying_normals.size() > 0) {
+            if (mesh.facevarying_normals.size() > 0) {
               float3 n0, n1, n2;
-              n0[0] = gMesh.facevarying_normals[9 * prim_id + 0];
-              n0[1] = gMesh.facevarying_normals[9 * prim_id + 1];
-              n0[2] = gMesh.facevarying_normals[9 * prim_id + 2];
-              n1[0] = gMesh.facevarying_normals[9 * prim_id + 3];
-              n1[1] = gMesh.facevarying_normals[9 * prim_id + 4];
-              n1[2] = gMesh.facevarying_normals[9 * prim_id + 5];
-              n2[0] = gMesh.facevarying_normals[9 * prim_id + 6];
-              n2[1] = gMesh.facevarying_normals[9 * prim_id + 7];
-              n2[2] = gMesh.facevarying_normals[9 * prim_id + 8];
-              N = Lerp3(n0, n1, n2, triangle_intersector.intersection.u,
-                        triangle_intersector.intersection.v);
+              n0[0] = mesh.facevarying_normals[9 * prim_id + 0];
+              n0[1] = mesh.facevarying_normals[9 * prim_id + 1];
+              n0[2] = mesh.facevarying_normals[9 * prim_id + 2];
+              n1[0] = mesh.facevarying_normals[9 * prim_id + 3];
+              n1[1] = mesh.facevarying_normals[9 * prim_id + 4];
+              n1[2] = mesh.facevarying_normals[9 * prim_id + 5];
+              n2[0] = mesh.facevarying_normals[9 * prim_id + 6];
+              n2[1] = mesh.facevarying_normals[9 * prim_id + 7];
+              n2[2] = mesh.facevarying_normals[9 * prim_id + 8];
+              N = Lerp3(n0, n1, n2, isect.u, isect.v);
             } else {
               unsigned int f0, f1, f2;
-              f0 = gMesh.faces[3 * prim_id + 0];
-              f1 = gMesh.faces[3 * prim_id + 1];
-              f2 = gMesh.faces[3 * prim_id + 2];
+              f0 = mesh.faces[3 * prim_id + 0];
+              f1 = mesh.faces[3 * prim_id + 1];
+              f2 = mesh.faces[3 * prim_id + 2];
 
               float3 v0, v1, v2;
-              v0[0] = gMesh.vertices[3 * f0 + 0];
-              v0[1] = gMesh.vertices[3 * f0 + 1];
-              v0[2] = gMesh.vertices[3 * f0 + 2];
-              v1[0] = gMesh.vertices[3 * f1 + 0];
-              v1[1] = gMesh.vertices[3 * f1 + 1];
-              v1[2] = gMesh.vertices[3 * f1 + 2];
-              v2[0] = gMesh.vertices[3 * f2 + 0];
-              v2[1] = gMesh.vertices[3 * f2 + 1];
-              v2[2] = gMesh.vertices[3 * f2 + 2];
+              v0[0] = mesh.vertices[3 * f0 + 0];
+              v0[1] = mesh.vertices[3 * f0 + 1];
+              v0[2] = mesh.vertices[3 * f0 + 2];
+              v1[0] = mesh.vertices[3 * f1 + 0];
+              v1[1] = mesh.vertices[3 * f1 + 1];
+              v1[2] = mesh.vertices[3 * f1 + 2];
+              v2[0] = mesh.vertices[3 * f2 + 0];
+              v2[1] = mesh.vertices[3 * f2 + 1];
+              v2[2] = mesh.vertices[3 * f2 + 2];
               CalcNormal(N, v0, v1, v2);
             }
 
@@ -790,25 +381,24 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             config.normalImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             config.depthImage[4 * (y * config.width + x) + 0] =
-                triangle_intersector.intersection.t;
+                isect.t;
             config.depthImage[4 * (y * config.width + x) + 1] =
-                triangle_intersector.intersection.t;
+                isect.t;
             config.depthImage[4 * (y * config.width + x) + 2] =
-                triangle_intersector.intersection.t;
+                isect.t;
             config.depthImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             float3 UV;
-            if (gMesh.facevarying_uvs.size() > 0) {
+            if (mesh.facevarying_uvs.size() > 0) {
               float3 uv0, uv1, uv2;
-              uv0[0] = gMesh.facevarying_uvs[6 * prim_id + 0];
-              uv0[1] = gMesh.facevarying_uvs[6 * prim_id + 1];
-              uv1[0] = gMesh.facevarying_uvs[6 * prim_id + 2];
-              uv1[1] = gMesh.facevarying_uvs[6 * prim_id + 3];
-              uv2[0] = gMesh.facevarying_uvs[6 * prim_id + 4];
-              uv2[1] = gMesh.facevarying_uvs[6 * prim_id + 5];
+              uv0[0] = mesh.facevarying_uvs[6 * prim_id + 0];
+              uv0[1] = mesh.facevarying_uvs[6 * prim_id + 1];
+              uv1[0] = mesh.facevarying_uvs[6 * prim_id + 2];
+              uv1[1] = mesh.facevarying_uvs[6 * prim_id + 3];
+              uv2[0] = mesh.facevarying_uvs[6 * prim_id + 4];
+              uv2[1] = mesh.facevarying_uvs[6 * prim_id + 5];
 
-              UV = Lerp3(uv0, uv1, uv2, triangle_intersector.intersection.u,
-                         triangle_intersector.intersection.v);
+              UV = Lerp3(uv0, uv1, uv2, isect.u, isect.v);
 
               config.texcoordImage[4 * (y * config.width + x) + 0] = UV[0];
               config.texcoordImage[4 * (y * config.width + x) + 1] = UV[1];
@@ -816,26 +406,26 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 
             // Fetch texture
             unsigned int material_id =
-                gMesh.material_ids[triangle_intersector.intersection.prim_id];
+                mesh.material_ids[isect.prim_id];
 
             float diffuse_col[3];
-            int diffuse_texid = gMaterials[material_id].diffuse_texid;
+            int diffuse_texid = materials[material_id].diffuse_texid;
             if (diffuse_texid >= 0) {
-              FetchTexture(diffuse_texid, UV[0], UV[1], diffuse_col);
+              FetchTexture(textures[diffuse_texid], UV[0], UV[1], diffuse_col);
             } else {
-              diffuse_col[0] = gMaterials[material_id].diffuse[0];
-              diffuse_col[1] = gMaterials[material_id].diffuse[1];
-              diffuse_col[2] = gMaterials[material_id].diffuse[2];
+              diffuse_col[0] = materials[material_id].diffuse[0];
+              diffuse_col[1] = materials[material_id].diffuse[1];
+              diffuse_col[2] = materials[material_id].diffuse[2];
             }
 
             float specular_col[3];
-            int specular_texid = gMaterials[material_id].specular_texid;
+            int specular_texid = materials[material_id].specular_texid;
             if (specular_texid >= 0) {
-              FetchTexture(specular_texid, UV[0], UV[1], specular_col);
+              FetchTexture(textures[specular_texid], UV[0], UV[1], specular_col);
             } else {
-              specular_col[0] = gMaterials[material_id].specular[0];
-              specular_col[1] = gMaterials[material_id].specular[1];
-              specular_col[2] = gMaterials[material_id].specular[2];
+              specular_col[0] = materials[material_id].specular[0];
+              specular_col[1] = materials[material_id].specular[1];
+              specular_col[2] = materials[material_id].specular[2];
             }
 
             // Simple shading
@@ -897,7 +487,6 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               config.varycoordImage[4 * (y * config.width + x) + 3] = 0.0f;
             }
           }
-#endif
         }
 
         for (int x = 0; x < config.width; x++) {
