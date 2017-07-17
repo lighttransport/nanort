@@ -526,6 +526,8 @@ class BVHAccel {
   /// Load BVH binary
   bool Load(const char *filename);
 
+  void Debug();
+
   /// Traverse into BVH along ray and find closest hit point & primitive if
   /// found
   template<class I, class H>
@@ -1286,7 +1288,7 @@ unsigned int BVHAccel<T>::BuildShallowTree(
   ComputeBoundingBox(&bmin, &bmax, &indices_.at(0), left_idx, right_idx, p);
 
   unsigned int n = right_idx - left_idx;
-  if ((n < options_.min_leaf_primitives) ||
+  if ((n <= options_.min_leaf_primitives) ||
       (depth >= options_.max_tree_depth)) {
     // Create leaf node.
     BVHNode<T> leaf;
@@ -1434,7 +1436,7 @@ unsigned int BVHAccel<T>::BuildTree(
   }
 
   unsigned int n = right_idx - left_idx;
-  if ((n < options_.min_leaf_primitives) ||
+  if ((n <= options_.min_leaf_primitives) ||
       (depth >= options_.max_tree_depth)) {
     // Create leaf node.
     BVHNode<T> leaf;
@@ -1677,6 +1679,25 @@ bool BVHAccel<T>::Build(unsigned int num_primitives,
 #endif
 
   return true;
+}
+
+template <typename T>
+void BVHAccel<T>::Debug() {
+  for (size_t i = 0; i < indices_.size(); i++) {
+    printf("index[%d] = %d\n", int(i), int(indices_[i]));
+  }
+
+  for (size_t i = 0; i < nodes_.size(); i++) {
+    printf("node[%d[ : bmin %f, %f, %f, bmax %f, %f, %f\n",
+      int(i),
+      nodes_[i].bmin[0],
+      nodes_[i].bmin[1],
+      nodes_[i].bmin[1],
+      nodes_[i].bmax[0],
+      nodes_[i].bmax[1],
+      nodes_[i].bmax[1]);
+    
+  }
 }
 
 template <typename T>
@@ -2036,7 +2057,8 @@ bool BVHAccel<T>::ListNodeIntersections(const Ray<T> &ray,
           isect_pq.push(hit);
 
           // Update `t' to the furthest distance.
-          hit_t = ray.max_t;
+          // hit_t = ray.max_t;
+
         } else {
           if (min_t < isect_pq.top().t_min) {
             // delete the furthest intersection and add a new intersection.
@@ -2045,7 +2067,7 @@ bool BVHAccel<T>::ListNodeIntersections(const Ray<T> &ray,
             isect_pq.push(hit);
 
             // Update furthest hit distance
-            hit_t = isect_pq.top().t_min;
+            // hit_t = isect_pq.top().t_min;
           }
         }
       }

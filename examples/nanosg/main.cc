@@ -411,25 +411,30 @@ int main(int argc, char** argv) {
 
   // construct the scene
   {
-    example::Mesh<float> mesh;
+    std::vector<example::Mesh<float> > meshes;
     std::vector<example::Material> materials;
     std::vector<example::Texture> textures;
 
-    bool ret = LoadObj(gRenderConfig.obj_filename, gRenderConfig.scene_scale, &mesh, &materials, &textures);
+    bool ret = LoadObj(gRenderConfig.obj_filename, gRenderConfig.scene_scale, &meshes, &materials, &textures);
     if (!ret) {
       std::cerr << "Failed to load .obj [ " << gRenderConfig.obj_filename << " ]" << std::endl;
       return -1;
     }
 
-    size_t mesh_id = gAsset.meshes.size();
-    gAsset.meshes.push_back(mesh);
     gAsset.materials = materials;
     gAsset.textures = textures;
 
-    nanosg::Node<float, example::Mesh<float> > node(&gAsset.meshes[mesh_id]);
-    gNodes.push_back(node);
+    for (size_t n = 0; n < meshes.size(); n++) {
+      size_t mesh_id = gAsset.meshes.size();
+      gAsset.meshes.push_back(meshes[mesh_id]);
+    }
+
+    for (size_t n = 0; n < gAsset.meshes.size(); n++) {
+      nanosg::Node<float, example::Mesh<float> > node(&gAsset.meshes[n]);
+      gNodes.push_back(node);
      
-    gScene.AddNode(node);
+      gScene.AddNode(node);
+    }
 
     if (!gScene.Commit()) {
       std::cerr << "Failed to commit the scene." << std::endl;

@@ -56,7 +56,7 @@ static int LoadTexture(const std::string& filename, std::vector<Texture> *textur
   return -1;
 }
 
-bool LoadObj(const std::string &filename, float scale, Mesh<float> *mesh, std::vector<Material> *out_materials, std::vector<Texture> *out_textures) {
+bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> > *meshes, std::vector<Material> *out_materials, std::vector<Texture> *out_textures) {
   tinyobj::attrib_t attrib;
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
@@ -102,33 +102,54 @@ bool LoadObj(const std::string &filename, float scale, Mesh<float> *mesh, std::v
   std::cout << "[LoadOBJ] # of vertices: " << num_vertices << std::endl;
 
   // Shape -> Mesh
-  mesh->vertices.resize(num_vertices * 3, 0.0f);
-  mesh->faces.resize(num_faces * 3, 0);
-  mesh->material_ids.resize(num_faces, 0);
-  mesh->facevarying_normals.resize(num_faces * 3 * 3, 0.0f);
-  mesh->facevarying_uvs.resize(num_faces * 3 * 2, 0.0f);
+  //mesh->vertices.resize(num_vertices * 3, 0.0f);
+  //mesh->faces.resize(num_faces * 3, 0);
+  //mesh->material_ids.resize(num_faces, 0);
+  //mesh->facevarying_normals.resize(num_faces * 3 * 3, 0.0f);
+  //mesh->facevarying_uvs.resize(num_faces * 3 * 2, 0.0f);
 
-  // @todo {}
-  // mesh->facevarying_tangents = NULL;
-  // mesh->facevarying_binormals = NULL;
+  // TODO(LTE): Implement tangents and binormals
 
-  //size_t vertexIdxOffset = 0;
-  size_t faceIdxOffset = 0;
+  //size_t faceIdxOffset = 0;
 
-  for (size_t i = 0; i < attrib.vertices.size(); i++) {
-    mesh->vertices[i] = scale * attrib.vertices[i];
-  }
+  //for (size_t i = 0; i < attrib.vertices.size(); i++) {
+  //  mesh->vertices[i] = scale * attrib.vertices[i];
+  //}
 
   for (size_t i = 0; i < shapes.size(); i++) {
-    for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
-      mesh->faces[3 * (faceIdxOffset + f) + 0] =
-          shapes[i].mesh.indices[3 * f + 0].vertex_index;
-      mesh->faces[3 * (faceIdxOffset + f) + 1] =
-          shapes[i].mesh.indices[3 * f + 1].vertex_index;
-      mesh->faces[3 * (faceIdxOffset + f) + 2] =
-          shapes[i].mesh.indices[3 * f + 2].vertex_index;
+    Mesh<float> mesh;
 
-      mesh->material_ids[faceIdxOffset + f] = shapes[i].mesh.material_ids[f];
+    const size_t num_faces = shapes[i].mesh.indices.size() / 3;
+    mesh.faces.resize(num_faces * 3);
+    mesh.material_ids.resize(num_faces);
+    mesh.facevarying_normals.resize(num_faces * 3 * 3);
+    mesh.facevarying_uvs.resize(num_faces * 3 * 2);
+    mesh.vertices.resize(num_faces * 3 * 3);
+
+    for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
+    
+      // reorder vertices. may create duplicated vertices.
+      unsigned int f0 = shapes[i].mesh.indices[3 * f + 0].vertex_index;
+      unsigned int f1 = shapes[i].mesh.indices[3 * f + 1].vertex_index;
+      unsigned int f2 = shapes[i].mesh.indices[3 * f + 2].vertex_index;
+
+      mesh.vertices[9 * f + 0] = attrib.vertices[3 * f0 + 0];
+      mesh.vertices[9 * f + 1] = attrib.vertices[3 * f0 + 1];
+      mesh.vertices[9 * f + 2] = attrib.vertices[3 * f0 + 2];
+
+      mesh.vertices[9 * f + 3] = attrib.vertices[3 * f1 + 0];
+      mesh.vertices[9 * f + 4] = attrib.vertices[3 * f1 + 1];
+      mesh.vertices[9 * f + 5] = attrib.vertices[3 * f1 + 2];
+
+      mesh.vertices[9 * f + 6] = attrib.vertices[3 * f2 + 0];
+      mesh.vertices[9 * f + 7] = attrib.vertices[3 * f2 + 1];
+      mesh.vertices[9 * f + 8] = attrib.vertices[3 * f2 + 2];
+
+      mesh.faces[3 * f + 0] = 3 * f + 0;
+      mesh.faces[3 * f + 1] = 3 * f + 1;
+      mesh.faces[3 * f + 2] = 3 * f + 2;
+
+      mesh.material_ids[f] = shapes[i].mesh.material_ids[f];
     }
 
     if (attrib.normals.size() > 0) {
@@ -154,25 +175,25 @@ bool LoadObj(const std::string &filename, float scale, Mesh<float> *mesh, std::v
           n2[1] = attrib.normals[3 * f2 + 1];
           n2[2] = attrib.normals[3 * f2 + 2];
 
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] =
+          mesh.facevarying_normals[3 * (3 * f + 0) + 0] =
               n0[0];
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] =
+          mesh.facevarying_normals[3 * (3 * f + 0) + 1] =
               n0[1];
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] =
+          mesh.facevarying_normals[3 * (3 * f + 0) + 2] =
               n0[2];
 
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] =
+          mesh.facevarying_normals[3 * (3 * f + 1) + 0] =
               n1[0];
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] =
+          mesh.facevarying_normals[3 * (3 * f + 1) + 1] =
               n1[1];
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] =
+          mesh.facevarying_normals[3 * (3 * f + 1) + 2] =
               n1[2];
 
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] =
+          mesh.facevarying_normals[3 * (3 * f + 2) + 0] =
               n2[0];
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] =
+          mesh.facevarying_normals[3 * (3 * f + 2) + 1] =
               n2[1];
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] =
+          mesh.facevarying_normals[3 * (3 * f + 2) + 2] =
               n2[2];
         } else {  // face contains invalid normal index. calc geometric normal.
           f0 = shapes[i].mesh.indices[3 * f + 0].vertex_index;
@@ -196,25 +217,25 @@ bool LoadObj(const std::string &filename, float scale, Mesh<float> *mesh, std::v
           float3 N;
           CalcNormal(N, v0, v1, v2);
 
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] =
+          mesh.facevarying_normals[3 * (3 * f + 0) + 0] =
               N[0];
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] =
+          mesh.facevarying_normals[3 * (3 * f + 0) + 1] =
               N[1];
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] =
+          mesh.facevarying_normals[3 * (3 * f + 0) + 2] =
               N[2];
 
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] =
+          mesh.facevarying_normals[3 * (3 * f + 1) + 0] =
               N[0];
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] =
+          mesh.facevarying_normals[3 * (3 * f + 1) + 1] =
               N[1];
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] =
+          mesh.facevarying_normals[3 * (3 * f + 1) + 2] =
               N[2];
 
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] =
+          mesh.facevarying_normals[3 * (3 * f + 2) + 0] =
               N[0];
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] =
+          mesh.facevarying_normals[3 * (3 * f + 2) + 1] =
               N[1];
-          mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] =
+          mesh.facevarying_normals[3 * (3 * f + 2) + 2] =
               N[2];
         }
       }
@@ -244,17 +265,17 @@ bool LoadObj(const std::string &filename, float scale, Mesh<float> *mesh, std::v
         float3 N;
         CalcNormal(N, v0, v1, v2);
 
-        mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] = N[0];
-        mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] = N[1];
-        mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] = N[2];
+        mesh.facevarying_normals[3 * (3 * f + 0) + 0] = N[0];
+        mesh.facevarying_normals[3 * (3 * f + 0) + 1] = N[1];
+        mesh.facevarying_normals[3 * (3 * f + 0) + 2] = N[2];
 
-        mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] = N[0];
-        mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] = N[1];
-        mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] = N[2];
+        mesh.facevarying_normals[3 * (3 * f + 1) + 0] = N[0];
+        mesh.facevarying_normals[3 * (3 * f + 1) + 1] = N[1];
+        mesh.facevarying_normals[3 * (3 * f + 1) + 2] = N[2];
 
-        mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] = N[0];
-        mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] = N[1];
-        mesh->facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] = N[2];
+        mesh.facevarying_normals[3 * (3 * f + 2) + 0] = N[0];
+        mesh.facevarying_normals[3 * (3 * f + 2) + 1] = N[1];
+        mesh.facevarying_normals[3 * (3 * f + 2) + 2] = N[2];
       }
     }
 
@@ -278,19 +299,19 @@ bool LoadObj(const std::string &filename, float scale, Mesh<float> *mesh, std::v
           n2[0] = attrib.texcoords[2 * f2 + 0];
           n2[1] = attrib.texcoords[2 * f2 + 1];
 
-          mesh->facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 0) + 0] = n0[0];
-          mesh->facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 0) + 1] = n0[1];
+          mesh.facevarying_uvs[2 * (3 * f + 0) + 0] = n0[0];
+          mesh.facevarying_uvs[2 * (3 * f + 0) + 1] = n0[1];
 
-          mesh->facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 1) + 0] = n1[0];
-          mesh->facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 1) + 1] = n1[1];
+          mesh.facevarying_uvs[2 * (3 * f + 1) + 0] = n1[0];
+          mesh.facevarying_uvs[2 * (3 * f + 1) + 1] = n1[1];
 
-          mesh->facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 2) + 0] = n2[0];
-          mesh->facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 2) + 1] = n2[1];
+          mesh.facevarying_uvs[2 * (3 * f + 2) + 0] = n2[0];
+          mesh.facevarying_uvs[2 * (3 * f + 2) + 1] = n2[1];
         }
       }
     }
 
-    faceIdxOffset += shapes[i].mesh.indices.size() / 3;
+    meshes->push_back(mesh);
   }
 
   // material_t -> Material and Texture
