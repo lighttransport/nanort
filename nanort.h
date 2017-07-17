@@ -363,10 +363,21 @@ inline const real *get_vertex_addr(const real *p, const size_t idx,
 template <typename T = float>
 class Ray {
  public:
+  Ray()
+   : min_t(static_cast<T>(0.0))
+   , max_t(std::numeric_limits<T>::max()) {
+    org[0] = static_cast<T>(0.0);
+    org[1] = static_cast<T>(0.0);
+    org[2] = static_cast<T>(0.0);
+    dir[0] = static_cast<T>(0.0);
+    dir[1] = static_cast<T>(0.0);
+    dir[2] = static_cast<T>(-1.0);
+  }
+
   T org[3];      // must set
   T dir[3];      // must set
-  T min_t;       // minium ray hit distance. must set.
-  T max_t;       // maximum ray hit distance. must set.
+  T min_t;       // minium ray hit distance. 
+  T max_t;       // maximum ray hit distance.
   T inv_dir[3];  // filled internally
   int dir_sign[3];  // filled internally
 };
@@ -1672,7 +1683,7 @@ template <typename T>
 bool BVHAccel<T>::Dump(const char *filename) {
   FILE *fp = fopen(filename, "wb");
   if (!fp) {
-    fprintf(stderr, "[BVHAccel] Cannot write a file: %s\n", filename);
+    //fprintf(stderr, "[BVHAccel] Cannot write a file: %s\n", filename);
     return false;
   }
 
@@ -1703,7 +1714,7 @@ template <typename T>
 bool BVHAccel<T>::Load(const char *filename) {
   FILE *fp = fopen(filename, "rb");
   if (!fp) {
-    fprintf(stderr, "Cannot open file: %s\n", filename);
+    //fprintf(stderr, "Cannot open file: %s\n", filename);
     return false;
   }
 
