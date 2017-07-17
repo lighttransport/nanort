@@ -1,6 +1,8 @@
 #ifndef EXAMPLE_MATERIAL_H_
 #define EXAMPLE_MATERIAL_H_
 
+#include <cstdlib>
+
 namespace example {
 
 struct Material {

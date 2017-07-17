@@ -65,21 +65,21 @@ bool LoadObj(const std::string &filename, float scale, Mesh<float> *mesh, std::v
   std::string basedir = GetBaseDir(filename) + "/";
   const char* basepath = (basedir.compare("/") == 0) ? NULL : basedir.c_str();
 
-  auto t_start = std::chrono::system_clock::now();
+  //auto t_start = std::chrono::system_clock::now();
 
   bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename.c_str(),
                               basepath, /* triangulate */ true);
 
-  auto t_end = std::chrono::system_clock::now();
-  std::chrono::duration<double, std::milli> ms = t_end - t_start;
+  //auto t_end = std::chrono::system_clock::now();
+  //std::chrono::duration<double, std::milli> ms = t_end - t_start;
 
   if (!err.empty()) {
     std::cerr << err << std::endl;
     return false;
   }
 
-  std::cout << "[LoadOBJ] Parse time : " << ms.count() << " [msecs]"
-            << std::endl;
+  //std::cout << "[LoadOBJ] Parse time : " << ms.count() << " [msecs]"
+  //          << std::endl;
 
   std::cout << "[LoadOBJ] # of shapes in .obj : " << shapes.size() << std::endl;
   std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size()

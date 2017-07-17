@@ -372,7 +372,7 @@ class Node
     Copy(rhs);
   }
 
-  const type &operator=(type &rhs) {
+  const type &operator=(const type &rhs) {
     Copy(rhs);
     return (*this);
   }
@@ -430,7 +430,10 @@ class Node
     }
 	}
 
-  void SetXform(T xform[4][4]) {
+	///
+	/// Set local transformation.
+	///
+  void SetLocalXform(const T xform[4][4]) {
     memcpy(local_xform_, xform, sizeof(float) * 16);
   }
 

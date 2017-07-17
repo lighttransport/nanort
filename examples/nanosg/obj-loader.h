@@ -2,6 +2,7 @@
 #define EXAMPLE_OBJ_LOADER_H_
 
 #include <vector>
+#include <string>
 
 #include "mesh.h"
 #include "material.h"
