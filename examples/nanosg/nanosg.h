@@ -827,9 +827,14 @@ class Scene
             has_hit = true;
             //(*isect) = local_isect;
             isect->node_id = node_hits[i].node_id;
+            isect->prim_id = local_isect.prim_id;
+            isect->u = local_isect.u;
+            isect->v = local_isect.v;
 
             // TODO(LTE): Implement
             T Ng[3], Ns[3]; // geometric normal, shading normal.
+
+            node.GetMesh()->GetNormal(Ng, Ns, isect->prim_id, isect->u, isect->v);
                 
             // Convert position and normal into world coordinate.
             isect->t = t_world;

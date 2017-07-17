@@ -230,6 +230,7 @@ PR are always welcome!
   * [ ] ARM NEON SIMD
   * [ ] Intel SSE SIMD
 * [ ] Scene graph support.
+  * [x] NanoSG, Minimal scene graph library. [examples/nanosg](examples/nanosg)
   * [ ] Instancing support.
 * [ ] Fix multi-hit ray traversal.
 * [ ] Optimize Multi-hit ray traversal for BVH.

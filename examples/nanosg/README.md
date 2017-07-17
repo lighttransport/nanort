@@ -19,10 +19,23 @@ Scene contains root nodes and provides the method to find an intersection of nod
 
 Following are required in user application.
 
-* Mesh class
-  * Current example code assumes mesh is all composed of triangle meshes.
-* Intersection class
-  * Represents intersection(hit) information.
+### Mesh class
+
+Current example code assumes mesh is all composed of triangle meshes.
+
+Following method must be implemented for `Scene::Traversal`.
+
+```
+///
+/// Get the geometric normal and the shading normal at `face_idx' th face.
+///
+template<typename T>
+void GetNormal(T Ng[3], T Ns[3], const unsigned int face_idx, const T u, const T v) const;
+```
+
+### Intersection class
+
+Represents intersection(hit) information.
 
 ## Memory management
 
@@ -30,14 +43,39 @@ Following are required in user application.
 
 ## API
 
-```
-Node::AddChild(const type &child);
-```
-
-Add node as child node.
+### Node
 
 ```
 Node::AddChild(const type &child);
 ```
 
 Add node as child node.
+
+```
+void Node::SetLocalXform(const T xform[4][4]) {
+```
+
+Set local transformation matrix.
+
+### Scene
+
+```
+bool Scene::AddNode(const Node<T, M> &node);
+```
+
+Add a node to the scene.
+
+```
+bool Scene::Commit() {
+```
+
+Commit the scene. After adding nodes to the scene, call this `Commit` before tracing rays.
+`Commit` triggers BVH build in each nodes and updates node's transformation matrix.
+
+```
+template<class H>
+bool Scene::Traverse(nanort::Ray<T> &ray, H *isect, const bool cull_back_face = false) const;
+```
+
+Trace ray into the scene and find an intersection.
+Returns `true` when there is an intersection and hit information is stored in `isect`.
