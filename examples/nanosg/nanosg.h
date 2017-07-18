@@ -391,9 +391,6 @@ class Node
 
     if (!accel_.IsValid() && mesh_ && (mesh_->vertices.size() > 3) && (mesh_->faces.size() >= 3)) {
 
-      printf("verts: %d\n", int(mesh_->vertices.size()));
-      printf("faces: %d\n", int(mesh_->faces.size()));
-
       // Assume mesh is composed of triangle faces only.
       nanort::TriangleMesh<float> triangle_mesh(mesh_->vertices.data(), mesh_->faces.data(), sizeof(float) * 3);
       nanort::TriangleSAHPred<float> triangle_pred(mesh_->vertices.data(), mesh_->faces.data(), sizeof(float) * 3);
@@ -549,6 +546,90 @@ class NodeBBoxGeometry {
   mutable nanort::BVHTraceOptions trace_options_;
 };
 
+class NodeBBoxIntersection {
+ public:
+  NodeBBoxIntersection() {}
+
+  float normal[3];
+
+  // Required member variables.
+  float t;
+  unsigned int prim_id;
+};
+
+template<typename T, class M>
+class NodeBBoxIntersector {
+ public:
+  NodeBBoxIntersector(const std::vector<Node<T, M> >* nodes)
+      : nodes_(nodes) {}
+
+  bool Intersect(float* out_t_min, float *out_t_max, unsigned int prim_index) const {
+
+    T bmin[3], bmax[3];
+
+    (*nodes_)[prim_index].GetWorldBoundingBox(bmin, bmax);
+
+    float tmin, tmax;
+
+    const float min_x = ray_dir_sign_[0] ? bmax[0] : bmin[0];
+    const float min_y = ray_dir_sign_[1] ? bmax[1] : bmin[1];
+    const float min_z = ray_dir_sign_[2] ? bmax[2] : bmin[2];
+    const float max_x = ray_dir_sign_[0] ? bmin[0] : bmax[0];
+    const float max_y = ray_dir_sign_[1] ? bmin[1] : bmax[1];
+    const float max_z = ray_dir_sign_[2] ? bmin[2] : bmax[2];
+
+    // X
+    const float tmin_x = (min_x - ray_org_[0]) * ray_inv_dir_[0];
+    const float tmax_x = (max_x - ray_org_[0]) * ray_inv_dir_[0];
+
+    // Y
+    const float tmin_y = (min_y - ray_org_[1]) * ray_inv_dir_[1];
+    const float tmax_y = (max_y - ray_org_[1]) * ray_inv_dir_[1];
+
+    // Z
+    const float tmin_z = (min_z - ray_org_[2]) * ray_inv_dir_[2];
+    const float tmax_z = (max_z - ray_org_[2]) * ray_inv_dir_[2];
+
+    tmin = nanort::safemax(tmin_z, nanort::safemax(tmin_y, tmin_x));
+    tmax = nanort::safemin(tmax_z, nanort::safemin(tmax_y, tmax_x));
+
+    if (tmin <= tmax) {
+      (*out_t_min) = tmin;
+      (*out_t_max) = tmax;
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Prepare BVH traversal(e.g. compute inverse ray direction)
+  /// This function is called only once in BVH traversal.
+  void PrepareTraversal(const nanort::Ray<float>& ray) const {
+    ray_org_[0] = ray.org[0];
+    ray_org_[1] = ray.org[1];
+    ray_org_[2] = ray.org[2];
+
+    ray_dir_[0] = ray.dir[0];
+    ray_dir_[1] = ray.dir[1];
+    ray_dir_[2] = ray.dir[2];
+
+    // FIXME(syoyo): Consider zero div case.
+    ray_inv_dir_[0] = static_cast<T>(1.0) / ray.dir[0];
+    ray_inv_dir_[1] = static_cast<T>(1.0) / ray.dir[1];
+    ray_inv_dir_[2] = static_cast<T>(1.0) / ray.dir[2];
+
+    ray_dir_sign_[0] = ray.dir[0] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
+    ray_dir_sign_[1] = ray.dir[1] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
+    ray_dir_sign_[2] = ray.dir[2] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
+  }
+
+  const std::vector<Node<T, M> >* nodes_;
+  mutable nanort::real3<T> ray_org_;
+  mutable nanort::real3<T> ray_dir_;
+  mutable nanort::real3<T> ray_inv_dir_;
+  mutable int ray_dir_sign_[3];
+};
+
 template<typename T, class M>
 class Scene
 {
@@ -594,8 +675,6 @@ class Scene
     bool ret = toplevel_accel_.Build(static_cast<unsigned int>(nodes_.size()), geom, pred, build_options);
 
     nanort::BVHBuildStatistics stats = toplevel_accel_.GetStatistics();
-    printf("# of branch nodes: %d\n", int(stats.num_branch_nodes));
-    printf("# of leaf nodes: %d\n", int(stats.num_leaf_nodes));
 
     toplevel_accel_.Debug();
 
@@ -644,8 +723,9 @@ class Scene
 
     bool has_hit = false;
 		
+    NodeBBoxIntersector<T, M> isector(&nodes_);
     nanort::StackVector<nanort::NodeHit<T>, 128> node_hits;
-    bool may_hit = toplevel_accel_.ListNodeIntersections(ray, kMaxIntersections, &node_hits);
+    bool may_hit = toplevel_accel_.ListNodeIntersections(ray, kMaxIntersections, isector, &node_hits);
 
 		if (may_hit) {
 
@@ -660,11 +740,11 @@ class Scene
 				
 				// Early cull test.
         if (t_nearest < node_hits[i].t_min) {
+          //printf("near: %f, t_min: %f, t_max: %f\n", t_nearest, node_hits[i].t_min, node_hits[i].t_max);
           continue;
         }
 
         assert(node_hits[i].node_id < nodes_.size());
-        printf("node_id = %d\n", node_hits[i].node_id);
         const Node<T, M> &node = nodes_[node_hits[i].node_id];
 
         // Transform ray into node's local space

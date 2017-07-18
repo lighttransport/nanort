@@ -551,8 +551,10 @@ class BVHAccel {
   /// List up nodes which intersects along the ray.
   /// This function is useful for two-level BVH traversal.
   ///
+  template<class I>
   bool ListNodeIntersections(const Ray<T> &ray,
                              int max_intersections,
+                             const I &intersector,
                              StackVector<NodeHit<T>, 128> *hits) const;
 
   const std::vector<BVHNode<T> > &GetNodes() const { return nodes_; }
@@ -605,6 +607,13 @@ class BVHAccel {
   template<class I>
   bool TestLeafNode(const BVHNode<T> &node, const Ray<T> &ray,
                     const I &intersector) const;
+
+  template<class I>
+  bool TestLeafNodeIntersections(const BVHNode<T> &node,
+                                 const Ray<T> &ray,
+                                 const int max_intersections,
+                                 const I &intersector,
+                                 std::priority_queue<NodeHit<T>, std::vector<NodeHit<T> >, NodeHitComparator<T> >  *isect_pq) const;
 
 #if 0
   template<class I, class H, class Comp>
@@ -1688,7 +1697,7 @@ void BVHAccel<T>::Debug() {
   }
 
   for (size_t i = 0; i < nodes_.size(); i++) {
-    printf("node[%d[ : bmin %f, %f, %f, bmax %f, %f, %f\n",
+    printf("node[%d] : bmin %f, %f, %f, bmax %f, %f, %f\n",
       int(i),
       nodes_[i].bmin[0],
       nodes_[i].bmin[1],
@@ -1991,10 +2000,62 @@ bool BVHAccel<T>::Traverse(const Ray<T> &ray,
   return hit;
 }
   
+template <typename T> template<class I>
+inline bool BVHAccel<T>::TestLeafNodeIntersections(const BVHNode<T> &node,
+                                      const Ray<T> &ray,
+                                      const int max_intersections,
+                                      const I &intersector,
+                                      std::priority_queue<NodeHit<T>, std::vector<NodeHit<T> >, NodeHitComparator<T> >  *isect_pq) const {
+  bool hit = false;
 
-template <typename T>
+  unsigned int num_primitives = node.data[0];
+  unsigned int offset = node.data[1];
+
+  real3<T> ray_org;
+  ray_org[0] = ray.org[0];
+  ray_org[1] = ray.org[1];
+  ray_org[2] = ray.org[2];
+
+  real3<T> ray_dir;
+  ray_dir[0] = ray.dir[0];
+  ray_dir[1] = ray.dir[1];
+  ray_dir[2] = ray.dir[2];
+
+  intersector.PrepareTraversal(ray);
+
+  for (unsigned int i = 0; i < num_primitives; i++) {
+    unsigned int prim_idx = indices_[i + offset];
+
+    T min_t, max_t;
+    if (intersector.Intersect(&min_t, &max_t, prim_idx)) {
+      // Always add to isect lists.
+      NodeHit<T> hit;
+      hit.t_min = min_t;
+      hit.t_max = max_t;
+      hit.node_id = prim_idx;
+
+      if (isect_pq->size() < static_cast<size_t>(max_intersections)) {
+        isect_pq->push(hit);
+
+      } else {
+        if (min_t < isect_pq->top().t_min) {
+          // delete the furthest intersection and add a new intersection.
+          isect_pq->pop();
+
+          isect_pq->push(hit);
+
+        }
+      }
+    }
+  }
+
+  return hit;
+}
+
+template <typename T> template<class I>
 bool BVHAccel<T>::ListNodeIntersections(const Ray<T> &ray,
                                          int max_intersections,
+                                         const I &intersector,
                                          StackVector<NodeHit<T>, 128> *hits) const {
   const int kMaxStackDepth = 512;
 
@@ -2047,29 +2108,7 @@ bool BVHAccel<T>::ListNodeIntersections(const Ray<T> &ray,
 
     } else {  // leaf node
       if (hit) {
-
-        NodeHit<T> hit;
-        hit.t_min = min_t;
-        hit.t_max = max_t;
-        hit.node_id = index;
-
-        if (isect_pq.size() < static_cast<size_t>(max_intersections)) {
-          isect_pq.push(hit);
-
-          // Update `t' to the furthest distance.
-          // hit_t = ray.max_t;
-
-        } else {
-          if (min_t < isect_pq.top().t_min) {
-            // delete the furthest intersection and add a new intersection.
-            isect_pq.pop();
-
-            isect_pq.push(hit);
-
-            // Update furthest hit distance
-            // hit_t = isect_pq.top().t_min;
-          }
-        }
+        TestLeafNodeIntersections(node, ray, max_intersections, intersector, &isect_pq);
       }
     }
   }

@@ -3,12 +3,13 @@
 
 #include <vector>
 #include <algorithm>
+#include <cmath>
 
 namespace example {
 
 
 template<typename T>
-inline T lerp(T dst[3], const T v0[3], const T v1[3], const T v2[3], float u, float v) {
+inline void lerp(T dst[3], const T v0[3], const T v1[3], const T v2[3], float u, float v) {
   dst[0] = (static_cast<T>(1.0) - u - v) * v0[0] + u * v1[0] + v * v2[0];
   dst[1] = (static_cast<T>(1.0) - u - v) * v0[1] + u * v1[1] + v * v2[1];
   dst[2] = (static_cast<T>(1.0) - u - v) * v0[2] + u * v1[2] + v * v2[2];
