@@ -21,7 +21,7 @@ sources = {
    "../common/imgui/ImGuizmo.cpp",
    }
 
-solution "GUISolution"
+solution "NanoSGSolution"
    configurations { "Release", "Debug" }
 
    if os.is("Windows") then

@@ -68,7 +68,16 @@ THE SOFTWARE.
 
 #include "ImGuizmo.h"
 
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 4201)
+#endif
+
 #include "glm/mat4x4.hpp"
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 #include "nanosg.h"
 #include "render-config.h"
@@ -519,7 +528,7 @@ int main(int argc, char** argv) {
     ImGuizmo::BeginFrame();
     ImGuizmo::Enable(true);
 
-    ImGuiIO &io = ImGui::GetIO();
+    //ImGuiIO &io = ImGui::GetIO();
     ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
 
     ImGui::Begin("UI");

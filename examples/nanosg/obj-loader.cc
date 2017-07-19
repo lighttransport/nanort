@@ -49,7 +49,7 @@ static int LoadTexture(const std::string& filename, std::vector<Texture> *textur
     free(data);
 
     textures->push_back(texture);
-    return textures->size() - 1;
+    return int(textures->size()) - 1;
   }
 
   std::cout << "  Failed to load : " << filename << std::endl;
@@ -75,6 +75,9 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
 
   if (!err.empty()) {
     std::cerr << err << std::endl;
+  }
+  
+  if (!ret) {
     return false;
   }
 
@@ -85,21 +88,23 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
   std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size()
             << std::endl;
 
-  size_t num_vertices = 0;
-  size_t num_faces = 0;
+  {
+	  size_t total_num_vertices = 0;
+	  size_t total_num_faces = 0;
 
-  num_vertices = attrib.vertices.size() / 3;
-  printf("  vertices: %ld\n", attrib.vertices.size() / 3);
+	  total_num_vertices = attrib.vertices.size() / 3;
+	  printf("  vertices: %ld\n", int(attrib.vertices.size() / 3));
 
-  for (size_t i = 0; i < shapes.size(); i++) {
-    printf("  shape[%ld].name = %s\n", i, shapes[i].name.c_str());
-    printf("  shape[%ld].indices: %ld\n", i, shapes[i].mesh.indices.size());
-    assert((shapes[i].mesh.indices.size() % 3) == 0);
+	  for (size_t i = 0; i < shapes.size(); i++) {
+		  printf("  shape[%ld].name = %s\n", int(i), shapes[i].name.c_str());
+		  printf("  shape[%ld].indices: %ld\n", int(i), int(shapes[i].mesh.indices.size()));
+		  assert((shapes[i].mesh.indices.size() % 3) == 0);
 
-    num_faces += shapes[i].mesh.indices.size() / 3;
+		  total_num_faces += shapes[i].mesh.indices.size() / 3;
+	  }
+	  std::cout << "[LoadOBJ] # of faces: " << total_num_faces << std::endl;
+	  std::cout << "[LoadOBJ] # of vertices: " << total_num_vertices << std::endl;
   }
-  std::cout << "[LoadOBJ] # of faces: " << num_faces << std::endl;
-  std::cout << "[LoadOBJ] # of vertices: " << num_vertices << std::endl;
 
   // Shape -> Mesh
   //mesh->vertices.resize(num_vertices * 3, 0.0f);
@@ -133,21 +138,21 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
       unsigned int f1 = shapes[i].mesh.indices[3 * f + 1].vertex_index;
       unsigned int f2 = shapes[i].mesh.indices[3 * f + 2].vertex_index;
 
-      mesh.vertices[9 * f + 0] = attrib.vertices[3 * f0 + 0];
-      mesh.vertices[9 * f + 1] = attrib.vertices[3 * f0 + 1];
-      mesh.vertices[9 * f + 2] = attrib.vertices[3 * f0 + 2];
+      mesh.vertices[9 * f + 0] = scale * attrib.vertices[3 * f0 + 0];
+      mesh.vertices[9 * f + 1] = scale * attrib.vertices[3 * f0 + 1];
+      mesh.vertices[9 * f + 2] = scale * attrib.vertices[3 * f0 + 2];
 
-      mesh.vertices[9 * f + 3] = attrib.vertices[3 * f1 + 0];
-      mesh.vertices[9 * f + 4] = attrib.vertices[3 * f1 + 1];
-      mesh.vertices[9 * f + 5] = attrib.vertices[3 * f1 + 2];
+      mesh.vertices[9 * f + 3] = scale * attrib.vertices[3 * f1 + 0];
+      mesh.vertices[9 * f + 4] = scale * attrib.vertices[3 * f1 + 1];
+      mesh.vertices[9 * f + 5] = scale * attrib.vertices[3 * f1 + 2];
 
-      mesh.vertices[9 * f + 6] = attrib.vertices[3 * f2 + 0];
-      mesh.vertices[9 * f + 7] = attrib.vertices[3 * f2 + 1];
-      mesh.vertices[9 * f + 8] = attrib.vertices[3 * f2 + 2];
+      mesh.vertices[9 * f + 6] = scale * attrib.vertices[3 * f2 + 0];
+      mesh.vertices[9 * f + 7] = scale * attrib.vertices[3 * f2 + 1];
+      mesh.vertices[9 * f + 8] = scale * attrib.vertices[3 * f2 + 2];
 
-      mesh.faces[3 * f + 0] = 3 * f + 0;
-      mesh.faces[3 * f + 1] = 3 * f + 1;
-      mesh.faces[3 * f + 2] = 3 * f + 2;
+      mesh.faces[3 * f + 0] = static_cast<unsigned int>(3 * f + 0);
+      mesh.faces[3 * f + 1] = static_cast<unsigned int>(3 * f + 1);
+      mesh.faces[3 * f + 2] = static_cast<unsigned int>(3 * f + 2);
 
       mesh.material_ids[f] = shapes[i].mesh.material_ids[f];
     }
@@ -325,7 +330,7 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
     (*out_materials)[i].specular[1] = materials[i].specular[1];
     (*out_materials)[i].specular[2] = materials[i].specular[2];
 
-    (*out_materials)[i].id = i;
+    (*out_materials)[i].id = int(i);
 
     // map_Kd
     (*out_materials)[i].diffuse_texid = LoadTexture(materials[i].diffuse_texname, out_textures);

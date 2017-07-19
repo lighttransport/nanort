@@ -395,7 +395,7 @@ class Node
       nanort::TriangleMesh<float> triangle_mesh(mesh_->vertices.data(), mesh_->faces.data(), sizeof(float) * 3);
       nanort::TriangleSAHPred<float> triangle_pred(mesh_->vertices.data(), mesh_->faces.data(), sizeof(float) * 3);
 
-      bool ret = accel_.Build(mesh_->faces.size() / 3, triangle_mesh, triangle_pred);
+      bool ret = accel_.Build(int(mesh_->faces.size()) / 3, triangle_mesh, triangle_pred);
 
       // Update local bbox.
       if (ret) {
@@ -747,10 +747,7 @@ class Scene
         assert(node_hits[i].node_id < nodes_.size());
         const Node<T, M> &node = nodes_[node_hits[i].node_id];
 
-        // Transform ray into node's local space
-        T local_ray_org[3];
-        T local_ray_dir[3];
-  
+        // Transform ray into node's local space  
         // TODO(LTE): Set ray tmin and tmax
         nanort::Ray<T> local_ray;
         Matrix<T>::MultV(local_ray.org, node.inv_xform_, ray.org);

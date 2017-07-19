@@ -2029,20 +2029,20 @@ inline bool BVHAccel<T>::TestLeafNodeIntersections(const BVHNode<T> &node,
     T min_t, max_t;
     if (intersector.Intersect(&min_t, &max_t, prim_idx)) {
       // Always add to isect lists.
-      NodeHit<T> hit;
-      hit.t_min = min_t;
-      hit.t_max = max_t;
-      hit.node_id = prim_idx;
+      NodeHit<T> isect;
+      isect.t_min = min_t;
+      isect.t_max = max_t;
+      isect.node_id = prim_idx;
 
       if (isect_pq->size() < static_cast<size_t>(max_intersections)) {
-        isect_pq->push(hit);
+        isect_pq->push(isect);
 
       } else {
         if (min_t < isect_pq->top().t_min) {
           // delete the furthest intersection and add a new intersection.
           isect_pq->pop();
 
-          isect_pq->push(hit);
+          isect_pq->push(isect);
 
         }
       }
