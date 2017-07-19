@@ -66,6 +66,10 @@ THE SOFTWARE.
 #include "imgui.h"
 #include "imgui_impl_btgui.h"
 
+#include "ImGuizmo.h"
+
+#include "glm/mat4x4.hpp"
+
 #include "nanosg.h"
 #include "render-config.h"
 #include "render.h"
@@ -496,6 +500,10 @@ int main(int argc, char** argv) {
   io.Fonts->AddFontDefault();
   //io.Fonts->AddFontFromFileTTF("./DroidSans.ttf", 15.0f);
 
+  glm::mat4 projection(1.0f);
+  glm::mat4 view(1.0f);
+  glm::mat4 matrix(1.0f);
+
   std::thread renderThread(RenderThread);
 
   // Trigger initial rendering request
@@ -507,6 +515,13 @@ int main(int argc, char** argv) {
     checkErrors("begin frame");
 
     ImGui_ImplBtGui_NewFrame(gMousePosX, gMousePosY);
+
+    ImGuizmo::BeginFrame();
+    ImGuizmo::Enable(true);
+
+    ImGuiIO &io = ImGui::GetIO();
+    ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+
     ImGui::Begin("UI");
     {
       static float col[3] = {0, 0, 0};
@@ -553,6 +568,10 @@ int main(int argc, char** argv) {
 
     Display(gRenderConfig.width, gRenderConfig.height);
 
+    // Draw imguizomo
+    ImGuizmo::DrawCube(&view[0][0], &projection[0][0], &matrix[0][0]);
+
+    // Draw imgui
     ImGui::Render();
 
     checkErrors("im render");

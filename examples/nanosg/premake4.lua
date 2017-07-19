@@ -18,6 +18,7 @@ sources = {
    "../common/imgui/imgui.cpp",
    "../common/imgui/imgui_draw.cpp",
    "../common/imgui/imgui_impl_btgui.cpp",
+   "../common/imgui/ImGuizmo.cpp",
    }
 
 solution "GUISolution"
@@ -48,6 +49,7 @@ solution "GUISolution"
       includedirs { "./", "../../" }
       includedirs { "../common" }
       includedirs { "../common/imgui" }
+      includedirs { "../common/glm" }
       --includedirs { "../common/nativefiledialog/src/include" }
 
       if _OPTIONS['asan'] then
