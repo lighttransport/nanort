@@ -74,6 +74,7 @@ THE SOFTWARE.
 #endif
 
 #include "glm/mat4x4.hpp"
+#include "glm/gtc/quaternion.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
 #if defined(_MSC_VER)
@@ -110,8 +111,8 @@ bool gShiftPressed = false;
 float gShowPositionScale = 1.0f;
 float gShowDepthRange[2] = {10.0f, 20.f};
 bool gShowDepthPeseudoColor = true;
-float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
 static nanosg::Scene<float, example::Mesh<float> > gScene;
 static example::Asset gAsset;
@@ -123,15 +124,33 @@ std::atomic<bool> gRenderCancel;
 example::RenderConfig gRenderConfig;
 std::mutex gMutex;
 
-std::vector<float> gDisplayRGBA;  // Accumurated image.
-std::vector<float> gRGBA;
-std::vector<float> gAuxRGBA;        // Auxiliary buffer
-std::vector<int> gSampleCounts;     // Sample num counter for each pixel.
-std::vector<float> gNormalRGBA;     // For visualizing normal
-std::vector<float> gPositionRGBA;   // For visualizing position
-std::vector<float> gDepthRGBA;      // For visualizing depth
-std::vector<float> gTexCoordRGBA;   // For visualizing texcoord
-std::vector<float> gVaryCoordRGBA;  // For visualizing varycentric coord
+struct RenderLayer
+{
+  std::vector<float> displayRGBA;  // Accumurated image.
+  std::vector<float> rgba;
+  std::vector<float> auxRGBA;        // Auxiliary buffer
+  std::vector<int> sampleCounts;     // Sample num counter for each pixel.
+  std::vector<float> normalRGBA;     // For visualizing normal
+  std::vector<float> positionRGBA;   // For visualizing position
+  std::vector<float> depthRGBA;      // For visualizing depth
+  std::vector<float> texCoordRGBA;   // For visualizing texcoord
+  std::vector<float> varyCoordRGBA;  // For visualizing varycentric coord
+};
+
+RenderLayer gRenderLayer;
+
+struct Camera
+{
+  glm::mat4 view;
+  glm::mat4 projection;
+};
+
+struct ManipConfig
+{
+  glm::vec3 snapTranslation;
+  glm::vec3 snapRotation;
+  glm::vec3 snapScale;
+};
 
 void RequestRender() {
   {
@@ -174,7 +193,7 @@ void RenderThread() {
     // Render() will repeatedly check this flag inside the rendering loop.
 
     bool ret =
-        example::Renderer::Render(&gRGBA.at(0), &gAuxRGBA.at(0), &gSampleCounts.at(0),
+        example::Renderer::Render(&gRenderLayer.rgba.at(0), &gRenderLayer.auxRGBA.at(0), &gRenderLayer.sampleCounts.at(0),
                          gCurrQuat, gScene, gAsset, gRenderConfig, gRenderCancel);
 
     if (ret) {
@@ -196,38 +215,38 @@ void InitRender(example::RenderConfig* rc) {
 
   rc->max_passes = 128;
 
-  gSampleCounts.resize(rc->width * rc->height);
-  std::fill(gSampleCounts.begin(), gSampleCounts.end(), 0.0);
+  gRenderLayer.sampleCounts.resize(rc->width * rc->height);
+  std::fill(gRenderLayer.sampleCounts.begin(), gRenderLayer.sampleCounts.end(), 0.0);
 
-  gDisplayRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gDisplayRGBA.begin(), gDisplayRGBA.end(), 0.0);
+  gRenderLayer.displayRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gRenderLayer.displayRGBA.begin(), gRenderLayer.displayRGBA.end(), 0.0);
 
-  gRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gRGBA.begin(), gRGBA.end(), 0.0);
+  gRenderLayer.rgba.resize(rc->width * rc->height * 4);
+  std::fill(gRenderLayer.rgba.begin(), gRenderLayer.rgba.end(), 0.0);
 
-  gAuxRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gAuxRGBA.begin(), gAuxRGBA.end(), 0.0);
+  gRenderLayer.auxRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gRenderLayer.auxRGBA.begin(), gRenderLayer.auxRGBA.end(), 0.0);
 
-  gNormalRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gNormalRGBA.begin(), gNormalRGBA.end(), 0.0);
+  gRenderLayer.normalRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gRenderLayer.normalRGBA.begin(), gRenderLayer.normalRGBA.end(), 0.0);
 
-  gPositionRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gPositionRGBA.begin(), gPositionRGBA.end(), 0.0);
+  gRenderLayer.positionRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gRenderLayer.positionRGBA.begin(), gRenderLayer.positionRGBA.end(), 0.0);
 
-  gDepthRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gDepthRGBA.begin(), gDepthRGBA.end(), 0.0);
+  gRenderLayer.depthRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gRenderLayer.depthRGBA.begin(), gRenderLayer.depthRGBA.end(), 0.0);
 
-  gTexCoordRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gTexCoordRGBA.begin(), gTexCoordRGBA.end(), 0.0);
+  gRenderLayer.texCoordRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gRenderLayer.texCoordRGBA.begin(), gRenderLayer.texCoordRGBA.end(), 0.0);
 
-  gVaryCoordRGBA.resize(rc->width * rc->height * 4);
-  std::fill(gVaryCoordRGBA.begin(), gVaryCoordRGBA.end(), 0.0);
+  gRenderLayer.varyCoordRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gRenderLayer.varyCoordRGBA.begin(), gRenderLayer.varyCoordRGBA.end(), 0.0);
 
-  rc->normalImage = &gNormalRGBA.at(0);
-  rc->positionImage = &gPositionRGBA.at(0);
-  rc->depthImage = &gDepthRGBA.at(0);
-  rc->texcoordImage = &gTexCoordRGBA.at(0);
-  rc->varycoordImage = &gVaryCoordRGBA.at(0);
+  rc->normalImage = &gRenderLayer.normalRGBA.at(0);
+  rc->positionImage = &gRenderLayer.positionRGBA.at(0);
+  rc->depthImage = &gRenderLayer.depthRGBA.at(0);
+  rc->texcoordImage = &gRenderLayer.texCoordRGBA.at(0);
+  rc->varycoordImage = &gRenderLayer.varyCoordRGBA.at(0);
 
   trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
@@ -360,31 +379,31 @@ void Display(int width, int height) {
   if (gShowBufferMode == SHOW_BUFFER_COLOR) {
     // normalize
     for (size_t i = 0; i < buf.size() / 4; i++) {
-      buf[4 * i + 0] = gRGBA[4 * i + 0];
-      buf[4 * i + 1] = gRGBA[4 * i + 1];
-      buf[4 * i + 2] = gRGBA[4 * i + 2];
-      buf[4 * i + 3] = gRGBA[4 * i + 3];
-      if (gSampleCounts[i] > 0) {
-        buf[4 * i + 0] /= static_cast<float>(gSampleCounts[i]);
-        buf[4 * i + 1] /= static_cast<float>(gSampleCounts[i]);
-        buf[4 * i + 2] /= static_cast<float>(gSampleCounts[i]);
-        buf[4 * i + 3] /= static_cast<float>(gSampleCounts[i]);
+      buf[4 * i + 0] = gRenderLayer.rgba[4 * i + 0];
+      buf[4 * i + 1] = gRenderLayer.rgba[4 * i + 1];
+      buf[4 * i + 2] = gRenderLayer.rgba[4 * i + 2];
+      buf[4 * i + 3] = gRenderLayer.rgba[4 * i + 3];
+      if (gRenderLayer.sampleCounts[i] > 0) {
+        buf[4 * i + 0] /= static_cast<float>(gRenderLayer.sampleCounts[i]);
+        buf[4 * i + 1] /= static_cast<float>(gRenderLayer.sampleCounts[i]);
+        buf[4 * i + 2] /= static_cast<float>(gRenderLayer.sampleCounts[i]);
+        buf[4 * i + 3] /= static_cast<float>(gRenderLayer.sampleCounts[i]);
       }
     }
   } else if (gShowBufferMode == SHOW_BUFFER_NORMAL) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gNormalRGBA[i];
+      buf[i] = gRenderLayer.normalRGBA[i];
     }
   } else if (gShowBufferMode == SHOW_BUFFER_POSITION) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gPositionRGBA[i] * gShowPositionScale;
+      buf[i] = gRenderLayer.positionRGBA[i] * gShowPositionScale;
     }
   } else if (gShowBufferMode == SHOW_BUFFER_DEPTH) {
     float d_min = std::min(gShowDepthRange[0], gShowDepthRange[1]);
     float d_diff = fabsf(gShowDepthRange[1] - gShowDepthRange[0]);
     d_diff = std::max(d_diff, std::numeric_limits<float>::epsilon());
     for (size_t i = 0; i < buf.size(); i++) {
-      float v = (gDepthRGBA[i] - d_min) / d_diff;
+      float v = (gRenderLayer.depthRGBA[i] - d_min) / d_diff;
       if (gShowDepthPeseudoColor) {
         buf[i] = pesudoColor(v, i % 4);
       } else {
@@ -393,11 +412,11 @@ void Display(int width, int height) {
     }
   } else if (gShowBufferMode == SHOW_BUFFER_TEXCOORD) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gTexCoordRGBA[i];
+      buf[i] = gRenderLayer.texCoordRGBA[i];
     }
   } else if (gShowBufferMode == SHOW_BUFFER_VARYCOORD) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gVaryCoordRGBA[i];
+      buf[i] = gRenderLayer.varyCoordRGBA[i];
     }
   }
 
@@ -405,19 +424,6 @@ void Display(int width, int height) {
   glDrawPixels(width, height, GL_RGBA, GL_FLOAT,
                static_cast<const GLvoid*>(&buf.at(0)));
 }
-
-struct Camera
-{
-  glm::mat4 view;
-  glm::mat4 projection;
-};
-
-struct ManipConfig
-{
-  glm::vec3 snapTranslation;
-  glm::vec3 snapRotation;
-  glm::vec3 snapScale;
-};
 
 void EditTransform(const ManipConfig &config, const Camera& camera, glm::mat4& matrix)
 {
@@ -476,6 +482,120 @@ void EditTransform(const ManipConfig &config, const Camera& camera, glm::mat4& m
   ImGuiIO& io = ImGui::GetIO();
   ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
   ImGuizmo::Manipulate(&camera.view[0][0], &camera.projection[0][0], mCurrentGizmoOperation, mCurrentGizmoMode, &matrix[0][0], NULL, useSnap ? &snap.x : NULL);
+}
+
+void DrawMesh(const example::Mesh<float> *mesh)
+{
+  // TODO(LTE): Use vertex array or use display list.
+
+  glBegin(GL_TRIANGLES);
+
+  if (!mesh->facevarying_normals.empty()) {
+    for (size_t i = 0; i < mesh->faces.size() / 3; i++) {
+      unsigned int f0 = mesh->faces[3 * i + 0];
+      unsigned int f1 = mesh->faces[3 * i + 1];
+      unsigned int f2 = mesh->faces[3 * i + 2];
+
+      glNormal3f(mesh->facevarying_normals[9 * i + 0],
+                 mesh->facevarying_normals[9 * i + 1],
+                 mesh->facevarying_normals[9 * i + 2]);
+      glVertex3f(mesh->vertices[3 * f0 + 0],
+                 mesh->vertices[3 * f0 + 1],
+                 mesh->vertices[3 * f0 + 2]);
+      glNormal3f(mesh->facevarying_normals[9 * i + 3],
+                 mesh->facevarying_normals[9 * i + 4],
+                 mesh->facevarying_normals[9 * i + 5]);
+      glVertex3f(mesh->vertices[3 * f1 + 0],
+                 mesh->vertices[3 * f1 + 1],
+                 mesh->vertices[3 * f1 + 2]);
+      glNormal3f(mesh->facevarying_normals[9 * i + 6],
+                 mesh->facevarying_normals[9 * i + 7],
+                 mesh->facevarying_normals[9 * i + 8]);
+      glVertex3f(mesh->vertices[3 * f2 + 0],
+                 mesh->vertices[3 * f2 + 1],
+                 mesh->vertices[3 * f2 + 2]);
+    }
+
+  } else {
+    for (size_t i = 0; i < mesh->faces.size() / 3; i++) {
+      unsigned int f0 = mesh->faces[3 * i + 0];
+      unsigned int f1 = mesh->faces[3 * i + 1];
+      unsigned int f2 = mesh->faces[3 * i + 2];
+
+      glVertex3f(mesh->vertices[3 * f0 + 0],
+                 mesh->vertices[3 * f0 + 1],
+                 mesh->vertices[3 * f0 + 2]);
+      glVertex3f(mesh->vertices[3 * f1 + 0],
+                 mesh->vertices[3 * f1 + 1],
+                 mesh->vertices[3 * f1 + 2]);
+      glVertex3f(mesh->vertices[3 * f2 + 0],
+                 mesh->vertices[3 * f2 + 1],
+                 mesh->vertices[3 * f2 + 2]);
+    }
+  }
+
+  glEnd(); 
+}
+
+void DrawNode(const nanosg::Node<float, example::Mesh<float> > &node)
+{
+  glPushMatrix();
+  glMultMatrixf(node.GetLocalXformPtr());
+
+  if (node.GetMesh()) {
+    DrawMesh(node.GetMesh());
+  }
+
+  for (size_t i = 0; i < node.GetChildren().size(); i++) {
+    DrawNode(node.GetChildren()[i]);
+  }
+
+  glPopMatrix();
+}
+
+// Draw scene with OpenGL
+void DrawScene(const nanosg::Scene<float, example::Mesh<float> > &scene, const Camera &camera)
+{
+  glEnable(GL_DEPTH_TEST);
+
+  glEnable(GL_LIGHTING);
+  glEnable(GL_LIGHT0);
+  glEnable(GL_LIGHT1);
+
+  // FIXME(LTE): Use scene bounding box.
+  const float light0_pos[4] = {1000.0f, 1000.0f, 1000.0f, 0.0f};
+  const float light1_pos[4] = {-1000.0f, -1000.0f, -1000.0f, 0.0f};
+
+  const float light_diffuse[4] = {0.5f, 0.5f, 0.5f, 1.0f};
+
+  glLightfv(GL_LIGHT0, GL_POSITION, &light0_pos[0]);
+  glLightfv(GL_LIGHT0, GL_DIFFUSE,  &light_diffuse[0]);
+  glLightfv(GL_LIGHT1, GL_POSITION, &light1_pos[0]);
+  glLightfv(GL_LIGHT1, GL_DIFFUSE,  &light_diffuse[0]);
+
+  const std::vector<nanosg::Node<float, example::Mesh<float> > > &root_nodes = scene.GetNodes(); 
+
+  glMatrixMode(GL_PROJECTION);
+  glPushMatrix();
+  glLoadMatrixf(&camera.projection[0][0]);
+  glMatrixMode(GL_MODELVIEW);
+  glPushMatrix();
+  glLoadMatrixf(&camera.view[0][0]);
+
+  for (size_t i = 0; i < root_nodes.size(); i++) {
+    DrawNode(root_nodes[i]);
+  }
+
+  glMatrixMode(GL_PROJECTION);
+  glPopMatrix();
+  glMatrixMode(GL_MODELVIEW);
+  glPopMatrix();
+
+  glDisable(GL_LIGHT0);
+  glDisable(GL_LIGHT1);
+  glDisable(GL_LIGHTING);
+  glDisable(GL_DEPTH_TEST);
+
 }
 
 int main(int argc, char** argv) {
@@ -586,6 +706,8 @@ int main(int argc, char** argv) {
   glm::mat4 view(1.0f);
   glm::mat4 matrix(1.0f);
 
+  Camera camera;
+
   std::thread renderThread(RenderThread);
 
   // Trigger initial rendering request
@@ -648,9 +770,9 @@ int main(int argc, char** argv) {
 
     checkErrors("clear");
 
-    //Display(gRenderConfig.width, gRenderConfig.height);
+    Display(gRenderConfig.width, gRenderConfig.height);
 
-    // Draw imguizomo
+    // Setup camera and draw imguizomo
     {
       ImGui::Begin("Transform");
 
@@ -670,47 +792,29 @@ int main(int argc, char** argv) {
       up[1] = gRenderConfig.up[1];
       up[2] = gRenderConfig.up[2];
 
-      view = glm::lookAt(eye, lookat, up);
+      // NOTE(LTE): w, then (x,y,z) for glm::quat.
+      glm::quat rot = glm::quat(gCurrQuat[3], gCurrQuat[0], gCurrQuat[1], gCurrQuat[2]);
+      glm::mat4 rm = glm::mat4_cast(rot);
+
+      view = glm::lookAt(eye, lookat, up) * glm::inverse(glm::mat4_cast(rot));
       projection = glm::perspective (45.0f, float(window->getWidth()) / float(window->getHeight()), 0.01f, 1000.0f);
 
       //ImGuizmo::DrawCube(&view[0][0], &projection[0][0], &matrix[0][0]);
 
       //ImGuizmo::Manipulate(&view[0][0], &projection[0][0], guizmo_op, guizmo_mode, &matrix[0][0], NULL, /* snap */NULL);
-      Camera camera;
       camera.view = view;
       camera.projection = projection;
       ManipConfig manip_config;
 
       EditTransform(manip_config, camera, matrix);
 
-      glMatrixMode(GL_PROJECTION);
-      glPushMatrix();
-      glLoadIdentity();
-      glMultMatrixf(&projection[0][0]);
-      glMatrixMode(GL_MODELVIEW);
-      glPushMatrix();
-      glLoadIdentity();
-      glMultMatrixf(&view[0][0]);
-      checkErrors("matrix");
+      checkErrors("edit_transform");
  
-      glBegin(GL_TRIANGLES);//start drawing triangles
-        glVertex3f(-1.0f,-0.25f,0.0f);//triangle one first vertex
-        glVertex3f(-0.5f,-0.25f,0.0f);//triangle one second vertex
-        glVertex3f(-0.75f,0.25f,0.0f);//triangle one third vertex
-        //drawing a new triangle
-        glVertex3f(0.5f,-0.25f,0.0f);//triangle two first vertex
-        glVertex3f(1.0f,-0.25f,0.0f);//triangle two second vertex
-        glVertex3f(0.75f,0.25f,0.0f);//triangle two third vertex
-      glEnd();//end drawing of triangles
-
-      glMatrixMode(GL_MODELVIEW);
-      glPopMatrix();
-
-      glMatrixMode(GL_PROJECTION);
-      glPopMatrix();
-
       ImGui::End();
     }
+
+    // Draw scene in OpenGL
+    DrawScene(gScene, camera);
 
     // Draw imgui
     ImGui::Render();
@@ -723,7 +827,6 @@ int main(int argc, char** argv) {
     std::this_thread::sleep_for(std::chrono::milliseconds(16));
   }
 
-  printf("quit\n");
   {
     gRenderCancel = true;
     gRenderQuit = true;

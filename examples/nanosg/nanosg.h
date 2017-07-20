@@ -384,6 +384,13 @@ class Node
     children_.push_back(child);
   }
 
+  ///
+  /// Get chidren
+  ///
+  const std::vector<type> GetChildren() const {
+    return children_;
+  }
+
 	///
 	/// Update internal state.
 	///
@@ -435,6 +442,10 @@ class Node
 	///
   void SetLocalXform(const T xform[4][4]) {
     memcpy(local_xform_, xform, sizeof(float) * 16);
+  }
+
+  const T *GetLocalXformPtr() const {
+    return &local_xform_[0][0];
   }
 
   const M *GetMesh() const {
@@ -649,6 +660,10 @@ class Scene
     return true;
   }
 
+  const std::vector<Node<T, M> > &GetNodes() const {
+    return nodes_;
+  }
+
   ///
   /// Commit the scene. Must be called before tracing rays into the scene.
   ///
@@ -676,7 +691,7 @@ class Scene
 
     nanort::BVHBuildStatistics stats = toplevel_accel_.GetStatistics();
 
-    toplevel_accel_.Debug();
+    //toplevel_accel_.Debug();
 
     if (ret) {
       toplevel_accel_.BoundingBox(bmin_, bmax_); 

@@ -43,6 +43,8 @@ Represents intersection(hit) information.
 
 ## API
 
+API is still subject to change.
+
 ### Node
 
 ```
