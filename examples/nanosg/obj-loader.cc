@@ -93,11 +93,11 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
 	  size_t total_num_faces = 0;
 
 	  total_num_vertices = attrib.vertices.size() / 3;
-	  printf("  vertices: %ld\n", int(attrib.vertices.size() / 3));
+	  std::cout << "  vertices : " << attrib.vertices.size() / 3 << std::endl;
 
 	  for (size_t i = 0; i < shapes.size(); i++) {
-		  printf("  shape[%ld].name = %s\n", int(i), shapes[i].name.c_str());
-		  printf("  shape[%ld].indices: %ld\n", int(i), int(shapes[i].mesh.indices.size()));
+		  std::cout << "  shape[" << i << "].name : " << shapes[i].name << std::endl;
+		  std::cout << "  shape[" << i << "].indices : " << shapes[i].mesh.indices.size() << std::endl;
 		  assert((shapes[i].mesh.indices.size() % 3) == 0);
 
 		  total_num_faces += shapes[i].mesh.indices.size() / 3;
@@ -106,20 +106,7 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
 	  std::cout << "[LoadOBJ] # of vertices: " << total_num_vertices << std::endl;
   }
 
-  // Shape -> Mesh
-  //mesh->vertices.resize(num_vertices * 3, 0.0f);
-  //mesh->faces.resize(num_faces * 3, 0);
-  //mesh->material_ids.resize(num_faces, 0);
-  //mesh->facevarying_normals.resize(num_faces * 3 * 3, 0.0f);
-  //mesh->facevarying_uvs.resize(num_faces * 3 * 2, 0.0f);
-
   // TODO(LTE): Implement tangents and binormals
-
-  //size_t faceIdxOffset = 0;
-
-  //for (size_t i = 0; i < attrib.vertices.size(); i++) {
-  //  mesh->vertices[i] = scale * attrib.vertices[i];
-  //}
 
   for (size_t i = 0; i < shapes.size(); i++) {
     Mesh<float> mesh;

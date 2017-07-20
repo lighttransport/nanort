@@ -74,6 +74,7 @@ THE SOFTWARE.
 #endif
 
 #include "glm/mat4x4.hpp"
+#include "glm/gtc/matrix_transform.hpp"
 
 #if defined(_MSC_VER)
 #pragma warning(pop)
@@ -405,6 +406,78 @@ void Display(int width, int height) {
                static_cast<const GLvoid*>(&buf.at(0)));
 }
 
+struct Camera
+{
+  glm::mat4 view;
+  glm::mat4 projection;
+};
+
+struct ManipConfig
+{
+  glm::vec3 snapTranslation;
+  glm::vec3 snapRotation;
+  glm::vec3 snapScale;
+};
+
+void EditTransform(const ManipConfig &config, const Camera& camera, glm::mat4& matrix)
+{
+  static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::ROTATE);
+  static ImGuizmo::MODE mCurrentGizmoMode(ImGuizmo::WORLD);
+  if (ImGui::IsKeyPressed(90))
+    mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+  if (ImGui::IsKeyPressed(69))
+    mCurrentGizmoOperation = ImGuizmo::ROTATE;
+  if (ImGui::IsKeyPressed(82)) // r Key
+    mCurrentGizmoOperation = ImGuizmo::SCALE;
+  if (ImGui::RadioButton("Translate", mCurrentGizmoOperation == ImGuizmo::TRANSLATE))
+    mCurrentGizmoOperation = ImGuizmo::TRANSLATE;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Rotate", mCurrentGizmoOperation == ImGuizmo::ROTATE))
+    mCurrentGizmoOperation = ImGuizmo::ROTATE;
+  ImGui::SameLine();
+  if (ImGui::RadioButton("Scale", mCurrentGizmoOperation == ImGuizmo::SCALE))
+    mCurrentGizmoOperation = ImGuizmo::SCALE;
+  float matrixTranslation[3], matrixRotation[3], matrixScale[3];
+  ImGuizmo::DecomposeMatrixToComponents(&matrix[0][0], matrixTranslation, matrixRotation, matrixScale);
+  ImGui::InputFloat3("Tr", matrixTranslation, 3);
+  ImGui::InputFloat3("Rt", matrixRotation, 3);
+  ImGui::InputFloat3("Sc", matrixScale, 3);
+  ImGuizmo::RecomposeMatrixFromComponents(matrixTranslation, matrixRotation, matrixScale, &matrix[0][0]);
+
+  if (mCurrentGizmoOperation != ImGuizmo::SCALE)
+  {
+    if (ImGui::RadioButton("Local", mCurrentGizmoMode == ImGuizmo::LOCAL))
+      mCurrentGizmoMode = ImGuizmo::LOCAL;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("World", mCurrentGizmoMode == ImGuizmo::WORLD))
+      mCurrentGizmoMode = ImGuizmo::WORLD;
+  }
+  static bool useSnap(false);
+  if (ImGui::IsKeyPressed(83))
+    useSnap = !useSnap;
+  ImGui::Checkbox("", &useSnap);
+  ImGui::SameLine();
+  glm::vec3 snap;
+  switch (mCurrentGizmoOperation)
+  {
+  case ImGuizmo::TRANSLATE:
+    snap = config.snapTranslation;
+    ImGui::InputFloat3("Snap", &snap.x);
+    break;
+  case ImGuizmo::ROTATE:
+    snap = config.snapRotation;
+    ImGui::InputFloat("Angle Snap", &snap.x);
+    break;
+  case ImGuizmo::SCALE:
+    snap = config.snapScale;
+    ImGui::InputFloat("Scale Snap", &snap.x);
+    break;
+  }
+  ImGuiIO& io = ImGui::GetIO();
+  ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
+  ImGuizmo::Manipulate(&camera.view[0][0], &camera.projection[0][0], mCurrentGizmoOperation, mCurrentGizmoMode, &matrix[0][0], NULL, useSnap ? &snap.x : NULL);
+}
+
 int main(int argc, char** argv) {
   std::string config_filename = "config.json";
 
@@ -575,10 +648,69 @@ int main(int argc, char** argv) {
 
     checkErrors("clear");
 
-    Display(gRenderConfig.width, gRenderConfig.height);
+    //Display(gRenderConfig.width, gRenderConfig.height);
 
     // Draw imguizomo
-    ImGuizmo::DrawCube(&view[0][0], &projection[0][0], &matrix[0][0]);
+    {
+      ImGui::Begin("Transform");
+
+      static ImGuizmo::OPERATION guizmo_op(ImGuizmo::ROTATE);
+      static ImGuizmo::MODE guizmo_mode(ImGuizmo::WORLD);
+
+      glm::vec3 eye, lookat, up;
+      eye[0] = gRenderConfig.eye[0];
+      eye[1] = gRenderConfig.eye[1];
+      eye[2] = gRenderConfig.eye[2];
+
+      lookat[0] = gRenderConfig.look_at[0];
+      lookat[1] = gRenderConfig.look_at[1];
+      lookat[2] = gRenderConfig.look_at[2];
+
+      up[0] = gRenderConfig.up[0];
+      up[1] = gRenderConfig.up[1];
+      up[2] = gRenderConfig.up[2];
+
+      view = glm::lookAt(eye, lookat, up);
+      projection = glm::perspective (45.0f, float(window->getWidth()) / float(window->getHeight()), 0.01f, 1000.0f);
+
+      //ImGuizmo::DrawCube(&view[0][0], &projection[0][0], &matrix[0][0]);
+
+      //ImGuizmo::Manipulate(&view[0][0], &projection[0][0], guizmo_op, guizmo_mode, &matrix[0][0], NULL, /* snap */NULL);
+      Camera camera;
+      camera.view = view;
+      camera.projection = projection;
+      ManipConfig manip_config;
+
+      EditTransform(manip_config, camera, matrix);
+
+      glMatrixMode(GL_PROJECTION);
+      glPushMatrix();
+      glLoadIdentity();
+      glMultMatrixf(&projection[0][0]);
+      glMatrixMode(GL_MODELVIEW);
+      glPushMatrix();
+      glLoadIdentity();
+      glMultMatrixf(&view[0][0]);
+      checkErrors("matrix");
+ 
+      glBegin(GL_TRIANGLES);//start drawing triangles
+        glVertex3f(-1.0f,-0.25f,0.0f);//triangle one first vertex
+        glVertex3f(-0.5f,-0.25f,0.0f);//triangle one second vertex
+        glVertex3f(-0.75f,0.25f,0.0f);//triangle one third vertex
+        //drawing a new triangle
+        glVertex3f(0.5f,-0.25f,0.0f);//triangle two first vertex
+        glVertex3f(1.0f,-0.25f,0.0f);//triangle two second vertex
+        glVertex3f(0.75f,0.25f,0.0f);//triangle two third vertex
+      glEnd();//end drawing of triangles
+
+      glMatrixMode(GL_MODELVIEW);
+      glPopMatrix();
+
+      glMatrixMode(GL_PROJECTION);
+      glPopMatrix();
+
+      ImGui::End();
+    }
 
     // Draw imgui
     ImGui::Render();
