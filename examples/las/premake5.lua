@@ -59,6 +59,10 @@ solution "LASRenderSolution"
          links {"X11", "pthread", "dl"}
       end
       if os.is("MacOSX") then
+         -- Assume brew installed liblas
+         includedirs { "/usr/local/include" }
+         libdirs  { "/usr/local/lib" }
+
          links {"Cocoa.framework"}
          files {
                 "../common/OpenGLWindow/MacOpenGLWindow.h",

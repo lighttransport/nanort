@@ -86,9 +86,7 @@ typedef struct {
 } Mesh;
 
 Mesh gMesh;
-nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>,
-                 nanort::TriangleIntersector<> >
-    gAccel;
+nanort::BVHAccel<float> gAccel;
 
 typedef nanort::real3<float> float3;
 
@@ -479,15 +477,16 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
 
           nanort::TriangleIntersector<> triangle_intersector(
               reinterpret_cast<const float*>(gMesh.vertices.data()), gMesh.faces.data(), gMesh.vertex_stride_bytes);
-          bool hit = gAccel.Traverse(ray, triangle_intersector);
+          nanort::TriangleIntersection<> isect;
+          bool hit = gAccel.Traverse(ray, triangle_intersector, &isect);
           if (hit) {
             float3 p;
             p[0] =
-                ray.org[0] + triangle_intersector.intersection.t * ray.dir[0];
+                ray.org[0] + isect.t * ray.dir[0];
             p[1] =
-                ray.org[1] + triangle_intersector.intersection.t * ray.dir[1];
+                ray.org[1] + isect.t * ray.dir[1];
             p[2] =
-                ray.org[2] + triangle_intersector.intersection.t * ray.dir[2];
+                ray.org[2] + isect.t * ray.dir[2];
 
             layer->position[4 * (y * config.width + x) + 0] = p.x();
             layer->position[4 * (y * config.width + x) + 1] = p.y();
@@ -495,13 +494,13 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
             layer->position[4 * (y * config.width + x) + 3] = 1.0f;
 
             layer->varycoord[4 * (y * config.width + x) + 0] =
-                triangle_intersector.intersection.u;
+                isect.u;
             layer->varycoord[4 * (y * config.width + x) + 1] =
-                triangle_intersector.intersection.v;
+                isect.v;
             layer->varycoord[4 * (y * config.width + x) + 2] = 0.0f;
             layer->varycoord[4 * (y * config.width + x) + 3] = 1.0f;
 
-            unsigned int prim_id = triangle_intersector.intersection.prim_id;
+            unsigned int prim_id = isect.prim_id;
 
             float3 N;
             { 
@@ -529,11 +528,11 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
             layer->normal[4 * (y * config.width + x) + 3] = 1.0f;
 
             layer->depth[4 * (y * config.width + x) + 0] =
-                triangle_intersector.intersection.t;
+                isect.t;
             layer->depth[4 * (y * config.width + x) + 1] =
-                triangle_intersector.intersection.t;
+                isect.t;
             layer->depth[4 * (y * config.width + x) + 2] =
-                triangle_intersector.intersection.t;
+                isect.t;
             layer->depth[4 * (y * config.width + x) + 3] = 1.0f;
 
             // @todo { material }

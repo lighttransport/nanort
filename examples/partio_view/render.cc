@@ -235,12 +235,12 @@ class SphereIntersector {
   }
 
   /// Returns the nearest hit distance.
-  float GetT() const { return intersection.t; }
+  float GetT() const { return t_; }
 
   /// Update is called when a nearest hit is found.
   void Update(float t, unsigned int prim_idx) const {
-    intersection.t = t;
-    intersection.prim_id = prim_idx;
+    t_ = t;
+    prim_id_ = prim_idx;
   }
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
@@ -261,14 +261,18 @@ class SphereIntersector {
   /// Post BVH traversal stuff(e.g. compute intersection point information)
   /// This function is called only once in BVH traversal.
   /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray<float>& ray, bool hit) const {
+  void PostTraversal(const nanort::Ray<float>& ray, bool hit, SphereIntersection *isect) const {
     if (hit) {
-      float3 hitP = ray_org_ + intersection.t * ray_dir_;
-      float3 center = float3(&vertices_[3 * intersection.prim_id]);
+      float3 hitP = ray_org_ + t_ * ray_dir_;
+      float3 center = float3(&vertices_[3 * prim_id_]);
       float3 n = vnormalize(hitP - center);
-      intersection.normal = n;
-      intersection.u = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
-      intersection.v = acos(n[1]) / M_PI;
+
+      isect->t = t_;
+      isect->prim_id = prim_id_;
+
+      isect->normal = n;
+      isect->u = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
+      isect->v = acos(n[1]) / M_PI;
     }
   }
 
@@ -278,14 +282,13 @@ class SphereIntersector {
   mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 
-  mutable I intersection;
+  mutable float t_;
+  mutable unsigned int prim_id_;
 };
 
 // -----------------------------------------------------
 
-nanort::BVHAccel<float, SphereGeometry, SpherePred,
-                 SphereIntersector<SphereIntersection> >
-    gAccel;
+nanort::BVHAccel<float> gAccel;
 
 inline float3 Lerp3(float3 v0, float3 v1, float3 v2, float u, float v) {
   return (1.0f - u - v) * v0 + u * v1 + v * v2;
@@ -587,12 +590,13 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 
           SphereIntersector<SphereIntersection> isector(&vertices_.at(0),
                                                         &radiuss_.at(0));
-          bool hit = gAccel.Traverse(ray, isector);
+          SphereIntersection isect;
+          bool hit = gAccel.Traverse(ray, isector, &isect);
           if (hit) {
             float3 p;
-            p[0] = ray.org[0] + isector.intersection.t * ray.dir[0];
-            p[1] = ray.org[1] + isector.intersection.t * ray.dir[1];
-            p[2] = ray.org[2] + isector.intersection.t * ray.dir[2];
+            p[0] = ray.org[0] + isect.t * ray.dir[0];
+            p[1] = ray.org[1] + isect.t * ray.dir[1];
+            p[2] = ray.org[2] + isect.t * ray.dir[2];
 
             config.positionImage[4 * (y * config.width + x) + 0] = p.x();
             config.positionImage[4 * (y * config.width + x) + 1] = p.y();
@@ -600,15 +604,15 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             config.positionImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             config.varycoordImage[4 * (y * config.width + x) + 0] =
-                isector.intersection.u;
+                isect.u;
             config.varycoordImage[4 * (y * config.width + x) + 1] =
-                isector.intersection.v;
+                isect.v;
             config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
             config.varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
 
-            unsigned int prim_id = isector.intersection.prim_id;
+            unsigned int prim_id = isect.prim_id;
 
-            float3 N = isector.intersection.normal;
+            float3 N = isect.normal;
 
             config.normalImage[4 * (y * config.width + x) + 0] =
                 0.5f * N[0] + 0.5f;
@@ -619,11 +623,11 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             config.normalImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             config.depthImage[4 * (y * config.width + x) + 0] =
-                isector.intersection.t;
+                isect.t;
             config.depthImage[4 * (y * config.width + x) + 1] =
-                isector.intersection.t;
+                isect.t;
             config.depthImage[4 * (y * config.width + x) + 2] =
-                isector.intersection.t;
+                isect.t;
             config.depthImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             // Simple shading
