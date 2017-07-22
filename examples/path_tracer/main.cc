@@ -661,11 +661,8 @@ void progressBar(int tick, int total, int width = 50) {
   std::fflush(stdout);
 }
 
-bool CheckForOccluder(
-    float3 p1, float3 p2, const Mesh &mesh,
-    const nanort::BVHAccel<float, nanort::TriangleMesh<float>,
-                           nanort::TriangleSAHPred<float>,
-                           nanort::TriangleIntersector<> > &accel) {
+bool CheckForOccluder(float3 p1, float3 p2, const Mesh &mesh,
+                      const nanort::BVHAccel<float> &accel) {
   static const float ray_eps = 0.00001f;
 
   float3 dir = p2 - p1;
@@ -684,7 +681,8 @@ bool CheckForOccluder(
 
   nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces,
                                                      sizeof(float) * 3);
-  if (!accel.Traverse(shadow_ray, triangle_intersector)) {
+  nanort::TriangleIntersection<> isect;
+  if (!accel.Traverse(shadow_ray, triangle_intersector, &isect)) {
     return false;
   }
 
@@ -748,10 +746,7 @@ int main(int argc, char **argv) {
   printf("num_triangles = %lu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
 
-  nanort::BVHAccel<float, nanort::TriangleMesh<float>,
-                   nanort::TriangleSAHPred<float>,
-                   nanort::TriangleIntersector<> >
-      accel;
+  nanort::BVHAccel<float> accel;
   ret =
       accel.Build(mesh.num_faces, triangle_mesh, triangle_pred, build_options);
   assert(ret);
@@ -826,15 +821,16 @@ int main(int argc, char **argv) {
 
           nanort::TriangleIntersector<> triangle_intersector(
               mesh.vertices, mesh.faces, sizeof(float) * 3);
-          bool hit = accel.Traverse(ray, triangle_intersector);
+          nanort::TriangleIntersection<> isect;
+          bool hit = accel.Traverse(ray, triangle_intersector, &isect);
 
           if (!hit) {
             break;
           }
 
-          rayOrg += rayDir * triangle_intersector.intersection.t;
+          rayOrg += rayDir * isect.t;
 
-          unsigned int fid = triangle_intersector.intersection.prim_id;
+          unsigned int fid = isect.prim_id;
           float3 norm(0, 0, 0);
           if (mesh.facevarying_normals) {
             float3 normals[3];
@@ -843,8 +839,8 @@ int main(int argc, char **argv) {
               normals[vId][1] = mesh.facevarying_normals[9 * fid + 3 * vId + 1];
               normals[vId][2] = mesh.facevarying_normals[9 * fid + 3 * vId + 2];
             }
-            float u = triangle_intersector.intersection.u;
-            float v = triangle_intersector.intersection.v;
+            float u = isect.u;
+            float v = isect.v;
             norm = (1.0 - u - v) * normals[0] + u * normals[1] + v * normals[2];
             norm.normalize();
           }

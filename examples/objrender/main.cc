@@ -3,6 +3,9 @@
 #define TINYEXR_IMPLEMENTATION
 #include "tinyexr.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 #include "nanort.h"
 
 #include <iostream>
@@ -15,8 +18,8 @@ namespace {
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <windows.h>
 #include <mmsystem.h>
+#include <windows.h>
 #ifdef __cplusplus
 }
 #endif
@@ -30,7 +33,7 @@ extern "C" {
 #endif
 
 class timerutil {
-public:
+ public:
 #ifdef _WIN32
   typedef DWORD time_t;
 
@@ -66,7 +69,7 @@ public:
     return (time_t)(t.tv_sec * 1000 + t.tv_usec);
   }
 
-#else // C timer
+#else  // C timer
   // using namespace std;
   typedef clock_t time_t;
 
@@ -81,7 +84,7 @@ public:
 #endif
 #endif
 
-private:
+ private:
 #ifdef _WIN32
   DWORD t_[2];
 #else
@@ -147,7 +150,7 @@ struct float3 {
   // float pad;  // for alignment
 };
 
-//inline float3 operator*(float f, const float3 &v) {
+// inline float3 operator*(float f, const float3 &v) {
 //  return float3(v.x * f, v.y * f, v.z * f);
 //}
 
@@ -159,22 +162,21 @@ inline float3 vcross(float3 a, float3 b) {
   return c;
 }
 
-//inline float vdot(float3 a, float3 b) {
+// inline float vdot(float3 a, float3 b) {
 //  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 //}
-
 
 typedef struct {
   size_t num_vertices;
   size_t num_faces;
-  float *vertices;              /// [xyz] * num_vertices
-  float *facevarying_normals;   /// [xyz] * 3(triangle) * num_faces
-  float *facevarying_tangents;  /// [xyz] * 3(triangle) * num_faces
-  float *facevarying_binormals; /// [xyz] * 3(triangle) * num_faces
-  float *facevarying_uvs;       /// [xyz] * 3(triangle) * num_faces
-  float *facevarying_vertex_colors;   /// [xyz] * 3(triangle) * num_faces
-  unsigned int *faces;         /// triangle x num_faces
-  unsigned int *material_ids;   /// index x num_faces
+  float *vertices;                   /// [xyz] * num_vertices
+  float *facevarying_normals;        /// [xyz] * 3(triangle) * num_faces
+  float *facevarying_tangents;       /// [xyz] * 3(triangle) * num_faces
+  float *facevarying_binormals;      /// [xyz] * 3(triangle) * num_faces
+  float *facevarying_uvs;            /// [xyz] * 3(triangle) * num_faces
+  float *facevarying_vertex_colors;  /// [xyz] * 3(triangle) * num_faces
+  unsigned int *faces;               /// triangle x num_faces
+  unsigned int *material_ids;        /// index x num_faces
 } Mesh;
 
 struct Material {
@@ -187,23 +189,23 @@ struct Material {
   int reflection_texid;
   int transparency_texid;
   int bump_texid;
-  int normal_texid;     // normal map
-  int alpha_texid;      // alpha map
+  int normal_texid;  // normal map
+  int alpha_texid;   // alpha map
 
   Material() {
-	  ambient[0] = 0.0;
-	  ambient[1] = 0.0;
-	  ambient[2] = 0.0;
-	  diffuse[0] = 0.5;
-	  diffuse[1] = 0.5;
-	  diffuse[2] = 0.5;
-	  reflection[0] = 0.0;
-	  reflection[1] = 0.0;
-	  reflection[2] = 0.0;
-	  refraction[0] = 0.0;
-	  refraction[1] = 0.0;
-	  refraction[2] = 0.0;
-	  id = -1;
+    ambient[0] = 0.0;
+    ambient[1] = 0.0;
+    ambient[2] = 0.0;
+    diffuse[0] = 0.5;
+    diffuse[1] = 0.5;
+    diffuse[2] = 0.5;
+    reflection[0] = 0.0;
+    reflection[1] = 0.0;
+    reflection[2] = 0.0;
+    refraction[0] = 0.0;
+    refraction[1] = 0.0;
+    refraction[2] = 0.0;
+    id = -1;
     diffuse_texid = -1;
     reflection_texid = -1;
     transparency_texid = -1;
@@ -213,8 +215,7 @@ struct Material {
   }
 };
 
-void calcNormal(float3& N, float3 v0, float3 v1, float3 v2)
-{
+void calcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
   float3 v10 = v1 - v0;
   float3 v20 = v2 - v0;
 
@@ -222,45 +223,48 @@ void calcNormal(float3& N, float3 v0, float3 v1, float3 v2)
   N.normalize();
 }
 
-//Save in RAW headerless format, for use when exr tools are not available in system
-void SaveImageRaw(const char* filename, const float* rgb, int width, int height) {
-  std::vector<unsigned char>rawbuf;
-  rawbuf.resize(3*width*height);
-  unsigned char* raw = &rawbuf.at(0);
+// Save in RAW headerless format, for use when exr tools are not available in
+// system
+void SaveImageRaw(const char *filename, const float *rgb, int width,
+                  int height) {
+  std::vector<unsigned char> rawbuf;
+  rawbuf.resize(3 * width * height);
+  unsigned char *raw = &rawbuf.at(0);
 
   // @note { Apply gamma correction would be nice? }
   for (int i = 0; i < width * height; i++) {
-    raw[i*3] = (char)(rgb[3*i+0] * 255.0);
-    raw[i*3+1] = (char)(rgb[3*i+1] * 255.0);
-    raw[i*3+2] = (char)(rgb[3*i+2] * 255.0);
+    raw[i * 3] = (char)(rgb[3 * i + 0] * 255.0);
+    raw[i * 3 + 1] = (char)(rgb[3 * i + 1] * 255.0);
+    raw[i * 3 + 2] = (char)(rgb[3 * i + 2] * 255.0);
   }
-  FILE* f=fopen(filename, "wb");
-  if(!f){
+  FILE *f = fopen(filename, "wb");
+  if (!f) {
     printf("Error: Couldnt open output binary file %s\n", filename);
     return;
   }
-  fwrite(raw, 3*width*height, 1, f);
+  fwrite(raw, 3 * width * height, 1, f);
   fclose(f);
-  printf("Info: Saved RAW RGB image of [%dx%d] dimensions to [ %s ]\n", width, height, filename);
+  printf("Info: Saved RAW RGB image of [%dx%d] dimensions to [ %s ]\n", width,
+         height, filename);
 }
 
-void SaveImage(const char* filename, const float* rgb, int width, int height) {
-
-  float* image_ptr[3];
+void SaveImageEXR(const char *filename, const float *rgb, int width,
+                  int height) {
+  float *image_ptr[3];
   std::vector<float> images[3];
   images[0].resize(width * height);
   images[1].resize(width * height);
   images[2].resize(width * height);
 
   for (int i = 0; i < width * height; i++) {
-    images[0][i] = rgb[3*i+0];
-    images[1][i] = rgb[3*i+1];
-    images[2][i] = rgb[3*i+2];
+    images[0][i] = rgb[3 * i + 0];
+    images[1][i] = rgb[3 * i + 1];
+    images[2][i] = rgb[3 * i + 2];
   }
 
-  image_ptr[0] = &(images[2].at(0)); // B
-  image_ptr[1] = &(images[1].at(0)); // G
-  image_ptr[2] = &(images[0].at(0)); // R
+  image_ptr[0] = &(images[2].at(0));  // B
+  image_ptr[1] = &(images[1].at(0));  // G
+  image_ptr[2] = &(images[0].at(0));  // R
 
   EXRHeader header;
   InitEXRHeader(&header);
@@ -269,25 +273,33 @@ void SaveImage(const char* filename, const float* rgb, int width, int height) {
   InitEXRImage(&image);
 
   header.num_channels = 3;
-  header.channels = (EXRChannelInfo *)malloc(sizeof(EXRChannelInfo) * header.num_channels);
+  header.channels =
+      (EXRChannelInfo *)malloc(sizeof(EXRChannelInfo) * header.num_channels);
   // Must be (A)BGR order, since most of EXR viewers expect this channel order.
-  strncpy(header.channels[0].name, "B", 255); header.channels[0].name[strlen("B")] = '\0';
-  strncpy(header.channels[1].name, "G", 255); header.channels[1].name[strlen("G")] = '\0';
-  strncpy(header.channels[2].name, "R", 255); header.channels[2].name[strlen("R")] = '\0';
+  strncpy(header.channels[0].name, "B", 255);
+  header.channels[0].name[strlen("B")] = '\0';
+  strncpy(header.channels[1].name, "G", 255);
+  header.channels[1].name[strlen("G")] = '\0';
+  strncpy(header.channels[2].name, "R", 255);
+  header.channels[2].name[strlen("R")] = '\0';
 
   header.pixel_types = (int *)malloc(sizeof(int) * header.num_channels);
-  header.requested_pixel_types = (int *)malloc(sizeof(int) * header.num_channels);
+  header.requested_pixel_types =
+      (int *)malloc(sizeof(int) * header.num_channels);
   for (int i = 0; i < header.num_channels; i++) {
-    header.pixel_types[i] = TINYEXR_PIXELTYPE_FLOAT; // pixel type of input image
-    header.requested_pixel_types[i] = TINYEXR_PIXELTYPE_HALF; // pixel type of output image to be stored in .EXR
+    header.pixel_types[i] =
+        TINYEXR_PIXELTYPE_FLOAT;  // pixel type of input image
+    header.requested_pixel_types[i] =
+        TINYEXR_PIXELTYPE_HALF;  // pixel type of output image to be stored in
+                                 // .EXR
   }
 
   image.num_channels = header.num_channels;
-  image.images = (unsigned char**)image_ptr;
+  image.images = (unsigned char **)image_ptr;
   image.width = width;
   image.height = height;
 
-  const char* err;
+  const char *err;
   int fail = SaveEXRImageToFile(&image, &header, filename, &err);
   if (fail) {
     fprintf(stderr, "Error: %s\n", err);
@@ -298,7 +310,30 @@ void SaveImage(const char* filename, const float* rgb, int width, int height) {
   free(header.requested_pixel_types);
   free(header.channels);
   free(header.pixel_types);
+}
 
+void SaveImagePNG(const char *filename, const float *rgb, int width,
+                  int height) {
+  unsigned char *bytes = new unsigned char[width * height * 3];
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      const int index = y * width + x;
+      bytes[index * 3 + 0] = (unsigned char)std::max(
+          0.0f, std::min(rgb[index * 3 + 0] * 255.0f, 255.0f));
+      bytes[index * 3 + 1] = (unsigned char)std::max(
+          0.0f, std::min(rgb[index * 3 + 1] * 255.0f, 255.0f));
+      bytes[index * 3 + 2] = (unsigned char)std::max(
+          0.0f, std::min(rgb[index * 3 + 2] * 255.0f, 255.0f));
+    }
+  }
+  int n = stbi_write_png(filename, width, height, 3, bytes, width * 3);
+  delete[] bytes;
+
+  if (n == 0) {
+    fprintf(stderr, "Error to save PNG image:\n");
+  } else {
+    printf("Saved image to [ %s ]\n", filename);
+  }
 }
 
 bool LoadObj(Mesh &mesh, const char *filename, float scale) {
@@ -313,7 +348,8 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
   }
 
   std::cout << "[LoadOBJ] # of shapes in .obj : " << shapes.size() << std::endl;
-  std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size() << std::endl;
+  std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size()
+            << std::endl;
 
   size_t num_vertices = 0;
   size_t num_faces = 0;
@@ -352,7 +388,6 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
   size_t vertexIdxOffset = 0;
   size_t faceIdxOffset = 0;
   for (size_t i = 0; i < shapes.size(); i++) {
-
     for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
       mesh.faces[3 * (faceIdxOffset + f) + 0] =
           shapes[i].mesh.indices[3 * f + 0];
@@ -381,9 +416,9 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
       for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
         int f0, f1, f2;
 
-        f0 = shapes[i].mesh.indices[3*f+0];
-        f1 = shapes[i].mesh.indices[3*f+1];
-        f2 = shapes[i].mesh.indices[3*f+2];
+        f0 = shapes[i].mesh.indices[3 * f + 0];
+        f1 = shapes[i].mesh.indices[3 * f + 1];
+        f2 = shapes[i].mesh.indices[3 * f + 2];
 
         float3 n0, n1, n2;
 
@@ -416,9 +451,9 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
       for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
         int f0, f1, f2;
 
-        f0 = shapes[i].mesh.indices[3*f+0];
-        f1 = shapes[i].mesh.indices[3*f+1];
-        f2 = shapes[i].mesh.indices[3*f+2];
+        f0 = shapes[i].mesh.indices[3 * f + 0];
+        f1 = shapes[i].mesh.indices[3 * f + 1];
+        f2 = shapes[i].mesh.indices[3 * f + 2];
 
         float3 v0, v1, v2;
 
@@ -448,18 +483,16 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] = N[0];
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] = N[1];
         mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] = N[2];
-
       }
-
     }
 
     if (shapes[i].mesh.texcoords.size() > 0) {
       for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
         int f0, f1, f2;
 
-        f0 = shapes[i].mesh.indices[3*f+0];
-        f1 = shapes[i].mesh.indices[3*f+1];
-        f2 = shapes[i].mesh.indices[3*f+2];
+        f0 = shapes[i].mesh.indices[3 * f + 0];
+        f1 = shapes[i].mesh.indices[3 * f + 1];
+        f2 = shapes[i].mesh.indices[3 * f + 2];
 
         float3 n0, n1, n2;
 
@@ -490,11 +523,9 @@ bool LoadObj(Mesh &mesh, const char *filename, float scale) {
   return true;
 }
 
-} // namespace
+}  // namespace
 
-
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
   int width = 512;
   int height = 512;
 
@@ -519,7 +550,7 @@ int main(int argc, char** argv)
     return -1;
   }
 
-  nanort::BVHBuildOptions<float> build_options; // Use default option
+  nanort::BVHBuildOptions<float> build_options;  // Use default option
   build_options.cache_bbox = false;
 
   printf("  BVH build option:\n");
@@ -529,19 +560,21 @@ int main(int argc, char** argv)
   timerutil t;
   t.start();
 
-  nanort::TriangleMesh<float> triangle_mesh(mesh.vertices, mesh.faces, sizeof(float) * 3);
-  nanort::TriangleSAHPred<float> triangle_pred(mesh.vertices, mesh.faces, sizeof(float) * 3);
+  nanort::TriangleMesh<float> triangle_mesh(mesh.vertices, mesh.faces,
+                                            sizeof(float) * 3);
+  nanort::TriangleSAHPred<float> triangle_pred(mesh.vertices, mesh.faces,
+                                               sizeof(float) * 3);
 
   printf("num_triangles = %lu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
 
   nanort::BVHAccel<float> accel;
-  ret = accel.Build(mesh.num_faces, triangle_mesh, triangle_pred, build_options);
+  ret =
+      accel.Build(mesh.num_faces, triangle_mesh, triangle_pred, build_options);
   assert(ret);
 
   t.end();
   printf("  BVH build time: %f secs\n", t.msec() / 1000.0);
-
 
   nanort::BVHBuildStatistics stats = accel.GetStatistics();
 
@@ -553,19 +586,18 @@ int main(int argc, char** argv)
   accel.BoundingBox(bmin, bmax);
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
- 
+
   std::vector<float> rgb(width * height * 3, 0.0f);
 
   t.start();
 
-  // Shoot rays.
-  #ifdef _OPENMP
-  #pragma omp parallel for
-  #endif
+// Shoot rays.
+#ifdef _OPENMP
+#pragma omp parallel for
+#endif
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
-
-      // Simple camera. change eye pos and direction fit to .obj model. 
+      // Simple camera. change eye pos and direction fit to .obj model.
 
       nanort::Ray<float> ray;
       ray.org[0] = 0.0f;
@@ -585,7 +617,8 @@ int main(int argc, char** argv)
       ray.min_t = 0.0f;
       ray.max_t = kFar;
 
-      nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces, sizeof(float) * 3);
+      nanort::TriangleIntersector<> triangle_intersector(
+          mesh.vertices, mesh.faces, sizeof(float) * 3);
       nanort::TriangleIntersection<> isect;
       bool hit = accel.Traverse(ray, triangle_intersector, &isect);
       if (hit) {
@@ -593,9 +626,9 @@ int main(int argc, char** argv)
         float3 normal(0.0f, 0.0f, 0.0f);
         unsigned int fid = isect.prim_id;
         if (mesh.facevarying_normals) {
-          normal[0] = mesh.facevarying_normals[9*fid+0];
-          normal[1] = mesh.facevarying_normals[9*fid+1];
-          normal[2] = mesh.facevarying_normals[9*fid+2];
+          normal[0] = mesh.facevarying_normals[9 * fid + 0];
+          normal[1] = mesh.facevarying_normals[9 * fid + 1];
+          normal[2] = mesh.facevarying_normals[9 * fid + 2];
         }
         // Flip Y
         rgb[3 * ((height - y - 1) * width + x) + 0] = fabsf(normal[0]);
@@ -609,9 +642,10 @@ int main(int argc, char** argv)
   printf("Render %f secs\n", t.msec() / 1000.0);
 
   // Save image.
-  SaveImage("render.exr", &rgb.at(0), width, height);
+  SaveImageEXR("render.exr", &rgb.at(0), width, height);
   // Save Raw Image that can be opened by tools like GIMP
-  SaveImageRaw("render.data", &rgb.at(0), width, height);
+  // SaveImageRaw("render.data", &rgb.at(0), width, height);
+  SaveImagePNG("render.png", &rgb.at(0), width, height);
 
   return 0;
 }

@@ -194,8 +194,6 @@ void RenderThread() {
 
     if (gSceneDirty) {
       gScene.Commit();
-      memset(gRenderLayer.rgba.data(), 0, sizeof(float) * gRenderConfig.width * gRenderConfig.height * 4);
-      memset(gRenderLayer.sampleCounts.data(), 0, sizeof(int) * gRenderConfig.width * gRenderConfig.height);
       gSceneDirty = false;
     }
 
@@ -381,9 +379,17 @@ void mouseButtonCallback(int button, int state, float x, float y) {
   if (button == 0) {
     if (state) {
       gMouseLeftDown = true;
-      trackball(gPrevQuat, 0.0f, 0.0f, 0.0f, 0.0f);
-    } else
+      if (ImGuizmo::IsOver() || ImGuizmo::IsUsing()) {
+      } else {
+        trackball(gPrevQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+      }
+    } else {
       gMouseLeftDown = false;
+      if (ImGuizmo::IsOver() || ImGuizmo::IsUsing()) {
+        gSceneDirty = true;
+        RequestRender();
+      }
+    }
   }
 }
 
@@ -970,8 +976,6 @@ int main(int argc, char** argv) {
       float mat[4][4];
       memcpy(mat, &node_matrix[0][0], sizeof(float) * 16);
       node_map[node_selected]->SetLocalXform(mat);
-
-      gSceneDirty = true;
 
       checkErrors("edit_transform");
  

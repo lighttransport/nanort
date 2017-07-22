@@ -298,14 +298,12 @@ class CylinderIntersector {
   }
 
   /// Returns the nearest hit distance.
-  float GetT() const { return intersection.t; }
+  float GetT() const { return t_; }
 
   /// Update is called when a nearest hit is found.
   void Update(float t, unsigned int prim_idx) const {
-    intersection.t = t;
-    intersection.prim_id = prim_idx;
-    intersection.u = u_param_;
-    intersection.v = v_param_;
+    t_ = t;
+    prim_id_ = prim_idx;
   }
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
@@ -326,10 +324,11 @@ class CylinderIntersector {
   /// Post BVH traversal stuff(e.g. compute intersection point information)
   /// This function is called only once in BVH traversal.
   /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray<float> &ray, bool hit) const {
+  void PostTraversal(const nanort::Ray<float> &ray, bool hit,
+                     CylinderIntersection *isect) const {
     if (hit) {
-      float v = intersection.v;
-      unsigned int index = intersection.prim_id;
+      float v = v_param_;
+      unsigned int index = prim_id_;
       nanort::real3<float> p0, p1;
 
       p0[0] = vertices_[3 * (2 * index + 0) + 0];
@@ -341,7 +340,7 @@ class CylinderIntersector {
 
       nanort::real3<float> center =
           p0 + nanort::real3<float>(v, v, v) * (p1 - p0);
-      nanort::real3<float> position = ray_org_ + intersection.t * ray_dir_;
+      nanort::real3<float> position = ray_org_ + t_ * ray_dir_;
 
       nanort::real3<float> n;
       if (hit_cap_) {
@@ -359,9 +358,13 @@ class CylinderIntersector {
         n = vnormalize(n);
       }
 
-      intersection.normal[0] = n[0];
-      intersection.normal[1] = n[1];
-      intersection.normal[2] = n[2];
+      isect->u = u_param_;
+      isect->v = v_param_;
+      isect->prim_id = prim_id_;
+
+      isect->normal[0] = n[0];
+      isect->normal[1] = n[1];
+      isect->normal[2] = n[2];
     }
   }
 
@@ -372,7 +375,9 @@ class CylinderIntersector {
   mutable nanort::real3<float> ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 
-  mutable I intersection;
+  mutable float t_;
+  mutable unsigned int prim_id_;
+
   mutable bool hit_cap_;
   mutable float u_param_;
   mutable float v_param_;
@@ -445,9 +450,7 @@ int main(int argc, char **argv) {
   CylinderGeometry cylinder_geom(&vertices.at(0), &radiuss.at(0));
   CylinderPred cylinder_pred(&vertices.at(0));
 
-  nanort::BVHAccel<float, CylinderGeometry, CylinderPred,
-                   CylinderIntersector<CylinderIntersection> >
-      accel;
+  nanort::BVHAccel<float> accel;
   bool ret = accel.Build(n, cylinder_geom, cylinder_pred, options);
   assert(ret);
 
@@ -489,15 +492,13 @@ int main(int argc, char **argv) {
 
       CylinderIntersector<CylinderIntersection> isector(&vertices.at(0),
                                                         &radiuss.at(0));
-      bool hit = accel.Traverse(ray, isector);
+      CylinderIntersection isect;
+      bool hit = accel.Traverse(ray, isector, &isect);
       if (hit) {
         // Flip Y
-        rgb[3 * ((height - y - 1) * width + x) + 0] =
-            fabsf(isector.intersection.normal[0]);
-        rgb[3 * ((height - y - 1) * width + x) + 1] =
-            fabsf(isector.intersection.normal[1]);
-        rgb[3 * ((height - y - 1) * width + x) + 2] =
-            fabsf(isector.intersection.normal[2]);
+        rgb[3 * ((height - y - 1) * width + x) + 0] = fabsf(isect.normal[0]);
+        rgb[3 * ((height - y - 1) * width + x) + 1] = fabsf(isect.normal[1]);
+        rgb[3 * ((height - y - 1) * width + x) + 2] = fabsf(isect.normal[2]);
       }
     }
   }

@@ -202,12 +202,12 @@ class CubeIntersector {
   }
 
   /// Returns the nearest hit distance.
-  float GetT() const { return intersection.t; }
+  float GetT() const { return t_; }
 
   /// Update is called when a nearest hit is found.
   void Update(float t, unsigned int prim_idx) const {
-    intersection.t = t;
-    intersection.prim_id = prim_idx;
+    t_ = t;
+    prim_id_ = prim_idx;
   }
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
@@ -237,11 +237,11 @@ class CubeIntersector {
   /// Post BVH traversal stuff(e.g. compute intersection point information)
   /// This function is called only once in BVH traversal.
   /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray<float>& ray, bool hit) const {
+  void PostTraversal(const nanort::Ray<float>& ray, bool hit, CubeIntersection *isect) const {
     if (hit) {
       // compute normal. there should be valid intersection point.
-      const float3 center(&vertices_[3 * intersection.prim_id]);
-      const float width = widths_[intersection.prim_id];
+      const float3 center(&vertices_[3 * prim_id_]);
+      const float width = widths_[prim_id_];
 
       const float3 bmin = center - float3(width);
       const float3 bmax = center + float3(width);
@@ -275,11 +275,14 @@ class CubeIntersector {
         tmin = tmin_z;
       }
 
-      intersection.normal[0] = 0.0f;
-      intersection.normal[1] = 0.0f;
-      intersection.normal[2] = 0.0f;
+      isect->t = t_;
+      isect->prim_id = prim_id_;
 
-      intersection.normal[axis] = ray_dir_sign_[axis] ? 1.0f : -1.0f;
+      isect->normal[0] = 0.0f;
+      isect->normal[1] = 0.0f;
+      isect->normal[2] = 0.0f;
+
+      isect->normal[axis] = ray_dir_sign_[axis] ? 1.0f : -1.0f;
     }
   }
 
@@ -291,13 +294,13 @@ class CubeIntersector {
   mutable int ray_dir_sign_[3];
   mutable nanort::BVHTraceOptions trace_options_;
 
-  mutable I intersection;
+  mutable float t_;
+  mutable unsigned int prim_id_;
 };
 
 // @fixme { Do not defined as global variable }
 Cubes gCubes;
-nanort::BVHAccel<float, CubeGeometry, CubePred,
-                 CubeIntersector<CubeIntersection> >
+nanort::BVHAccel<float>
     gAccel;
 
 inline float3 Lerp3(float3 v0, float3 v1, float3 v2, float u, float v) {
@@ -678,12 +681,13 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
           CubeIntersector<CubeIntersection> cube_intersector(
               reinterpret_cast<const float*>(gCubes.vertices.data()),
               gCubes.widths.data());
-          bool hit = gAccel.Traverse(ray, cube_intersector);
+          CubeIntersection isect;
+          bool hit = gAccel.Traverse(ray, cube_intersector, &isect);
           if (hit) {
             float3 p;
-            p[0] = ray.org[0] + cube_intersector.intersection.t * ray.dir[0];
-            p[1] = ray.org[1] + cube_intersector.intersection.t * ray.dir[1];
-            p[2] = ray.org[2] + cube_intersector.intersection.t * ray.dir[2];
+            p[0] = ray.org[0] + isect.t * ray.dir[0];
+            p[1] = ray.org[1] + isect.t * ray.dir[1];
+            p[2] = ray.org[2] + isect.t * ray.dir[2];
 
             layer->position[4 * (y * config.width + x) + 0] = p.x();
             layer->position[4 * (y * config.width + x) + 1] = p.y();
@@ -695,12 +699,12 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
             layer->varycoord[4 * (y * config.width + x) + 2] = 0.0f;
             layer->varycoord[4 * (y * config.width + x) + 3] = 1.0f;
 
-            unsigned int prim_id = cube_intersector.intersection.prim_id;
+            unsigned int prim_id = isect.prim_id;
 
             float3 N;
-            N[0] = cube_intersector.intersection.normal[0];
-            N[1] = cube_intersector.intersection.normal[1];
-            N[2] = cube_intersector.intersection.normal[2];
+            N[0] = isect.normal[0];
+            N[1] = isect.normal[1];
+            N[2] = isect.normal[2];
 
             layer->normal[4 * (y * config.width + x) + 0] = 0.5 * N[0] + 0.5;
             layer->normal[4 * (y * config.width + x) + 1] = 0.5 * N[1] + 0.5;
@@ -708,17 +712,17 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
             layer->normal[4 * (y * config.width + x) + 3] = 1.0f;
 
             layer->depth[4 * (y * config.width + x) + 0] =
-                cube_intersector.intersection.t;
+                isect.t;
             layer->depth[4 * (y * config.width + x) + 1] =
-                cube_intersector.intersection.t;
+                isect.t;
             layer->depth[4 * (y * config.width + x) + 2] =
-                cube_intersector.intersection.t;
+                isect.t;
             layer->depth[4 * (y * config.width + x) + 3] = 1.0f;
 
             float diffuse_col[3] = {0.0f, 0.0f, 0.0f};
 
             uint8_t color_id =
-                gCubes.color_ids[cube_intersector.intersection.prim_id];
+                gCubes.color_ids[isect.prim_id];
             uint32_t col = color_palette[color_id];
 
             {

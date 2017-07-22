@@ -87,3 +87,7 @@ bool Scene::Traverse(nanort::Ray<T> &ray, H *isect, const bool cull_back_face = 
 
 Trace ray into the scene and find an intersection.
 Returns `true` when there is an intersection and hit information is stored in `isect`.
+
+## TODO
+
+* [ ] Compute pivot point of each node(mesh).

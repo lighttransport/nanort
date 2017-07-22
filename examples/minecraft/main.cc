@@ -419,7 +419,7 @@ int main(int argc, char** argv) {
 
     // Load Minecraft model
     bool las_ret = gRenderer.LoadMI(gRenderConfig.mi_filename.c_str(),
-                                         gRenderConfig.scene_scale);
+                                    gRenderConfig.scene_scale);
     if (!las_ret) {
       fprintf(stderr, "Failed to load [ %s ]\n",
               gRenderConfig.mi_filename.c_str());
@@ -472,7 +472,7 @@ int main(int argc, char** argv) {
 
   ImGuiIO& io = ImGui::GetIO();
   io.Fonts->AddFontDefault();
-  //io.Fonts->AddFontFromFileTTF("./Inconsolata-Regular.ttf", 15.0f);
+  // io.Fonts->AddFontFromFileTTF("./Inconsolata-Regular.ttf", 15.0f);
 
   std::thread renderThread(RenderThread);
 
