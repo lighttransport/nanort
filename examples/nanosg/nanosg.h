@@ -364,6 +364,7 @@ class Node
     xbmax_[2] = rhs.xbmax_[2];
 
     mesh_ = rhs.mesh_;
+    name_ = rhs.name_;
 
     children_ = rhs.children_;
   }
@@ -377,6 +378,14 @@ class Node
     return (*this);
   }
 
+  void SetName(const std::string &name) {
+    name_ = name;
+  }
+
+  const std::string &GetName() const {
+    return name_;
+  }
+
   ///
   /// Add child node.
   ///
@@ -387,7 +396,11 @@ class Node
   ///
   /// Get chidren
   ///
-  const std::vector<type> GetChildren() const {
+  const std::vector<type> &GetChildren() const {
+    return children_;
+  }
+
+  std::vector<type> &GetChildren() {
     return children_;
   }
 
@@ -493,6 +506,8 @@ class Node
 	T xbmax_[3];
 	
   nanort::BVHAccel<T> accel_;
+
+  std::string name_;
 
   const M *mesh_;
 
@@ -664,6 +679,26 @@ class Scene
     return nodes_;
   }
 
+  bool FindNode(const std::string &name, Node<T, M> **found_node) {
+    if (!found_node) {
+      return false;
+    }
+
+    if (name.empty()) {
+      return false;
+    }
+
+    // Simple exhaustive search.
+    for (size_t i = 0; i < nodes_.size(); i++) {
+      if (FindNodeRecursive(name, &(nodes_[i]), found_node)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+
   ///
   /// Commit the scene. Must be called before tracing rays into the scene.
   ///
@@ -824,6 +859,28 @@ class Scene
   }
 
  private:
+
+  ///
+  /// Find a node by name.
+  /// 
+  bool FindNodeRecursive(const std::string &name, Node<T, M> *root, Node<T, M> **found_node) {
+
+    if (root->GetName().compare(name) == 0) {
+      (*found_node) = root;
+      return true;
+    }
+
+    // Simple exhaustive search.
+    for (size_t i = 0; i < root->GetChildren().size(); i++) {
+      if (FindNodeRecursive(name, &(root->GetChildren()[i]), found_node)) {
+        return true;
+      }
+    }
+
+    return false;
+
+  }
+
   // Scene bounding box.
   // Valid after calling `Commit()`.
   T bmin_[3];

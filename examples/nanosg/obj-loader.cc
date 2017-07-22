@@ -111,6 +111,8 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
   for (size_t i = 0; i < shapes.size(); i++) {
     Mesh<float> mesh;
 
+    mesh.name = shapes[i].name;
+
     const size_t num_faces = shapes[i].mesh.indices.size() / 3;
     mesh.faces.resize(num_faces * 3);
     mesh.material_ids.resize(num_faces);

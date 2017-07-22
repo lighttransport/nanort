@@ -48,7 +48,13 @@ API is still subject to change.
 ### Node
 
 ```
-Node::AddChild(const type &child);
+void Node::SetName(const std::string &name);
+```
+
+Set (unique) name for the node.
+
+```
+void Node::AddChild(const type &child);
 ```
 
 Add node as child node.
@@ -71,7 +77,7 @@ Add a node to the scene.
 bool Scene::Commit() {
 ```
 
-Commit the scene. After adding nodes to the scene, call this `Commit` before tracing rays.
+Commit the scene. After adding nodes to the scene or changed transformation matrix, call this `Commit` before tracing rays.
 `Commit` triggers BVH build in each nodes and updates node's transformation matrix.
 
 ```

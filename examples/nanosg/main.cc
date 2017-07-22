@@ -57,6 +57,8 @@ THE SOFTWARE.
 #include <limits>
 #include <string>
 #include <vector>
+#include <sstream>
+#include <map>
 
 #include <atomic>  // C++11
 #include <chrono>  // C++11
@@ -76,6 +78,7 @@ THE SOFTWARE.
 #include "glm/mat4x4.hpp"
 #include "glm/gtc/quaternion.hpp"
 #include "glm/gtc/matrix_transform.hpp"
+#include "glm/gtc/type_ptr.hpp"
 
 #if defined(_MSC_VER)
 #pragma warning(pop)
@@ -121,6 +124,7 @@ static std::vector<nanosg::Node<float, example::Mesh<float> > > gNodes;
 std::atomic<bool> gRenderQuit;
 std::atomic<bool> gRenderRefresh;
 std::atomic<bool> gRenderCancel;
+std::atomic<bool> gSceneDirty;
 example::RenderConfig gRenderConfig;
 std::mutex gMutex;
 
@@ -186,6 +190,13 @@ void RenderThread() {
       if (gRenderConfig.pass == 0) {
         initial_pass = true;
       }
+    }
+
+    if (gSceneDirty) {
+      gScene.Commit();
+      memset(gRenderLayer.rgba.data(), 0, sizeof(float) * gRenderConfig.width * gRenderConfig.height * 4);
+      memset(gRenderLayer.sampleCounts.data(), 0, sizeof(int) * gRenderConfig.width * gRenderConfig.height);
+      gSceneDirty = false;
     }
 
     gRenderCancel = false;
@@ -259,6 +270,39 @@ void checkErrors(std::string desc) {
   }
 }
 
+static int CreateDisplayTextureGL(const float *data, int width,
+                                   int height, int components) {
+  GLuint id;                       
+  glGenTextures(1, &id);           
+  
+  GLint last_texture;
+  glGetIntegerv(GL_TEXTURE_BINDING_2D, &last_texture);
+  
+  glBindTexture(GL_TEXTURE_2D, id);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  
+  GLenum format = GL_RGBA;
+  if (components == 1) {
+    format = GL_LUMINANCE;
+  } else if (components == 2) {
+    format = GL_LUMINANCE_ALPHA;
+  } else if (components == 3) {
+    format = GL_RGB;
+  } else if (components == 4) {
+    format = GL_RGBA;
+  } else { 
+    assert(0); // "Invalid components"
+  } 
+  
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, format,
+               GL_FLOAT, data);
+               
+  glBindTexture(GL_TEXTURE_2D, last_texture);
+  
+  return static_cast<int>(id);
+}
+
 void keyboardCallback(int keycode, int state) {
   printf("hello key %d, state %d(ctrl %d)\n", keycode, state,
          window->isModifierKeyPressed(B3G_CONTROL));
@@ -266,7 +310,11 @@ void keyboardCallback(int keycode, int state) {
   if (keycode == 27) {
     if (window) window->setRequestExit();
   } else if (keycode == ' ') {
+    // reset.
     trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+    // clear buffer.
+    memset(gRenderLayer.rgba.data(), 0, sizeof(float) * gRenderConfig.width * gRenderConfig.height * 4);
+    memset(gRenderLayer.sampleCounts.data(), 0, sizeof(int) * gRenderConfig.width * gRenderConfig.height);
   } else if (keycode == 9) {
     gTabPressed = (state == 1);
   } else if (keycode == B3G_SHIFT) {
@@ -283,32 +331,36 @@ void keyboardCallback(int keycode, int state) {
 }
 
 void mouseMoveCallback(float x, float y) {
+
   if (gMouseLeftDown) {
-    float w = static_cast<float>(gRenderConfig.width);
-    float h = static_cast<float>(gRenderConfig.height);
-
-    float y_offset = gHeight - h;
-
-    if (gTabPressed) {
-      const float dolly_scale = 0.1f;
-      gRenderConfig.eye[2] += dolly_scale * (gMousePosY - y);
-      gRenderConfig.look_at[2] += dolly_scale * (gMousePosY - y);
-    } else if (gShiftPressed) {
-      const float trans_scale = 0.02f;
-      gRenderConfig.eye[0] += trans_scale * (gMousePosX - x);
-      gRenderConfig.eye[1] -= trans_scale * (gMousePosY - y);
-      gRenderConfig.look_at[0] += trans_scale * (gMousePosX - x);
-      gRenderConfig.look_at[1] -= trans_scale * (gMousePosY - y);
-
+    if (ImGuizmo::IsOver() || ImGuizmo::IsUsing()) {
     } else {
-      // Adjust y.
-      trackball(gPrevQuat, (2.f * gMousePosX - w) / (float)w,
-                (h - 2.f * (gMousePosY - y_offset)) / (float)h,
-                (2.f * x - w) / (float)w,
-                (h - 2.f * (y - y_offset)) / (float)h);
-      add_quats(gPrevQuat, gCurrQuat, gCurrQuat);
+      float w = static_cast<float>(gRenderConfig.width);
+      float h = static_cast<float>(gRenderConfig.height);
+
+      float y_offset = gHeight - h;
+
+      if (gTabPressed) {
+        const float dolly_scale = 0.1f;
+        gRenderConfig.eye[2] += dolly_scale * (gMousePosY - y);
+        gRenderConfig.look_at[2] += dolly_scale * (gMousePosY - y);
+      } else if (gShiftPressed) {
+        const float trans_scale = 0.02f;
+        gRenderConfig.eye[0] += trans_scale * (gMousePosX - x);
+        gRenderConfig.eye[1] -= trans_scale * (gMousePosY - y);
+        gRenderConfig.look_at[0] += trans_scale * (gMousePosX - x);
+        gRenderConfig.look_at[1] -= trans_scale * (gMousePosY - y);
+
+      } else {
+        // Adjust y.
+        trackball(gPrevQuat, (2.f * gMousePosX - w) / (float)w,
+                  (h - 2.f * (gMousePosY - y_offset)) / (float)h,
+                  (2.f * x - w) / (float)w,
+                  (h - 2.f * (y - y_offset)) / (float)h);
+        add_quats(gPrevQuat, gCurrQuat, gCurrQuat);
+      }
+      RequestRender();
     }
-    RequestRender();
   }
 
   gMousePosX = (int)x;
@@ -374,8 +426,15 @@ inline float pesudoColor(float v, int ch) {
   }
 }
 
-void Display(int width, int height) {
-  std::vector<float> buf(width * height * 4);
+void UpdateDisplayTextureGL(GLint tex_id, int width, int height) {
+  if (tex_id < 0) {
+    // ???
+    return;
+  }
+
+  std::vector<float> buf;
+  buf.resize(width * height * 4);
+
   if (gShowBufferMode == SHOW_BUFFER_COLOR) {
     // normalize
     for (size_t i = 0; i < buf.size() / 4; i++) {
@@ -420,9 +479,23 @@ void Display(int width, int height) {
     }
   }
 
-  glRasterPos2i(-1, -1);
-  glDrawPixels(width, height, GL_RGBA, GL_FLOAT,
-               static_cast<const GLvoid*>(&buf.at(0)));
+  // Flip Y
+  std::vector<float> disp;
+  disp.resize(width * height * 4);
+  {
+    for (size_t y = 0; y < height; y++) {
+      memcpy(&disp[4 * (y * width)], &buf[4 * ((height - y - 1) * width)], sizeof(float) * 4 * width);
+    }
+  
+  }
+
+  glBindTexture(GL_TEXTURE_2D, tex_id);
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_FLOAT, disp.data());
+  glBindTexture(GL_TEXTURE_2D, 0);
+
+  //glRasterPos2i(-1, -1);
+  //glDrawPixels(width, height, GL_RGBA, GL_FLOAT,
+  //             static_cast<const GLvoid*>(&buf.at(0)));
 }
 
 void EditTransform(const ManipConfig &config, const Camera& camera, glm::mat4& matrix)
@@ -598,6 +671,34 @@ void DrawScene(const nanosg::Scene<float, example::Mesh<float> > &scene, const C
 
 }
 
+void BuildSceneItems(
+  std::vector<std::string> *display_names,
+  std::vector<std::string> *names,
+  const nanosg::Node<float, example::Mesh<float> > &node,
+  int indent)
+{
+  if (node.GetName().empty()) {
+    // Skip a node with empty name.
+    return;
+  }
+
+  std::stringstream ss;
+  for (int i = 0; i < indent; i++) {
+    ss << " ";
+  }
+
+  ss << node.GetName();
+  std::string display_name = ss.str();
+
+  display_names->push_back(display_name);
+  names->push_back(node.GetName());
+    
+  for (size_t i = 0; i < node.GetChildren().size(); i++) {
+    BuildSceneItems(display_names, names, node.GetChildren()[i], indent + 1);
+  }
+
+}
+
 int main(int argc, char** argv) {
   std::string config_filename = "config.json";
 
@@ -637,6 +738,7 @@ int main(int argc, char** argv) {
 
     for (size_t n = 0; n < gAsset.meshes.size(); n++) {
       nanosg::Node<float, example::Mesh<float> > node(&gAsset.meshes[n]);
+      node.SetName(meshes[n].name);
       gNodes.push_back(node);
      
       gScene.AddNode(node);
@@ -655,6 +757,33 @@ int main(int argc, char** argv) {
 
   }
   
+  std::vector<const char *> imgui_node_names;
+  std::vector<std::string> display_node_names;
+  std::vector<std::string> node_names;
+  std::map<int, nanosg::Node<float, example::Mesh<float> > *> node_map;
+
+  {
+    for (size_t i = 0; i < gScene.GetNodes().size(); i++) {
+      BuildSceneItems(&display_node_names, &node_names, gScene.GetNodes()[i], /* indent */0);
+    }
+
+    // List of strings for imgui.
+    // Assume nodes in the scene does not change.
+    for (size_t i = 0; i < display_node_names.size(); i++) {
+      //std::cout << "name : " << display_node_names[i] << std::endl;
+      imgui_node_names.push_back(display_node_names[i].c_str());
+    }
+
+    // Construct list index <-> Node ptr map.
+    for (size_t i = 0; i < node_names.size(); i++) {
+      nanosg::Node<float, example::Mesh<float> > *node;
+
+      if (gScene.FindNode(node_names[i], &node)) {
+        //std::cout << "id : " << i << ", name : " << node_names[i] << std::endl;
+        node_map[i] = node;
+      }
+    }
+  }
 
 
   window = new b3gDefaultOpenGLWindow;
@@ -770,9 +899,42 @@ int main(int argc, char** argv) {
 
     checkErrors("clear");
 
-    Display(gRenderConfig.width, gRenderConfig.height);
 
-    // Setup camera and draw imguizomo
+    // Render display window
+    {
+      static GLint gl_texid = -1;
+      if (gl_texid < 0) {
+        gl_texid = CreateDisplayTextureGL(NULL, gRenderConfig.width, gRenderConfig.height, 4);
+      }
+
+      // Refresh texture until rendering finishes.
+      if (gRenderConfig.pass < gRenderConfig.max_passes) {
+        // FIXME(LTE): Do not update GL texture frequently.
+        UpdateDisplayTextureGL(gl_texid, gRenderConfig.width, gRenderConfig.height);
+      }
+
+      ImGui::Begin("Render");
+      ImTextureID tex_id = reinterpret_cast<void *>(
+                    static_cast<intptr_t>(gl_texid));
+      ImGui::Image(tex_id, ImVec2(256, 256), ImVec2(0, 0),
+                   ImVec2(1, 1));// Setup camera and draw imguizomo
+
+      ImGui::End();
+  
+    }
+
+    // scene graph tree
+    glm::mat4 node_matrix;
+    static int node_selected = 0;
+    {
+      ImGui::Begin("Scene");
+
+      ImGui::ListBox("Node list", &node_selected, imgui_node_names.data(), imgui_node_names.size(), 16);
+      node_matrix = glm::make_mat4(node_map[node_selected]->GetLocalXformPtr());
+
+      ImGui::End();
+    }
+
     {
       ImGui::Begin("Transform");
 
@@ -799,14 +961,17 @@ int main(int argc, char** argv) {
       view = glm::lookAt(eye, lookat, up) * glm::inverse(glm::mat4_cast(rot));
       projection = glm::perspective (45.0f, float(window->getWidth()) / float(window->getHeight()), 0.01f, 1000.0f);
 
-      //ImGuizmo::DrawCube(&view[0][0], &projection[0][0], &matrix[0][0]);
-
-      //ImGuizmo::Manipulate(&view[0][0], &projection[0][0], guizmo_op, guizmo_mode, &matrix[0][0], NULL, /* snap */NULL);
       camera.view = view;
       camera.projection = projection;
       ManipConfig manip_config;
 
-      EditTransform(manip_config, camera, matrix);
+      EditTransform(manip_config, camera, node_matrix);
+
+      float mat[4][4];
+      memcpy(mat, &node_matrix[0][0], sizeof(float) * 16);
+      node_map[node_selected]->SetLocalXform(mat);
+
+      gSceneDirty = true;
 
       checkErrors("edit_transform");
  
