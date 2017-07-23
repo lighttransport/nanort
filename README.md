@@ -72,7 +72,7 @@ class BVHTraceOptions {
   bool cull_back_face; // default: false
 };
 
-nanort::BVHBuildOptions options; // BVH build option
+nanort::BVHBuildOptions build_options; // BVH build option(optional)
 
 const float *vertices = ...;
 const unsigned int *faces = ...;
@@ -83,7 +83,7 @@ nanort::TriangleMesh<float> triangle_mesh(vertices, faces, /* stride */sizeof(fl
 nanort::TriangleSAHPred<float> triangle_pred(vertices, faces, /* stride */sizeof(float) * 3);
 
 nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> > accel;
-ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
+ret = accel.Build(mesh.num_faces, triangle_mesh, triangle_pred, build_options);
 
 nanort::TriangleIntersector<> triangle_intersecter(vertices, faces, /* stride */sizeof(float) * 3);
 
@@ -95,8 +95,8 @@ ray.min_t = 0.0f;
 ray.max_t = 1.0e+30f;
 
 // Returns nearest hit point(if exists)
-BVHTraceOptions trace_options;
-bool hit = accel.Traverse(ray, trace_options, triangle_intersecter);
+BVHTraceOptions trace_options; // optional
+bool hit = accel.Traverse(ray, triangle_intersecter, trace_options);
 ```
 
 Application must prepare geometric information and store it in linear array.
@@ -230,6 +230,7 @@ PR are always welcome!
   * [ ] ARM NEON SIMD
   * [ ] Intel SSE SIMD
 * [ ] Scene graph support.
+  * [x] NanoSG, Minimal scene graph library. [examples/nanosg](examples/nanosg)
   * [ ] Instancing support.
 * [ ] Fix multi-hit ray traversal.
 * [ ] Optimize Multi-hit ray traversal for BVH.

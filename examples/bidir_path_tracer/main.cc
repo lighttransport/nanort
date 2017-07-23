@@ -30,10 +30,11 @@ void setupFPExceptions() {
             _EM_UNDERFLOW);
   _controlfp_s(&cw, newcw, _MCW_EM);
 }
-#else // Assume x86 SSE + linux or macosx
+#else  // Assume x86 SSE + linux or macosx
 #include <xmmintrin.h>
 void setupFPExceptions() {
-  _MM_SET_EXCEPTION_MASK(_MM_GET_EXCEPTION_MASK() & ~_MM_MASK_INVALID); // Enale NaN exception
+  _MM_SET_EXCEPTION_MASK(_MM_GET_EXCEPTION_MASK() &
+                         ~_MM_MASK_INVALID);  // Enale NaN exception
 }
 #endif
 #endif
@@ -48,10 +49,7 @@ static const int uMaxBounces = 10;
 // static const int SPP = 1000;
 static const int SPP = 100;
 
-typedef nanort::BVHAccel<float, nanort::TriangleMesh<float>,
-                         nanort::TriangleSAHPred<float>,
-                         nanort::TriangleIntersector<> >
-    Accel;
+typedef nanort::BVHAccel<float> Accel;
 
 namespace {
 
@@ -370,7 +368,7 @@ void SaveImagePNG(const char *filename, const float *rgb, int width,
 
 void SaveImageEXR(const char *filename, const float *rgb, int width,
                   int height) {
-  int ret = SaveEXR(rgb, width, height, /* RGB */3, filename);
+  int ret = SaveEXR(rgb, width, height, /* RGB */ 3, filename);
   if (ret != TINYEXR_SUCCESS) {
     fprintf(stderr, "EXR save error: %d\n", ret);
   } else {
@@ -380,7 +378,7 @@ void SaveImageEXR(const char *filename, const float *rgb, int width,
 
 //! OBJ file loader.
 bool LoadObj(Mesh &mesh, std::vector<tinyobj::material_t> &materials,
-             const char *filename, float scale, const char* mtl_path) {
+             const char *filename, float scale, const char *mtl_path) {
   std::vector<tinyobj::shape_t> shapes;
   std::string err;
   bool success = tinyobj::LoadObj(shapes, materials, err, filename, mtl_path);
@@ -911,8 +909,8 @@ void raytrace(const Mesh &mesh, const Accel &accel,
 
     nanort::TriangleIntersector<> triangle_intersector(
         mesh.vertices, mesh.faces, sizeof(float) * 3);
-    nanort::BVHTraceOptions trace_options;
-    bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
+    nanort::TriangleIntersection<> isect;
+    bool hit = accel.Traverse(ray, triangle_intersector, &isect);
 
     if (!hit) {
       break;
@@ -922,10 +920,10 @@ void raytrace(const Mesh &mesh, const Accel &accel,
     vertices->push_back(Vertex());
     Vertex &vertex = vertices->at(vertices->size() - 1);
     Vertex &prev = vertices->at(vertices->size() - 2);
-    float3 nextPos = rayOrg + triangle_intersector.intersection.t * rayDir;
+    float3 nextPos = rayOrg + isect.t * rayDir;
 
     // Shading normal
-    unsigned int fid = triangle_intersector.intersection.prim_id;
+    unsigned int fid = isect.prim_id;
     float3 norm(0, 0, 0);
     if (mesh.facevarying_normals) {
       float3 normals[3];
@@ -934,8 +932,8 @@ void raytrace(const Mesh &mesh, const Accel &accel,
         normals[vId][1] = mesh.facevarying_normals[9 * fid + 3 * vId + 1];
         normals[vId][2] = mesh.facevarying_normals[9 * fid + 3 * vId + 2];
       }
-      float u = triangle_intersector.intersection.u;
-      float v = triangle_intersector.intersection.v;
+      float u = isect.u;
+      float v = isect.v;
       norm = (1.0 - u - v) * normals[0] + u * normals[1] + v * normals[2];
       norm.normalize();
     }
@@ -1224,13 +1222,13 @@ float calcG(const Vertex &v1, const Vertex &v2, const Mesh &mesh,
 
   nanort::TriangleIntersector<> triangle_intersector(mesh.vertices, mesh.faces,
                                                      sizeof(float) * 3);
-  nanort::BVHTraceOptions trace_options;
-  bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
+  nanort::TriangleIntersection<> isect;
+  bool hit = accel.Traverse(ray, triangle_intersector, &isect);
   if (!hit) {
     return 0.0f;
   }
 
-  if (std::abs(dist - triangle_intersector.intersection.t) > kEps) {
+  if (std::abs(dist - isect.t) > kEps) {
     return 0.0f;
   }
 
@@ -1346,7 +1344,7 @@ int main(int argc, char **argv) {
 
   Accel accel;
   ret =
-      accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
+      accel.Build(mesh.num_faces, triangle_mesh, triangle_pred, build_options);
   assert(ret);
 
   printf("  BVH build time: %f secs\n", t.stop() / 1000.0);

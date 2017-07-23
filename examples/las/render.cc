@@ -227,13 +227,13 @@ class SphereIntersector
 
 	/// Returns the nearest hit distance.
 	float GetT() const {
-		return intersection.t;
+		return t_;
 	}
 
 	/// Update is called when a nearest hit is found.
 	void Update(float t, unsigned int prim_idx) const {
-    intersection.t = t;
-    intersection.prim_id = prim_idx;
+    t_ = t;
+    prim_id_ = prim_idx;
 	}
 
   /// Prepare BVH traversal(e.g. compute inverse ray direction)
@@ -255,13 +255,15 @@ class SphereIntersector
   /// Post BVH traversal stuff(e.g. compute intersection point information)
   /// This function is called only once in BVH traversal.
   /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray<float> &ray, bool hit) const {
+  void PostTraversal(const nanort::Ray<float> &ray, bool hit, SphereIntersection *isect) const {
     if (hit) {
-      float3 hitP = ray_org_ + intersection.t * ray_dir_;
-      float3 center = float3(&vertices_[3*intersection.prim_id]);
+      float3 hitP = ray_org_ + t_ * ray_dir_;
+      float3 center = float3(&vertices_[3*prim_id_]);
       float3 n = vnormalize(hitP - center);
-      intersection.u = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
-      intersection.v = acos(n[1]) / M_PI;
+      isect->t = t_;
+      isect->prim_id = prim_id_;
+      isect->u = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
+      isect->v = acos(n[1]) / M_PI;
     } 
   }
 
@@ -271,14 +273,13 @@ class SphereIntersector
   mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
 
-  mutable I intersection;
+  mutable float t_;
+  mutable unsigned int prim_id_;
 };
 
 // @fixme { Do not defined as global variable } 
 Particles gParticles; 
-nanort::BVHAccel<float, SphereGeometry, SpherePred,
-                 SphereIntersector<SphereIntersection> >
-    gAccel;
+nanort::BVHAccel<float> gAccel;
 
 inline float3 Lerp3(float3 v0, float3 v1,
                             float3 v2, float u, float v) {
@@ -528,8 +529,8 @@ bool Renderer::BuildBVH() {
 
   SphereGeometry sphere_geom(&gParticles.vertices.at(0), &gParticles.radiuss.at(0));
   SpherePred sphere_pred(&gParticles.vertices.at(0));
-  bool ret = gAccel.Build(gParticles.radiuss.size(), build_options, sphere_geom,
-                          sphere_pred);
+  bool ret = gAccel.Build(gParticles.radiuss.size(), sphere_geom,
+                          sphere_pred, build_options);
   assert(ret);
 
   auto t_end = std::chrono::system_clock::now();
@@ -622,16 +623,16 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
 
           SphereIntersector<SphereIntersection> sphere_intersector(
               reinterpret_cast<const float*>(gParticles.vertices.data()), gParticles.radiuss.data());
-          nanort::BVHTraceOptions trace_options;
-          bool hit = gAccel.Traverse(ray, trace_options, sphere_intersector);
+          SphereIntersection isect;
+          bool hit = gAccel.Traverse(ray, sphere_intersector, &isect);
           if (hit) {
             float3 p;
             p[0] =
-                ray.org[0] + sphere_intersector.intersection.t * ray.dir[0];
+                ray.org[0] + isect.t * ray.dir[0];
             p[1] =
-                ray.org[1] + sphere_intersector.intersection.t * ray.dir[1];
+                ray.org[1] + isect.t * ray.dir[1];
             p[2] =
-                ray.org[2] + sphere_intersector.intersection.t * ray.dir[2];
+                ray.org[2] + isect.t * ray.dir[2];
 
             layer->position[4 * (y * config.width + x) + 0] = p.x();
             layer->position[4 * (y * config.width + x) + 1] = p.y();
@@ -639,13 +640,13 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
             layer->position[4 * (y * config.width + x) + 3] = 1.0f;
 
             layer->varycoord[4 * (y * config.width + x) + 0] =
-                sphere_intersector.intersection.u;
+                isect.u;
             layer->varycoord[4 * (y * config.width + x) + 1] =
-                sphere_intersector.intersection.v;
+                isect.v;
             layer->varycoord[4 * (y * config.width + x) + 2] = 0.0f;
             layer->varycoord[4 * (y * config.width + x) + 3] = 1.0f;
 
-            unsigned int prim_id = sphere_intersector.intersection.prim_id;
+            unsigned int prim_id = isect.prim_id;
 
             float3 sphere_center(&gParticles.vertices[3*prim_id]);
             float3 N = vnormalize(p - sphere_center);
@@ -656,11 +657,11 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
             layer->normal[4 * (y * config.width + x) + 3] = 1.0f;
 
             layer->depth[4 * (y * config.width + x) + 0] =
-                sphere_intersector.intersection.t;
+                isect.t;
             layer->depth[4 * (y * config.width + x) + 1] =
-                sphere_intersector.intersection.t;
+                isect.t;
             layer->depth[4 * (y * config.width + x) + 2] =
-                sphere_intersector.intersection.t;
+                isect.t;
             layer->depth[4 * (y * config.width + x) + 3] = 1.0f;
 
             // @todo { material }

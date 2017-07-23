@@ -298,7 +298,7 @@ void mouseButtonCallback(int button, int state, float x, float y) {
 }
 
 void resizeCallback(float width, float height) {
-  //GLfloat h = (GLfloat)height / (GLfloat)width;
+  // GLfloat h = (GLfloat)height / (GLfloat)width;
   GLfloat xmax, znear, zfar;
 
   znear = 1.0f;
@@ -478,7 +478,7 @@ int main(int argc, char** argv) {
 
   ImGuiIO& io = ImGui::GetIO();
   io.Fonts->AddFontDefault();
-  //io.Fonts->AddFontFromFileTTF("./DroidSans.ttf", 15.0f);
+  // io.Fonts->AddFontFromFileTTF("./DroidSans.ttf", 15.0f);
 
   std::thread renderThread(RenderThread);
 

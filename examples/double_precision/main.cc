@@ -517,8 +517,8 @@ int main(int argc, char** argv)
   printf("num_triangles = %lu\n", mesh.num_faces);
   printf("faces = %p\n", mesh.faces);
 
-  nanort::BVHAccel<double, nanort::TriangleMesh<double>, nanort::TriangleSAHPred<double>, nanort::TriangleIntersector<double> > accel;
-  ret = accel.Build(mesh.num_faces, build_options, triangle_mesh, triangle_pred);
+  nanort::BVHAccel<double> accel;
+  ret = accel.Build(mesh.num_faces, triangle_mesh, triangle_pred, build_options);
   assert(ret);
 
   t.end();
@@ -582,12 +582,12 @@ int main(int argc, char** argv)
 
 #if !USE_MULTIHIT_RAY_TRAVERSAL 
       nanort::TriangleIntersector<double, nanort::TriangleIntersection<double> > triangle_intersector(mesh.vertices, mesh.faces, sizeof(double) * 3);
-      nanort::BVHTraceOptions trace_options;
-      bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
+      nanort::TriangleIntersection<double> isect;
+      bool hit = accel.Traverse(ray, triangle_intersector, &isect);
       if (hit) {
         // Write your shader here.
         double3 normal(0.0f, 0.0f, 0.0f);
-        unsigned int fid = triangle_intersector.intersection.prim_id;
+        unsigned int fid = isect.prim_id;
         if (mesh.facevarying_normals) {
           normal[0] = mesh.facevarying_normals[9*fid+0];
           normal[1] = mesh.facevarying_normals[9*fid+1];

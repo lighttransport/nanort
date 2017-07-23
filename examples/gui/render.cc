@@ -166,9 +166,7 @@ struct Texture {
 Mesh gMesh;
 std::vector<Material> gMaterials;
 std::vector<Texture> gTextures;
-nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>,
-                 nanort::TriangleIntersector<> >
-    gAccel;
+nanort::BVHAccel<float> gAccel;
 
 typedef nanort::real3<float> float3;
 
@@ -747,7 +745,7 @@ bool Renderer::LoadEsonMesh(const char* eson_filename) {
 
   int64_t num_vertices = v.Get("num_vertices").Get<int64_t>();
   int64_t num_faces = v.Get("num_faces").Get<int64_t>();
-  printf("# of vertices: %lld\n", num_vertices);
+  printf("# of vertices: %d\n", int(num_vertices));
 
   // Mesh
   gMesh.num_vertices = num_vertices;
@@ -822,8 +820,8 @@ bool Renderer::BuildBVH() {
 
   printf("num_triangles = %lu\n", gMesh.num_faces);
 
-  bool ret = gAccel.Build(gMesh.num_faces, build_options, triangle_mesh,
-                          triangle_pred);
+  bool ret = gAccel.Build(gMesh.num_faces, triangle_mesh,
+                          triangle_pred, build_options);
   assert(ret);
 
   auto t_end = std::chrono::system_clock::now();
@@ -925,16 +923,16 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 
           nanort::TriangleIntersector<> triangle_intersector(
               gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
-          nanort::BVHTraceOptions trace_options;
-          bool hit = gAccel.Traverse(ray, trace_options, triangle_intersector);
+          nanort::TriangleIntersection<float> isect;
+          bool hit = gAccel.Traverse(ray, triangle_intersector, &isect);
           if (hit) {
             float3 p;
             p[0] =
-                ray.org[0] + triangle_intersector.intersection.t * ray.dir[0];
+                ray.org[0] + isect.t * ray.dir[0];
             p[1] =
-                ray.org[1] + triangle_intersector.intersection.t * ray.dir[1];
+                ray.org[1] + isect.t * ray.dir[1];
             p[2] =
-                ray.org[2] + triangle_intersector.intersection.t * ray.dir[2];
+                ray.org[2] + isect.t * ray.dir[2];
 
             config.positionImage[4 * (y * config.width + x) + 0] = p.x();
             config.positionImage[4 * (y * config.width + x) + 1] = p.y();
@@ -942,13 +940,13 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             config.positionImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             config.varycoordImage[4 * (y * config.width + x) + 0] =
-                triangle_intersector.intersection.u;
+                isect.u;
             config.varycoordImage[4 * (y * config.width + x) + 1] =
-                triangle_intersector.intersection.v;
+                isect.v;
             config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
             config.varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
 
-            unsigned int prim_id = triangle_intersector.intersection.prim_id;
+            unsigned int prim_id = isect.prim_id;
 
             float3 N;
             if (gMesh.facevarying_normals.size() > 0) {
@@ -962,8 +960,8 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               n2[0] = gMesh.facevarying_normals[9 * prim_id + 6];
               n2[1] = gMesh.facevarying_normals[9 * prim_id + 7];
               n2[2] = gMesh.facevarying_normals[9 * prim_id + 8];
-              N = Lerp3(n0, n1, n2, triangle_intersector.intersection.u,
-                        triangle_intersector.intersection.v);
+              N = Lerp3(n0, n1, n2, isect.u,
+                        isect.v);
             } else {
               unsigned int f0, f1, f2;
               f0 = gMesh.faces[3 * prim_id + 0];
@@ -992,11 +990,11 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             config.normalImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             config.depthImage[4 * (y * config.width + x) + 0] =
-                triangle_intersector.intersection.t;
+                isect.t;
             config.depthImage[4 * (y * config.width + x) + 1] =
-                triangle_intersector.intersection.t;
+                isect.t;
             config.depthImage[4 * (y * config.width + x) + 2] =
-                triangle_intersector.intersection.t;
+                isect.t;
             config.depthImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             float3 UV;
@@ -1009,8 +1007,8 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               uv2[0] = gMesh.facevarying_uvs[6 * prim_id + 4];
               uv2[1] = gMesh.facevarying_uvs[6 * prim_id + 5];
 
-              UV = Lerp3(uv0, uv1, uv2, triangle_intersector.intersection.u,
-                         triangle_intersector.intersection.v);
+              UV = Lerp3(uv0, uv1, uv2, isect.u,
+                         isect.v);
 
               config.texcoordImage[4 * (y * config.width + x) + 0] = UV[0];
               config.texcoordImage[4 * (y * config.width + x) + 1] = UV[1];
@@ -1018,7 +1016,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 
             // Fetch texture
             unsigned int material_id =
-                gMesh.material_ids[triangle_intersector.intersection.prim_id];
+                gMesh.material_ids[isect.prim_id];
 
             float diffuse_col[3];
             int diffuse_texid = gMaterials[material_id].diffuse_texid;
