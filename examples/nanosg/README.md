@@ -2,6 +2,25 @@
 
 Simple, minimal and header-only scene graph library for NanoRT.
 
+![](images/nanosg-demo.png)
+
+![](https://giphy.com/gifs/nanosg-l3JDO29fMFndyObHW)
+
+## Build
+
+### Linux or macOS
+
+````
+$ premake5 gmake
+$ make
+```
+
+### Windows
+
+````
+$ premake5 vs2015
+```
+
 ## Data structure
 
 ### Node
