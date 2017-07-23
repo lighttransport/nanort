@@ -37,6 +37,12 @@ void GetNormal(T Ng[3], T Ns[3], const unsigned int face_idx, const T u, const T
 
 Represents intersection(hit) information.
 
+### Transform
+
+Transformation is done in the following procedure.
+
+`M' = parent_xform x local_xform x local_pivot`
+
 ## Memory management
 
 `Scene` and `Node` does not create a copy of asset data(e.g. vertices, indices). Thus user must care about memory management of scene assets in user side.

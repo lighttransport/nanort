@@ -56,6 +56,22 @@ static int LoadTexture(const std::string& filename, std::vector<Texture> *textur
   return -1;
 }
 
+static void ComputeBoundingBoxOfMesh(float bmin[3], float bmax[3], const example::Mesh<float> &mesh)
+{
+  bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<float>::max();
+  bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<float>::max();
+
+  for (size_t i = 0; i < mesh.vertices.size() / 3; i++) {
+    bmin[0] = std::min(bmin[0], mesh.vertices[3 * i + 0]);    
+    bmin[1] = std::min(bmin[1], mesh.vertices[3 * i + 1]);    
+    bmin[2] = std::min(bmin[1], mesh.vertices[3 * i + 2]);    
+
+    bmax[0] = std::max(bmax[0], mesh.vertices[3 * i + 0]);    
+    bmax[1] = std::max(bmax[1], mesh.vertices[3 * i + 1]);    
+    bmax[2] = std::max(bmax[2], mesh.vertices[3 * i + 2]);    
+  }
+}
+
 bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> > *meshes, std::vector<Material> *out_materials, std::vector<Texture> *out_textures) {
   tinyobj::attrib_t attrib;
   std::vector<tinyobj::shape_t> shapes;
@@ -305,8 +321,44 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
       }
     }
 
+    // Compute pivot translation and add offset to the vertices.
+    float bmin[3], bmax[3];
+    ComputeBoundingBoxOfMesh(bmin, bmax, mesh);
+
+    float bcenter[3];
+    bcenter[0] = 0.5f * (bmax[0] - bmin[0]) + bmin[0];
+    bcenter[1] = 0.5f * (bmax[1] - bmin[1]) + bmin[1];
+    bcenter[2] = 0.5f * (bmax[2] - bmin[2]) + bmin[2];
+
+    for (size_t v = 0; v < mesh.vertices.size() / 3; v++) {
+      mesh.vertices[3 * v + 0] -= bcenter[0];
+      mesh.vertices[3 * v + 1] -= bcenter[1];
+      mesh.vertices[3 * v + 2] -= bcenter[2];
+    }
+
+    mesh.pivot_xform[0][0] = 1.0f;
+    mesh.pivot_xform[0][1] = 0.0f;
+    mesh.pivot_xform[0][2] = 0.0f;
+    mesh.pivot_xform[0][3] = 0.0f;
+
+    mesh.pivot_xform[1][0] = 0.0f;
+    mesh.pivot_xform[1][1] = 1.0f;
+    mesh.pivot_xform[1][2] = 0.0f;
+    mesh.pivot_xform[1][3] = 0.0f;
+
+    mesh.pivot_xform[2][0] = 0.0f;
+    mesh.pivot_xform[2][1] = 0.0f;
+    mesh.pivot_xform[2][2] = 1.0f;
+    mesh.pivot_xform[2][3] = 0.0f;
+
+    mesh.pivot_xform[3][0] = bcenter[0];
+    mesh.pivot_xform[3][1] = bcenter[1];
+    mesh.pivot_xform[3][2] = bcenter[2];
+    mesh.pivot_xform[3][3] = 1.0f;
+
     meshes->push_back(mesh);
   }
+
 
   // material_t -> Material and Texture
   out_materials->resize(materials.size());

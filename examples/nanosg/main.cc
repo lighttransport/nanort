@@ -268,6 +268,7 @@ void checkErrors(std::string desc) {
   }
 }
 
+
 static int CreateDisplayTextureGL(const float *data, int width,
                                    int height, int components) {
   GLuint id;                       
@@ -743,8 +744,10 @@ int main(int argc, char** argv) {
     }
 
     for (size_t n = 0; n < gAsset.meshes.size(); n++) {
+
       nanosg::Node<float, example::Mesh<float> > node(&gAsset.meshes[n]);
       node.SetName(meshes[n].name);
+      node.SetLocalXform(meshes[n].pivot_xform); // Use mesh's pivot transform as node's local transform.
       gNodes.push_back(node);
      
       gScene.AddNode(node);

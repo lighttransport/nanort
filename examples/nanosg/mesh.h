@@ -81,6 +81,7 @@ class Mesh {
   std::vector<unsigned int> faces;         /// triangle x num_faces
   std::vector<unsigned int> material_ids;  /// index x num_faces
 
+  T pivot_xform[4][4];
 
   // --- Required methods in Scene::Traversal. ---
 

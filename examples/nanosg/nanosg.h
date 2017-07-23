@@ -461,6 +461,10 @@ class Node
     return &local_xform_[0][0];
   }
 
+  const T *GetXformPtr() const {
+    return &xform_[0][0];
+  }
+
   const M *GetMesh() const {
     return mesh_;
   }
