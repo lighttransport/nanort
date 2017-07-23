@@ -4,7 +4,7 @@ Simple, minimal and header-only scene graph library for NanoRT.
 
 ![](images/nanosg-demo.png)
 
-![](https://giphy.com/gifs/nanosg-l3JDO29fMFndyObHW)
+![](https://media.giphy.com/media/l3JDO29fMFndyObHW/giphy.gif)
 
 ## Build
 
