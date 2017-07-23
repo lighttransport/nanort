@@ -2,6 +2,8 @@
 
 Simple, minimal and header-only scene graph library for NanoRT.
 
+NanoSG itself shoud be compiled with C++-03 compiler, but demo code uses C++11 features.
+
 ![](images/nanosg-demo.png)
 
 ![](https://media.giphy.com/media/l3JDO29fMFndyObHW/giphy.gif)
@@ -116,3 +118,13 @@ Returns `true` when there is an intersection and hit information is stored in `i
 ## TODO
 
 * [ ] Compute pivot point of each node(mesh).
+
+## Third party libraries and its icenses.
+
+* picojson : BSD license.
+* bt3gui : zlib license. 
+* glew : BSD/MIT license.
+* tinyobjloader : MIT license.
+* glm : The Happy Bunny License (Modified MIT License). Copyright (c) 2005 - 2017 G-Truc Creation
+* ImGui : The MIT License (MIT). Copyright (c) 2014-2015 Omar Cornut and ImGui contributors
+* ImGuizmo : The MIT License (MIT). Copyright (c) 2016 Cedric Guillemet
