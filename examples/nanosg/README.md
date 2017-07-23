@@ -10,14 +10,14 @@ Simple, minimal and header-only scene graph library for NanoRT.
 
 ### Linux or macOS
 
-````
+```
 $ premake5 gmake
 $ make
 ```
 
 ### Windows
 
-````
+```
 $ premake5 vs2015
 ```
 
