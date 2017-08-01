@@ -1566,6 +1566,10 @@ bool BVHAccel<T>::Build(unsigned int num_primitives,
 
   assert(options_.bin_size > 1);
 
+  if (num_primitives == 0) {
+    return false;
+  }
+
   unsigned int n = num_primitives;
 
   //
