@@ -744,6 +744,19 @@ namespace picojson {
     }
     do {
       std::string key;
+	  
+	  //tigra: can handle // comment!
+	  if(in.expect('/'))
+	  {
+		  if(in.expect('/'))
+		  {
+			 int ch;
+			 do {ch = in.getc();} while(ch==10 || ch==13);
+
+			 in.ungetc();			 
+		  }
+	  }	    
+	    
       if (! in.expect('"')
 	  || ! _parse_string(key, in)
 	  || ! in.expect(':')) {
