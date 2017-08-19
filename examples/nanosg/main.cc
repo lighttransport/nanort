@@ -912,6 +912,7 @@ int main(int argc, char** argv) {
 	  if(gShowBufferMode_prv!=gShowBufferMode)
 	  {
 		  gRenderConfig.pass = 0;
+		  gShowBufferMode_prv = gShowBufferMode;
 	  }
 
 
