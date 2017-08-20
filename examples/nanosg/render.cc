@@ -235,7 +235,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
                       const nanosg::Scene<float, example::Mesh<float>> &scene,
                       const example::Asset &asset,
                       const RenderConfig& config,
-                      std::atomic<bool>& cancelFlag) {
+                      std::atomic<bool>& cancelFlag,
+                      int &_showBufferMode
+                      ) {
   //if (!gAccel.IsValid()) {
   //  return false;
   //}
@@ -300,6 +302,19 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           float u1 = pcg32_random(&rng);
 
           float3 dir;
+        
+        //for modes not a "color"
+		    if(_showBufferMode != SHOW_BUFFER_COLOR)
+		    {
+          //only one pass
+			    if(config.pass > 0)
+				    continue;
+				  
+          //to the center of pixel
+			      u0 = 0.5f;
+			      u1 = 0.5f;
+		      }
+      
           dir = corner + (float(x) + u0) * u +
                 (float(config.height - y - 1) + u1) * v;
           dir = vnormalize(dir);
