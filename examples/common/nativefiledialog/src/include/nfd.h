@@ -50,8 +50,15 @@ nfdresult_t NFD_SaveDialog( const nfdchar_t *filterList,
                             const nfdchar_t *defaultPath,
                             nfdchar_t **outPath );
 
+
+/* select folder dialog */
+nfdresult_t NFD_PickFolder( const nfdchar_t *defaultPath,
+                            nfdchar_t **outPath);
+
 /* nfd_common.c */
 
+/* free the memory allocated for a path */
+void NFD_FreePath( nfdchar_t *outPath );
 /* get last error -- set when nfdresult_t returns NFD_ERROR */
 const char *NFD_GetError( void );
 /* get the number of entries stored in pathSet */
