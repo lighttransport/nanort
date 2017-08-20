@@ -96,19 +96,16 @@ THE SOFTWARE.
 #endif
 #endif
 
-#define SHOW_BUFFER_COLOR (0)
-#define SHOW_BUFFER_NORMAL (1)
-#define SHOW_BUFFER_POSITION (2)
-#define SHOW_BUFFER_DEPTH (3)
-#define SHOW_BUFFER_TEXCOORD (4)
-#define SHOW_BUFFER_VARYCOORD (5)
-
 b3gDefaultOpenGLWindow* window = 0;
 int gWidth = 512;
 int gHeight = 512;
 int gMousePosX = -1, gMousePosY = -1;
 bool gMouseLeftDown = false;
+
+//FIX issue when max passes is done - no modes is switched. pass must be set to 0 when mode is changed
+int gShowBufferMode_prv = SHOW_BUFFER_COLOR;
 int gShowBufferMode = SHOW_BUFFER_COLOR;
+
 bool gTabPressed = false;
 bool gShiftPressed = false;
 float gShowPositionScale = 1.0f;
@@ -203,7 +200,10 @@ void RenderThread() {
 
     bool ret =
         example::Renderer::Render(&gRenderLayer.rgba.at(0), &gRenderLayer.auxRGBA.at(0), &gRenderLayer.sampleCounts.at(0),
-                         gCurrQuat, gScene, gAsset, gRenderConfig, gRenderCancel);
+                         gCurrQuat, gScene, gAsset, gRenderConfig, gRenderCancel
+                                 ,
+						                    gShowBufferMode //added mode passing
+                                 );
 
     if (ret) {
       std::lock_guard<std::mutex> guard(gMutex);
@@ -907,6 +907,13 @@ int main(int argc, char** argv) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
     checkErrors("clear");
+	
+    //fix max passes issue
+	  if(gShowBufferMode_prv!=gShowBufferMode)
+	  {
+		  gRenderConfig.pass = 0;
+		  gShowBufferMode_prv = gShowBufferMode;
+	  }
 
 
     // Render display window
