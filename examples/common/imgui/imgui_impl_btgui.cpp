@@ -1,5 +1,11 @@
 // ImGui BtGui binding with OpenGL based on Imgui Glfw binding.
 
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
+
+
 #include "imgui_impl_btgui.h"
 
 #ifdef _MSC_VER
@@ -339,3 +345,8 @@ void ImGui_ImplBtGui_NewFrame(int mouse_x, int mouse_y) {
   // Start the frame
   ImGui::NewFrame();
 }
+
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
