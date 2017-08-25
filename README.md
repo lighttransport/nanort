@@ -246,6 +246,7 @@ PR are always welcome!
 * [ ] Efficient BVH
   * [ ] Spatial split BVH
 * [ ] Motion blur
+  * [ ] STBVH: A Spatial-Temporal BVH for Efficient Multi-Segment Motion Blur http://www.highperformancegraphics.org/2017/program/
 * [ ] Accurate ray curve intersection
 * [x] Example bi-directional path tracing renderer by @tatsy.
 
