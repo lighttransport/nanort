@@ -4,11 +4,6 @@
   http://www.frogtoss.com/labs
  */
 
-#ifdef _MSC_VER
-#pragma warning(disable : 4245)
-#pragma warning(disable : 4996)
-#endif
-
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
@@ -17,6 +12,11 @@
 static char g_errorstr[NFD_MAX_STRLEN] = {0};
 
 /* public routines */
+
+void NFD_FreePath( nfdchar_t *outPath )
+{
+	NFDi_Free( outPath );
+}
 
 const char *NFD_GetError( void )
 {

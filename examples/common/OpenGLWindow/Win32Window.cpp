@@ -1,3 +1,13 @@
+
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#endif
+
+
 #ifdef _WIN32
 /*
 Copyright (c) 2012 Advanced Micro Devices, Inc.  
@@ -832,3 +842,9 @@ b3WheelCallback Win32Window::getWheelCallback()
 }
 #endif
 	
+
+	
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#pragma GCC diagnostic pop
+#endif

@@ -1,3 +1,9 @@
+
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
+
 #ifdef _WIN32
 /*
 Copyright (c) 2012 Advanced Micro Devices, Inc.  
@@ -202,3 +208,7 @@ int Win32OpenGLWindow::getHeight() const
 #endif
 
 	
+
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
