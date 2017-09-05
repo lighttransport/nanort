@@ -1079,22 +1079,22 @@ inline bool FindCutFromBinBuffer(T *cut_pos,        // [out] xyz
   T pos;
   T minCost[3];
 
-  T costTtri = 1.0f - costTaabb;
+  T costTtri = static_cast<T>(1.0) - costTaabb;
 
   (*minCostAxis) = 0;
 
   bsize = bmax - bmin;
-  bstep = bsize * (1.0f / bins->bin_size);
+  bstep = bsize * (static_cast<T>(1.0) / bins->bin_size);
   saTotal = CalculateSurfaceArea(bmin, bmax);
 
-  T invSaTotal = 0.0f;
+  T invSaTotal = static_cast<T>(0.0);
   if (saTotal > kEPS) {
-    invSaTotal = 1.0f / saTotal;
+    invSaTotal = static_cast<T>(1.0) / saTotal;
   }
 
   for (int j = 0; j < 3; ++j) {
     //
-    // Compute SAH cost for right side of each cell of the bbox.
+    // Compute SAH cost for the right side of each cell of the bbox.
     // Exclude both extreme side of the bbox.
     //
     //  i:      0    1    2    3
@@ -1103,7 +1103,7 @@ inline bool FindCutFromBinBuffer(T *cut_pos,        // [out] xyz
     //     +----+----+----+----+----+
     //
 
-    T minCostPos = bmin[j] + 0.5f * bstep[j];
+    T minCostPos = bmin[j] + static_cast<T>(1.0) * bstep[j];
     minCost[j] = std::numeric_limits<T>::max();
 
     left = 0;
@@ -1127,7 +1127,7 @@ inline bool FindCutFromBinBuffer(T *cut_pos,        // [out] xyz
       // +1 for i since we want a position on right side of the cell.
       //
 
-      pos = bmin[j] + (i + 0.5f) * bstep[j];
+      pos = bmin[j] + (i + static_cast<T>(1.0)) * bstep[j];
       bmaxLeft[j] = pos;
       bminRight[j] = pos;
 
