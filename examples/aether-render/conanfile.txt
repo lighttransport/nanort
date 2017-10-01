@@ -1,0 +1,6 @@
+[requires]
+Eigen3/3.2.8@bilke/stable
+Boost/1.64.0@inexorgame/stable
+
+[generators]
+cmake
