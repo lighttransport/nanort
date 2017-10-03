@@ -16,7 +16,7 @@ Just finished build setup. No rendering code yet.
 ## Supported platforms
 
 * Ubuntu 16.04
-* Windows may work, but not tested yet.
+* clang-cl.exe 4.0.1 + Visual Studio 2017.
 
 ## Setup
 
@@ -32,13 +32,21 @@ aether-render/
 ├── aether
 ``
 
-## Build
+## Build(Linux)
 
 `CMAKE_BUILD_TYPE` must be specified.
 
 ```
 $ cmake -Bbuild -H.  -DCMAKE_BUILD_TYPE=Release
 $ cmake --build build/
+```
+
+## Build(Windows)
+
+Set path to clang/LLVM, Boost and eigen in `vcbuild-clang-cl.bat`, then
+
+```
+> vcbuild-clang-cl.bat
 ```
 
 ## Run(Linux)
