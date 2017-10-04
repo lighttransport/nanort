@@ -10,8 +10,9 @@ newoption {
 
 sources = {
    "main.cc",
-   "render.cc",
-   "render-config.cc",
+   "nanort-embree.cc",
+   "../nanosg/render.cc",
+   "../nanosg/render-config.cc",
    "../nanosg/obj-loader.cc",
    "../nanosg/matrix.cc",
    "../common/trackball.cc",
@@ -47,6 +48,8 @@ solution "EmbreeAPISolution"
       files { sources }
 
       includedirs { "./", "../../" }
+      includedirs { "./include" }
+      includedirs { "../nanosg" }
       includedirs { "../common" }
       includedirs { "../common/imgui" }
       includedirs { "../common/glm" }
@@ -63,6 +66,7 @@ solution "EmbreeAPISolution"
 
          defines { "NOMINMAX" }
          defines { "USE_NATIVEFILEDIALOG" }
+         defines { "_CRT_SECURE_NO_WARNINGS" }
          buildoptions { "/W4" } -- raise compile error level.
          files{
             "../common/OpenGLWindow/Win32OpenGLWindow.cpp",

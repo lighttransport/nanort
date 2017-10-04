@@ -59,6 +59,7 @@ static size_t GetUTF8ByteCountForWChar( const wchar_t *str )
 static int CopyWCharToExistingNFDCharBuffer( const wchar_t *inStr, nfdchar_t *outPtr )
 {
     int inStrCharacterCount = static_cast<int>(wcslen(inStr));
+    (void)inStrCharacterCount;
     int bytesNeeded = static_cast<int>(GetUTF8ByteCountForWChar( inStr ));
 
     /* invocation copies null term */
@@ -116,7 +117,7 @@ static int AppendExtensionToSpecBuf( const char *ext, char *specBuf, size_t spec
 
     char extWildcard[NFD_MAX_STRLEN];
     int bytesWritten = sprintf_s( extWildcard, NFD_MAX_STRLEN, "*.%s", ext );
-    assert( bytesWritten == strlen(ext)+2 );
+    assert( size_t(bytesWritten) == strlen(ext)+2 );
     
     strncat( specBuf, extWildcard, specBufLen - strlen(specBuf) - 1 );
 
