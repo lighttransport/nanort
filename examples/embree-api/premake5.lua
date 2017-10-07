@@ -11,15 +11,6 @@ newoption {
 sources = {
    "main.cc",
    "nanort-embree.cc",
-   "../nanosg/render.cc",
-   "../nanosg/render-config.cc",
-   "../nanosg/obj-loader.cc",
-   "../nanosg/matrix.cc",
-   "../common/trackball.cc",
-   "../common/imgui/imgui.cpp",
-   "../common/imgui/imgui_draw.cpp",
-   "../common/imgui/imgui_impl_btgui.cpp",
-   "../common/imgui/ImGuizmo.cpp",
    }
 
 solution "EmbreeAPISolution"
@@ -30,16 +21,6 @@ solution "EmbreeAPISolution"
    else
       platforms { "native", "x64", "x32" }
    end
-
-
-   -- RootDir for OpenGLWindow
-   projectRootDir = os.getcwd() .. "/../common/"
-   dofile ("../common/findOpenGLGlewGlut.lua")
-   initOpenGL()
-   initGlew()
-
-   -- Use c++11
-   flags { "c++11" }
 
    -- A project defines one build target
    project "embree-api"
@@ -55,6 +36,9 @@ solution "EmbreeAPISolution"
       includedirs { "../common/glm" }
       --includedirs { "../common/nativefiledialog/src/include" }
 
+      toolset "clang"
+      buildoptions { "-Weverything -Werror" }
+
       if _OPTIONS['asan'] then
          buildoptions { "-fsanitize=address" }
          linkoptions { "-fsanitize=address" }
@@ -65,45 +49,15 @@ solution "EmbreeAPISolution"
          warnings "Extra" -- /W4
 
          defines { "NOMINMAX" }
-         defines { "USE_NATIVEFILEDIALOG" }
          defines { "_CRT_SECURE_NO_WARNINGS" }
          buildoptions { "/W4" } -- raise compile error level.
-         files{
-            "../common/OpenGLWindow/Win32OpenGLWindow.cpp",
-            "../common/OpenGLWindow/Win32OpenGLWindow.h",
-            "../common/OpenGLWindow/Win32Window.cpp",
-            "../common/OpenGLWindow/Win32Window.h",
-            }
-         includedirs { "./../common/nativefiledialog/src/include" }
-         files { "../common/nativefiledialog/src/nfd_common.c",
-                 "../common/nativefiledialog/src/nfd_win.cpp" }
       end
+
       if os.is("Linux") then
-         files {
-            "../common/OpenGLWindow/X11OpenGLWindow.cpp",
-            "../common/OpenGLWindow/X11OpenGLWindows.h"
-            }
-         links {"X11", "pthread", "dl"}
-         if _OPTIONS["with-gtk3nfd"] then
-            defines { "USE_NATIVEFILEDIALOG" }
-            includedirs { "./../common/nativefiledialog/src/include" }
-            files { "../common/nativefiledialog/src/nfd_gtk.c",
-                    "../common/nativefiledialog/src/nfd_common.c"
-                  }
-            buildoptions { "`pkg-config --cflags gtk+-3.0`" }
-            linkoptions { "`pkg-config --libs gtk+-3.0`" }
-         end
+         links {"pthread", "dl"}
       end
+
       if os.is("MacOSX") then
-         defines { "USE_NATIVEFILEDIALOG" }
-         links {"Cocoa.framework"}
-         files {
-                "../common/OpenGLWindow/MacOpenGLWindow.h",
-                "../common/OpenGLWindow/MacOpenGLWindow.mm",
-               }
-         includedirs { "./../common/nativefiledialog/src/include" }
-         files { "../common/nativefiledialog/src/nfd_cocoa.m",
-                 "../common/nativefiledialog/src/nfd_common.c" }
       end
 
       configuration "Debug"
