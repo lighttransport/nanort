@@ -149,7 +149,7 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
   // TODO(LTE): Implement tangents and binormals
 
   for (size_t i = 0; i < shapes.size(); i++) {
-    Mesh<float> mesh;
+    Mesh<float> mesh(/* stride */sizeof(float) * 3);
 
     mesh.name = shapes[i].name;
 

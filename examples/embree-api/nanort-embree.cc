@@ -94,10 +94,11 @@ inline void calculate_normal(T Nn[3], const T v0[3], const T v1[3], const T v2[3
 template<typename T = float>
 class TriMesh {
  public:
-  TriMesh() {}
-
-  TriMesh(const size_t num_triangles, const size_t num_vertices) {
-    vertices.resize(num_vertices * 4); // Embree uses 16 bytes stride
+  explicit TriMesh(const size_t num_triangles, const size_t num_vertices) {
+		
+	  // Embree uses 16 bytes stride
+		stride = sizeof(float) * 4;
+    vertices.resize(num_vertices * 4); 
     faces.resize(num_triangles * 3); 
   }
 
@@ -105,6 +106,7 @@ class TriMesh {
 
   std::string name;
 
+	size_t stride;
   std::vector<T> vertices;               /// [xyz] * num_vertices
   std::vector<unsigned int> faces;       /// triangle x num_faces
 
@@ -485,6 +487,16 @@ RTCORE_API void rtcIntersect (RTCScene scene, RTCRay& rtc_ray)
 
   nanort::Ray<float> ray;
 
+	ray.org[0] = rtc_ray.org[0];
+	ray.org[1] = rtc_ray.org[1];
+	ray.org[2] = rtc_ray.org[2];
+
+	ray.dir[0] = rtc_ray.dir[0];
+	ray.dir[1] = rtc_ray.dir[1];
+	ray.dir[2] = rtc_ray.dir[2];
+
+	// TODO(LTE): .time, .mask
+
   ray.min_t = rtc_ray.tnear;
   ray.max_t = rtc_ray.tfar;
 
@@ -499,7 +511,7 @@ RTCORE_API void rtcIntersect (RTCScene scene, RTCRay& rtc_ray)
     rtc_ray.u = isect.u;
     rtc_ray.v = isect.v;
     rtc_ray.geomID = isect.node_id;
-    rtc_ray.primID = isect.node_id;
+    rtc_ray.primID = isect.prim_id;
     rtc_ray.instID = RTC_INVALID_GEOMETRY_ID; // Instancing is not yet supported.
   } else {
     rtc_ray.geomID = RTC_INVALID_GEOMETRY_ID;

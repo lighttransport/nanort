@@ -22,5 +22,6 @@ Triangle + single ray intersection only.
 * [ ] Curve/hair
 * [ ] Subdivision surface
 * [ ] Motion blur
+* [ ] Instanciation
 * [ ] Stream intersection API
 * [ ] Ray stream API

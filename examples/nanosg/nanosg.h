@@ -59,7 +59,7 @@ public:
   Matrix();
   ~Matrix();
 
-  static void Print(T m[4][4]) {
+  static void Print(const T m[4][4]) {
     for (int i = 0; i < 4; i++) {
       printf("m[%d] = %f, %f, %f, %f\n", i, m[i][0], m[i][1], m[i][2], m[i][3]);
     }
@@ -412,8 +412,8 @@ class Node
     if (!accel_.IsValid() && mesh_ && (mesh_->vertices.size() > 3) && (mesh_->faces.size() >= 3)) {
 
       // Assume mesh is composed of triangle faces only.
-      nanort::TriangleMesh<float> triangle_mesh(mesh_->vertices.data(), mesh_->faces.data(), sizeof(float) * 3);
-      nanort::TriangleSAHPred<float> triangle_pred(mesh_->vertices.data(), mesh_->faces.data(), sizeof(float) * 3);
+      nanort::TriangleMesh<float> triangle_mesh(mesh_->vertices.data(), mesh_->faces.data(), mesh_->stride);
+      nanort::TriangleSAHPred<float> triangle_pred(mesh_->vertices.data(), mesh_->faces.data(), mesh_->stride);
 
       bool ret = accel_.Build(static_cast<unsigned int>(mesh_->faces.size()) / 3, triangle_mesh, triangle_pred);
 
@@ -809,7 +809,7 @@ class Scene
         Matrix<T>::MultV(local_ray.org, node.inv_xform_, ray.org);
         Matrix<T>::MultV(local_ray.dir, node.inv_xform33_, ray.dir);
 
-        nanort::TriangleIntersector<T, H> triangle_intersector(node.GetMesh()->vertices.data(), node.GetMesh()->faces.data(), sizeof(T) * 3);
+        nanort::TriangleIntersector<T, H> triangle_intersector(node.GetMesh()->vertices.data(), node.GetMesh()->faces.data(), node.GetMesh()->stride);
         H local_isect;
 
         bool hit = node.GetAccel().Traverse(local_ray, triangle_intersector, &local_isect);
@@ -830,6 +830,7 @@ class Scene
           po[2] = world_P[2] - ray.org[2];
 
           float t_world = vlength(po);
+					//printf("tworld %f, tnear %f\n", t_world, t_nearest);
 
           if (t_world < t_nearest) {
             t_nearest = t_world;
