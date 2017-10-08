@@ -609,6 +609,46 @@ RTCORE_API void rtcUnmapBuffer(RTCScene scene, unsigned geomID, RTCBufferType ty
 	(void)geomID;
 }
 
+RTCORE_API unsigned rtcNewInstance2 (RTCScene target,                  //!< the scene the instance belongs to
+                                     RTCScene source,                  //!< the scene to instantiate
+                                     size_t numTimeSteps = 1) {         //!< number of timesteps, one matrix per timestep
+	if (numTimeSteps != 1) {
+    std::stringstream ss;
+    ss << "[rtcNewInstance2] numTimeSteps must be 1" << std::endl;
+    GetContext().SetError(ss.str());
+    return 0; 
+	}
+
+	// TODO(LTE): Implement
+	(void)target;
+	(void)source;
+}
+
+
+RTCORE_API void rtcSetTransform2 (RTCScene scene,                         //!< scene handle
+                                  unsigned int geomID,                    //!< ID of geometry 
+                                  RTCMatrixType layout,                   //!< layout of transformation matrix
+                                  const float* xfm,                       //!< pointer to transformation matrix
+                                  size_t timeStep = 0                     //!< timestep to set the matrix for 
+  ) {
+
+	// TODO(LTE): Implement
+	(void)scene;
+	(void)geomID;
+	(void)layout;
+	(void)xfm;
+	(void)timeStep;
+
+}
+
+
+RTCORE_API void rtcUpdate (RTCScene scene, unsigned geomID) 
+{
+	// TODO(LTE): Implement
+	(void)scene;
+	(void)geomID;
+}
+
 RTCORE_API void rtcCommit (RTCScene scene) {
 
   Scene *s = reinterpret_cast<Scene *>(scene);

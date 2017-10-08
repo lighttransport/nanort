@@ -74,6 +74,17 @@ static inline void vnormalize(float dst[3], const float v[3]) {
   }
 }
 
+static void MultV(float dst[3], const float m[4][4], const float v[3]) {
+	float tmp[3];
+	tmp[0] = m[0][0] * v[0] + m[1][0] * v[1] + m[2][0] * v[2] + m[3][0];
+	tmp[1] = m[0][1] * v[0] + m[1][1] * v[1] + m[2][1] * v[2] + m[3][1];
+	tmp[2] = m[0][2] * v[0] + m[1][2] * v[1] + m[2][2] * v[2] + m[3][2];
+	dst[0] = tmp[0];
+	dst[1] = tmp[1];
+	dst[2] = tmp[2];
+}
+
+
 // Create TriangleMesh
 static unsigned int CreateTriangleMesh(const example::Mesh<float> &mesh, RTCScene scene) {
   unsigned int geom_id = rtcNewTriangleMesh(scene, RTC_GEOMETRY_STATIC,
@@ -86,10 +97,14 @@ static unsigned int CreateTriangleMesh(const example::Mesh<float> &mesh, RTCScen
       reinterpret_cast<int *>(rtcMapBuffer(scene, geom_id, RTC_INDEX_BUFFER));
 
   for (size_t i = 0; i < mesh.vertices.size() / 3; i++) {
+		// TODO(LTE): Use instanciation for applying xform.
+		float v[3];
+		MultV(v, mesh.pivot_xform, &mesh.vertices[3 * i + 0]);
+		
     // Embree uses 4 floats(16 bytes stride)
-    vertices[4 * i + 0] = mesh.vertices[3 * i + 0];
-    vertices[4 * i + 1] = mesh.vertices[3 * i + 1];
-    vertices[4 * i + 2] = mesh.vertices[3 * i + 2];
+    vertices[4 * i + 0] = v[0];
+    vertices[4 * i + 1] = v[1];
+    vertices[4 * i + 2] = v[2];
     vertices[4 * i + 3] = 0.0f;
   }
 
