@@ -328,8 +328,8 @@ template <typename T>
 inline real3<T> vnormalize(const real3<T> &rhs) {
   real3<T> v = rhs;
   T len = vlength(rhs);
-  if (fabs(len) > 1.0e-6f) {
-    float inv_len = 1.0f / len;
+  if (std::fabs(len) > static_cast<T>(1.0e-6)) {
+    T inv_len = static_cast<T>(1.0) / len;
     v.v[0] *= inv_len;
     v.v[1] *= inv_len;
     v.v[2] *= inv_len;
@@ -653,7 +653,7 @@ class TriangleSAHPred {
 
     T center = p0[axis] + p1[axis] + p2[axis];
 
-    return (center < pos * 3.0);
+    return (center < pos * static_cast<T>(3.0));
   }
 
  private:
@@ -781,8 +781,13 @@ class TriangleIntersector {
     T V = Ax * Cy - Ay * Cx;
     T W = Bx * Ay - By * Ax;
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#endif
+
     // Fall back to test against edges using double precision.
-    if (U == 0.0 || V == 0.0 || W == 0.0) {
+    if (U == static_cast<T>(0.0) || V == static_cast<T>(0.0) || W == static_cast<T>(0.0)) {
       double CxBy = static_cast<double>(Cx) * static_cast<double>(By);
       double CyBx = static_cast<double>(Cy) * static_cast<double>(Bx);
       U = static_cast<T>(CxBy - CyBx);
@@ -797,15 +802,19 @@ class TriangleIntersector {
     }
 
     if (trace_options_.cull_back_face) {
-      if (U < 0.0 || V < 0.0 || W < 0.0) return false;
+      if (U < static_cast<T>(0.0) || V < static_cast<T>(0.0) || W < static_cast<T>(0.0)) return false;
     } else {
-      if ((U < 0.0 || V < 0.0 || W < 0.0) && (U > 0.0 || V > 0.0 || W > 0.0)) {
+      if ((U < static_cast<T>(0.0) || V < static_cast<T>(0.0) || W < static_cast<T>(0.0)) && (U > static_cast<T>(0.0) || V > static_cast<T>(0.0) || W > static_cast<T>(0.0))) {
         return false;
       }
     }
 
     T det = U + V + W;
-    if (det == 0.0) return false;
+    if (det == static_cast<T>(0.0)) return false;
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
     const T Az = ray_coeff_.Sz * A[ray_coeff_.kz];
     const T Bz = ray_coeff_.Sz * B[ray_coeff_.kz];
@@ -910,6 +919,7 @@ class TriangleIntersector {
   mutable T u_;
   mutable T v_;
   mutable unsigned int prim_id_;
+  int _pad_;
 };
 
 //
@@ -991,12 +1001,12 @@ inline void ContributeBinBuffer(BinBuffer *bins,  // [out]
   real3<T> scene_size, scene_inv_size;
   scene_size = scene_max - scene_min;
   for (int i = 0; i < 3; ++i) {
-    assert(scene_size[i] >= 0.0);
+    assert(scene_size[i] >= static_cast<T>(0.0));
 
-    if (scene_size[i] > 0.0) {
+    if (scene_size[i] > static_cast<T>(0.0)) {
       scene_inv_size[i] = bin_size / scene_size[i];
     } else {
-      scene_inv_size[i] = 0.0;
+      scene_inv_size[i] = static_cast<T>(0.0);
     }
   }
 
@@ -2072,11 +2082,11 @@ bool BVHAccel<T>::ListNodeIntersections(
 
   int dir_sign[3];
   dir_sign[0] =
-      ray.dir[0] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
+      ray.dir[0] < static_cast<T>(0.0) ? 1 : 0;
   dir_sign[1] =
-      ray.dir[1] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
+      ray.dir[1] < static_cast<T>(0.0) ? 1 : 0;
   dir_sign[2] =
-      ray.dir[2] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
+      ray.dir[2] < static_cast<T>(0.0) ? 1 : 0;
 
   // @fixme { Check edge case; i.e., 1/0 }
   real3<T> ray_inv_dir;

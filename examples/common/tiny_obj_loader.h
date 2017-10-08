@@ -74,6 +74,7 @@ typedef struct {
   float clearcoat_roughness;      // [0, 1] default 0
   float anisotropy;               // aniso. [0, 1] default 0
   float anisotropy_rotation;      // anisor. [0, 1] default 0
+  float _pad_;
   std::string roughness_texname;  // map_Pr
   std::string metallic_texname;   // map_Pm
   std::string sheen_texname;      // map_Ps

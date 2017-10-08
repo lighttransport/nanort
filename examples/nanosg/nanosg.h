@@ -415,7 +415,7 @@ class Node
       nanort::TriangleMesh<float> triangle_mesh(mesh_->vertices.data(), mesh_->faces.data(), sizeof(float) * 3);
       nanort::TriangleSAHPred<float> triangle_pred(mesh_->vertices.data(), mesh_->faces.data(), sizeof(float) * 3);
 
-      bool ret = accel_.Build(int(mesh_->faces.size()) / 3, triangle_mesh, triangle_pred);
+      bool ret = accel_.Build(static_cast<unsigned int>(mesh_->faces.size()) / 3, triangle_mesh, triangle_pred);
 
       // Update local bbox.
       if (ret) {
@@ -574,6 +574,7 @@ class NodeBBoxGeometry {
   mutable nanort::real3<T> ray_org_;
   mutable nanort::real3<T> ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
+  int _pad_;
 };
 
 class NodeBBoxIntersection {
@@ -648,9 +649,9 @@ class NodeBBoxIntersector {
     ray_inv_dir_[1] = static_cast<T>(1.0) / ray.dir[1];
     ray_inv_dir_[2] = static_cast<T>(1.0) / ray.dir[2];
 
-    ray_dir_sign_[0] = ray.dir[0] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
-    ray_dir_sign_[1] = ray.dir[1] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
-    ray_dir_sign_[2] = ray.dir[2] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
+    ray_dir_sign_[0] = ray.dir[0] < static_cast<T>(0.0) ? 1 : 0;
+    ray_dir_sign_[1] = ray.dir[1] < static_cast<T>(0.0) ? 1 : 0;
+    ray_dir_sign_[2] = ray.dir[2] < static_cast<T>(0.0) ? 1 : 0;
   }
 
   const std::vector<Node<T, M> >* nodes_;
@@ -669,7 +670,7 @@ class Scene
     bmax_[0] = bmax_[1] = bmax_[2] = -std::numeric_limits<T>::max();
   }
 
-	~Scene() {};
+	~Scene() {}
 
   ///
   /// Add intersectable node to the scene.
@@ -729,6 +730,7 @@ class Scene
     bool ret = toplevel_accel_.Build(static_cast<unsigned int>(nodes_.size()), geom, pred, build_options);
 
     nanort::BVHBuildStatistics stats = toplevel_accel_.GetStatistics();
+    (void)stats;
 
     //toplevel_accel_.Debug();
 

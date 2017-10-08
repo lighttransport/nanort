@@ -90,7 +90,7 @@ Add node as child node.
 void Node::SetLocalXform(const T xform[4][4]) {
 ```
 
-Set local transformation matrix.
+Set local transformation matrix. Default is identity matrix.
 
 ### Scene
 

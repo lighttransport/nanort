@@ -51,6 +51,7 @@ struct Texture {
   int width;
   int height;
   int components;
+  int _pad_;
   unsigned char* image;
 
   Texture() {
