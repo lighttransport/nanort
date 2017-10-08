@@ -35,7 +35,7 @@ Application must care of calling Embree API with proper locking(except for `rtcI
 * [ ] Stream intersection API
 * [ ] Ray stream API
 * [ ] Multi-threading support.
-* [ ] Fix LNK4217 warning on VS compiler.
+* [ ] DLL build of nanort-embree module.
 
 ## Licenses
 

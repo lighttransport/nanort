@@ -44,6 +44,9 @@ solution "EmbreeAPISolution"
          flags { "FatalCompileWarnings" }
          warnings "Extra" -- /W4
 
+         -- TODO(LTE): Support dll build of nanort-embree.
+         defines { "EMBREE_STATIC_LIB" }
+
          defines { "NOMINMAX" }
          defines { "_CRT_SECURE_NO_WARNINGS" }
          buildoptions { "/W4" } -- raise compile error level.
