@@ -36,11 +36,26 @@ THE SOFTWARE.
 #pragma clang diagnostic ignored "-Wexit-time-destructors"
 #endif
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4324)
+#endif
+
+#ifdef _WIN32
+#  define RTCORE_API extern "C" __declspec(dllexport)
+#else
+#  define RTCORE_API extern "C" __attribute__ ((visibility ("default")))
+#endif
+
 #include "embree2/rtcore.h"
 #include "embree2/rtcore_ray.h"
 
 #ifdef __clang__
 #pragma clang diagnostic pop
+#endif
+
+#ifdef _MSC_VER
+#pragma warning(pop)
 #endif
 
 #include <cassert>

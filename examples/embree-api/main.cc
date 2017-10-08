@@ -53,6 +53,14 @@ THE SOFTWARE.
 #endif
 #endif
 
+
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4324)
+#pragma warning(disable : 4457)
+#pragma warning(disable : 4456)
+#endif
+
 #include <embree2/rtcore.h>
 #include <embree2/rtcore_ray.h>
 
@@ -61,6 +69,10 @@ THE SOFTWARE.
 
 #ifdef __clang__
 #pragma clang diagnostic pop
+#endif
+
+#ifdef _MSC_VER
+#pragma warning(pop)
 #endif
 
 #include <cstdio>
