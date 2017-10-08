@@ -61,5 +61,6 @@ int main(int argc, char **argv)
 
 	RTCDevice device = rtcNewDevice(NULL);
 	rtcDeleteDevice(device);
+
 	return EXIT_SUCCESS;
 }

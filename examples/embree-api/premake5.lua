@@ -11,6 +11,7 @@ newoption {
 sources = {
    "main.cc",
    "nanort-embree.cc",
+   "../nanosg/obj-loader.cc",
    }
 
 solution "EmbreeAPISolution"
@@ -32,12 +33,7 @@ solution "EmbreeAPISolution"
       includedirs { "./include" }
       includedirs { "../nanosg" }
       includedirs { "../common" }
-      includedirs { "../common/imgui" }
-      includedirs { "../common/glm" }
-      --includedirs { "../common/nativefiledialog/src/include" }
-
-      toolset "clang"
-      buildoptions { "-Weverything -Werror" }
+      includedirs { "../common/imgui" }  -- stb_image
 
       if _OPTIONS['asan'] then
          buildoptions { "-fsanitize=address" }
@@ -54,6 +50,8 @@ solution "EmbreeAPISolution"
       end
 
       if os.is("Linux") then
+         toolset "clang"
+         buildoptions { "-Weverything -Werror" }
          links {"pthread", "dl"}
       end
 
