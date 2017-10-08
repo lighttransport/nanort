@@ -309,13 +309,26 @@ class Device
 		}
 
 		void AddScene(Scene *scene) {
-			scenes_.push_back(scene);
+      scene_map_[scene] = scene;
+		}
+
+		bool DeleteScene(Scene *scene) {
+      if (scene_map_.find(scene) != scene_map_.end()) {
+        std::map<const Scene*, Scene *>::iterator it = scene_map_.find(scene);
+         
+        scene_map_.erase(it);
+
+        delete scene;
+        return true;
+      }
+
+      return false;
 		}
 
 	private:
 		std::string config_;
 
-		std::vector<Scene *> scenes_;
+		std::map<const Scene*, Scene *> scene_map_;
 
 		// Callbacks
 		RTCErrorFunc2 error_func_;
@@ -328,8 +341,12 @@ class Context
   public:
 		Context() {}
 		~Context() {
-			for (size_t i = 0; i < devices_.size(); i++) {
-				delete devices_[i];
+      std::map<const Device*, Device*>::iterator it(device_map_.begin());
+      std::map<const Device*, Device*>::iterator itEnd(device_map_.end());
+
+			for (; it != itEnd; it++) {
+				delete it->second;
+        it->second = NULL;
 			}
 	  }
 
@@ -341,14 +358,35 @@ class Context
 
 			Device *device = new Device(cfg);
 
-			devices_.push_back(device);
+			device_map_[device] = device;
 
 			return device;
 		}
 
-		std::vector<Device *> GetDeviceList() {
-			return devices_;
-		}
+    bool DeleteDevice(Device *device) {
+      if (device_map_.find(device) != device_map_.end()) {
+        std::map<const Device*, Device*>::iterator it = device_map_.find(device);
+        device_map_.erase(it);
+        
+        delete device;
+        return true;
+      }
+      return false;
+    }
+
+    bool DeleteScene(Scene *scene) {
+      // Assume scene is assigned to the device uniquely 
+      std::map<const Device*, Device*>::iterator it(device_map_.begin());
+      std::map<const Device*, Device*>::iterator itEnd(device_map_.end());
+
+			for (; it != itEnd; it++) {
+        if (it->second->DeleteScene(scene)) {
+          return true;
+        }
+      }
+
+      return false;
+    }
 
 		void SetError(const std::string &err) {
 			error_ = err;
@@ -356,7 +394,7 @@ class Context
 
  private:
 	std::string error_;
-	std::vector<Device*> devices_;
+	std::map<const Device *, Device*> device_map_;
 };
 
 #ifdef __clang__
@@ -364,7 +402,7 @@ class Context
 #pragma clang diagnostic ignored "-Wexit-time-destructors"
 #endif
 
-static Context GetContext() {
+static Context &GetContext() {
 	static Context s_ctx;
 
 	return s_ctx;
@@ -383,27 +421,34 @@ RTCORE_API RTCDevice rtcNewDevice(const char* cfg = NULL)
 	return reinterpret_cast<RTCDevice>(device);
 }
 
-RTCORE_API void rtcDeleteDevice(RTCDevice device) {
-	Device *dev = reinterpret_cast<Device *>(device);
-	
-	std::vector<Device *> devices = GetContext().GetDeviceList();
+RTCORE_API void rtcDeleteScene(RTCScene scene) {
+	Scene *s = reinterpret_cast<Scene *>(scene);
 
-	bool found = false;
-	// Simple linear search
-	for (size_t i = 0; i < devices.size(); i++) {
-		if (dev == devices[i]) {
-			delete devices[i];
-			devices.erase(devices.begin() + ptrdiff_t(i));
-			found = true;
-			break;
-		}
+  bool ret = GetContext().DeleteScene(s);
+
+	if (!ret) {
+		std::stringstream ss;
+		ss << "Invalid scene : " << scene << std::endl;
+		GetContext().SetError(ss.str());
 	}
 
-	if (!found) {
+}
+
+RTCORE_API void rtcDeleteDevice(RTCDevice device) {
+#if 0
+  (void)device;
+  std::cout << "TODO: Implement rtcDeleteScene()" << std::endl;
+#else
+	Device *dev = reinterpret_cast<Device *>(device);
+	
+  bool ret = GetContext().DeleteDevice(dev);
+
+	if (!ret) {
 		std::stringstream ss;
 		ss << "Invalid device : " << device << std::endl;
 		GetContext().SetError(ss.str());
 	}
+#endif
 }
 
 RTCORE_API void rtcDeviceSetErrorFunction2(RTCDevice device, RTCErrorFunc2 func, void* userPtr)
@@ -502,6 +547,7 @@ RTCORE_API unsigned rtcNewTriangleMesh (RTCScene scene,                    //!< 
   assert(s);
   const uint32_t geom_id = s->NewTriMesh(numTriangles, numVertices);
 
+  // TODO(LTE): Support flags.
 	(void)flags;
 
 	return geom_id;
@@ -556,16 +602,7 @@ RTCORE_API void rtcCommit (RTCScene scene) {
   Scene *s = reinterpret_cast<Scene *>(scene);
   assert(s);
 
-  // TODO(LTE): Support multiple geometry using NanoSG.
-  if (s->NumShapes() == 1) {
-    s->Build();
-  } else {
-    std::stringstream ss;
-    ss << "[rtcCommit] Multiple geometries are TODO. # of shapes : " << s->NumShapes() << std::endl;
-    GetContext().SetError(ss.str());
-    return; 
-  }
-
+  s->Build();
 }
 
 
