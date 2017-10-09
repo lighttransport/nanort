@@ -1,6 +1,6 @@
 # NanoRT + Embree2 compatile API
 
-Drop-in replacement of Embree API For cross-platform raytracing(e.g. raytracing on ARM, PowerPC)
+Drop-in replacement of raytracing engine with Embree API for cross-platform support(e.g. raytracing on ARM, PowerPC)
 
 ## Version
 
@@ -21,6 +21,11 @@ Triangle + single ray intersection only.
 
 Simply copy embree2 header files(`include/embree2/`), `nanort.h`, `nanosg.h` and `nanort-embree.cc` to your project.
 
+## Notes
+
+Current implementation does not consider calling Embree API from multi-threaded context.
+Application must care of calling Embree API with proper locking(except for `rtcIntersect`)
+
 ## TODO
 
 * [ ] Curve/hair
@@ -29,3 +34,4 @@ Simply copy embree2 header files(`include/embree2/`), `nanort.h`, `nanosg.h` and
 * [ ] Instanciation
 * [ ] Stream intersection API
 * [ ] Ray stream API
+* [ ] Multi-threading support.
