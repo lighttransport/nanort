@@ -17,6 +17,10 @@ Triangle + single ray intersection only.
 * Right-handed
 * Geometric normal defined as CCW
 
+## How to use
+
+Simply copy embree2 header files(`include/embree2/`), `nanort.h`, `nanosg.h` and `nanort-embree.cc` to your project.
+
 ## TODO
 
 * [ ] Curve/hair

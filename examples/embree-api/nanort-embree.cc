@@ -20,19 +20,20 @@
 #endif
 
 #include <cassert>
-#include <string>
-#include <vector>
 #include <map>
 #include <sstream>
+#include <string>
+#include <vector>
 
 #include "nanosg.h"
 
-#include <stdint.h> // Use cstint for C++11 compiler.
+#include <stdint.h>  // Use cstint for C++11 compiler.
 
 namespace nanort_embree2 {
 
-template<typename T>
-inline void lerp(T dst[3], const T v0[3], const T v1[3], const T v2[3], float u, float v) {
+template <typename T>
+inline void lerp(T dst[3], const T v0[3], const T v1[3], const T v2[3], float u,
+                 float v) {
   dst[0] = (static_cast<T>(1.0) - u - v) * v0[0] + u * v1[0] + v * v2[0];
   dst[1] = (static_cast<T>(1.0) - u - v) * v0[1] + u * v1[1] + v * v2[1];
   dst[2] = (static_cast<T>(1.0) - u - v) * v0[2] + u * v1[2] + v * v2[2];
@@ -76,8 +77,9 @@ inline void vsub(T dst[3], const T a[3], const T b[3]) {
   dst[2] = a[2] - b[2];
 }
 
-template<typename T>
-inline void calculate_normal(T Nn[3], const T v0[3], const T v1[3], const T v2[3]) {
+template <typename T>
+inline void calculate_normal(T Nn[3], const T v0[3], const T v1[3],
+                             const T v2[3]) {
   T v10[3];
   T v20[3];
 
@@ -85,30 +87,28 @@ inline void calculate_normal(T Nn[3], const T v0[3], const T v1[3], const T v2[3
   vsub(v20, v2, v0);
 
   T N[3];
-  vcross(N, v10, v20); // CCW
-  //vcross(N, v20, v10); // CC
+  vcross(N, v10, v20);  // CCW
+  // vcross(N, v20, v10); // CC
   vnormalize(Nn, N);
 }
 
-
-template<typename T = float>
+template <typename T = float>
 class TriMesh {
  public:
   explicit TriMesh(const size_t num_triangles, const size_t num_vertices) {
-		
-	  // Embree uses 16 bytes stride
-		stride = sizeof(float) * 4;
-    vertices.resize(num_vertices * 4); 
-    faces.resize(num_triangles * 3); 
+    // Embree uses 16 bytes stride
+    stride = sizeof(float) * 4;
+    vertices.resize(num_vertices * 4);
+    faces.resize(num_triangles * 3);
   }
 
   ~TriMesh() {}
 
   std::string name;
 
-	size_t stride;
-  std::vector<T> vertices;               /// [xyz] * num_vertices
-  std::vector<unsigned int> faces;       /// triangle x num_faces
+  size_t stride;
+  std::vector<T> vertices;          /// [xyz] * num_vertices
+  std::vector<unsigned int> faces;  /// triangle x num_faces
 
   T pivot_xform[4][4];
 
@@ -117,7 +117,8 @@ class TriMesh {
   ///
   /// Get the geometric normal and the shading normal at `face_idx' th face.
   ///
-  void GetNormal(T Ng[3], T Ns[3], const unsigned int face_idx, const T u, const T v) const {
+  void GetNormal(T Ng[3], T Ns[3], const unsigned int face_idx, const T u,
+                 const T v) const {
     (void)u;
     (void)v;
 
@@ -140,34 +141,31 @@ class TriMesh {
     v2[0] = vertices[3 * f2 + 0];
     v2[1] = vertices[3 * f2 + 1];
     v2[2] = vertices[3 * f2 + 2];
-    
+
     calculate_normal(Ng, v0, v1, v2);
 
     // Use geometric normal.
     Ns[0] = Ng[0];
     Ns[1] = Ng[1];
     Ns[2] = Ng[2];
-
   }
 
   // --- end of required methods in Scene::Traversal. ---
-
 };
 
 ///
 /// Simple handle resource management.
 ///
 class HandleAllocator {
-public:
+ public:
   // id = 0 is reserved.
-  HandleAllocator() : counter_(1){ (void)_pad_; }
-  ~HandleAllocator(){}
+  HandleAllocator() : counter_(1) { (void)_pad_; }
+  ~HandleAllocator() {}
 
   ///
   /// Allocates handle object.
   ///
   uint32_t Allocate() {
-
     uint32_t handle = 0;
 
     if (!freeList_.empty()) {
@@ -198,205 +196,191 @@ public:
     }
   }
 
-private:
+ private:
   std::vector<uint32_t> freeList_;
   uint32_t counter_;
   uint32_t _pad_;
 };
 
-class Scene
-{
-  public:
-		Scene(RTCSceneFlags sflags, RTCAlgorithmFlags aflags) :
-			scene_flags_(sflags),
-			algorithm_flags_(aflags) {
+class Scene {
+ public:
+  Scene(RTCSceneFlags sflags, RTCAlgorithmFlags aflags)
+      : scene_flags_(sflags), algorithm_flags_(aflags) {
+    (void)scene_flags_;
+    (void)algorithm_flags_;
+  }
 
-			(void)scene_flags_;
-			(void)algorithm_flags_;
-		}
+  ~Scene() {
+    std::map<uint32_t, TriMesh<float> *>::iterator it(trimesh_map_.begin());
+    std::map<uint32_t, TriMesh<float> *>::iterator itEnd(trimesh_map_.end());
 
-		~Scene() {
-      std::map<uint32_t, TriMesh<float> *>::iterator it(trimesh_map_.begin());
-      std::map<uint32_t, TriMesh<float> *>::iterator itEnd(trimesh_map_.end());
+    for (; it != itEnd; it++) {
+      delete it->second;
+    }
+  }
 
-      for (; it != itEnd; it++) {
-        delete it->second;
-      }
+  ///
+  /// Get scene bounding box.
+  ///
+  void GetBounds(RTCBounds &bounds) {
+    float bmin[3], bmax[3];
+    trimesh_scene_.GetBoundingBox(bmin, bmax);
+    bounds.lower_x = bmin[0];
+    bounds.lower_y = bmin[1];
+    bounds.lower_z = bmin[2];
+
+    bounds.upper_x = bmax[0];
+    bounds.upper_y = bmax[1];
+    bounds.upper_z = bmax[2];
+  }
+
+  ///
+  ///
+  ///
+  uint32_t NewTriMesh(size_t num_triangles, size_t num_vertices) {
+    uint32_t geom_id = geom_ids_.Allocate();
+
+    TriMesh<float> *trimesh = new TriMesh<float>(num_triangles, num_vertices);
+
+    trimesh_map_[geom_id] = trimesh;
+
+    return geom_id;
+  }
+
+  TriMesh<float> *GetTriMesh(const uint32_t geom_id) {
+    if (trimesh_map_.find(geom_id) != trimesh_map_.end()) {
+      return trimesh_map_[geom_id];
+    }
+    return NULL;
+  }
+
+  size_t NumShapes() { return trimesh_map_.size(); }
+
+  void Build() {
+    std::map<uint32_t, TriMesh<float> *>::iterator it(trimesh_map_.begin());
+    std::map<uint32_t, TriMesh<float> *>::iterator itEnd(trimesh_map_.end());
+
+    for (; it != itEnd; it++) {
+      nanosg::Node<float, TriMesh<float> > node(it->second);
+
+      trimesh_scene_.AddNode(node);
     }
 
-		///
-		/// Get scene bounding box.
-		///
-		void GetBounds(RTCBounds &bounds) {
-      float bmin[3], bmax[3];
-      trimesh_scene_.GetBoundingBox(bmin, bmax);
-      bounds.lower_x = bmin[0];
-      bounds.lower_y = bmin[1];
-      bounds.lower_z = bmin[2];
+    trimesh_scene_.Commit();
+  }
 
-      bounds.upper_x = bmax[0];
-      bounds.upper_y = bmax[1];
-      bounds.upper_z = bmax[2];
-		}
-
-    ///
-    /// 
-    ///
-    uint32_t NewTriMesh(size_t num_triangles, size_t num_vertices) {
-      uint32_t geom_id = geom_ids_.Allocate();
-
-      TriMesh<float> *trimesh = new TriMesh<float>(num_triangles, num_vertices);
-
-      trimesh_map_[geom_id] = trimesh;
-
-      return geom_id;
-    }
-
-    TriMesh<float> *GetTriMesh(const uint32_t geom_id) {
-      if (trimesh_map_.find(geom_id) != trimesh_map_.end()) {
-        return trimesh_map_[geom_id];
-      }
-      return NULL;
-    }
-
-    size_t NumShapes() {
-      return trimesh_map_.size();
-    } 
-
-    void Build() {
-      std::map<uint32_t, TriMesh<float> *>::iterator it(trimesh_map_.begin());
-      std::map<uint32_t, TriMesh<float> *>::iterator itEnd(trimesh_map_.end());
-
-      for (; it != itEnd; it++) {
-        nanosg::Node<float, TriMesh<float> > node(it->second);
-        
-        trimesh_scene_.AddNode(node);
-      }
-
-      trimesh_scene_.Commit();
-    }
-
-    bool Intersect(nanort::Ray<float> &ray, nanosg::Intersection<float> *isect_out, const bool cull_back_face) {
-      return trimesh_scene_.Traverse(ray, isect_out, cull_back_face);
-    }
-
-  private:
-		RTCSceneFlags scene_flags_;
-		RTCAlgorithmFlags algorithm_flags_;
-    HandleAllocator geom_ids_;
-
-    nanosg::Scene<float, TriMesh<float> > trimesh_scene_;
-    std::vector<nanosg::Node<float, TriMesh<float> > > trimesh_nodes_;
-
-    // Records triangle mesh for geom_id
-    std::map<uint32_t, TriMesh<float>* > trimesh_map_;
-
-};
-
-class Device
-{
-  public:
-		Device(const std::string &config) :
-			config_(config),
-			error_func_(NULL),
-			user_ptr_(NULL)
-		{
-		}
-
-		~Device() {}
-
-		void SetErrorFunction(RTCErrorFunc2 func, void *user_ptr) {
-			error_func_ = func;
-			user_ptr_ = user_ptr;
-		}
-
-		void AddScene(Scene *scene) {
-      scene_map_[scene] = scene;
-		}
-
-		bool DeleteScene(Scene *scene) {
-      if (scene_map_.find(scene) != scene_map_.end()) {
-        std::map<const Scene*, Scene *>::iterator it = scene_map_.find(scene);
-         
-        scene_map_.erase(it);
-
-        delete scene;
-        return true;
-      }
-
-      return false;
-		}
-
-	private:
-		std::string config_;
-
-		std::map<const Scene*, Scene *> scene_map_;
-
-		// Callbacks
-		RTCErrorFunc2 error_func_;
-		void *user_ptr_;
-
-};
-
-class Context
-{
-  public:
-		Context() {}
-		~Context() {
-      std::map<const Device*, Device*>::iterator it(device_map_.begin());
-      std::map<const Device*, Device*>::iterator itEnd(device_map_.end());
-
-			for (; it != itEnd; it++) {
-				delete it->second;
-        it->second = NULL;
-			}
-	  }
-
-		Device *NewDevice(const char *config) {
-			std::string cfg;
-			if (config) {
-				cfg = std::string(config);
-			}
-
-			Device *device = new Device(cfg);
-
-			device_map_[device] = device;
-
-			return device;
-		}
-
-    bool DeleteDevice(Device *device) {
-      if (device_map_.find(device) != device_map_.end()) {
-        std::map<const Device*, Device*>::iterator it = device_map_.find(device);
-        device_map_.erase(it);
-        
-        delete device;
-        return true;
-      }
-      return false;
-    }
-
-    bool DeleteScene(Scene *scene) {
-      // Assume scene is assigned to the device uniquely 
-      std::map<const Device*, Device*>::iterator it(device_map_.begin());
-      std::map<const Device*, Device*>::iterator itEnd(device_map_.end());
-
-			for (; it != itEnd; it++) {
-        if (it->second->DeleteScene(scene)) {
-          return true;
-        }
-      }
-
-      return false;
-    }
-
-		void SetError(const std::string &err) {
-			error_ = err;
-		}
+  bool Intersect(nanort::Ray<float> &ray,
+                 nanosg::Intersection<float> *isect_out,
+                 const bool cull_back_face) {
+    return trimesh_scene_.Traverse(ray, isect_out, cull_back_face);
+  }
 
  private:
-	std::string error_;
-	std::map<const Device *, Device*> device_map_;
+  RTCSceneFlags scene_flags_;
+  RTCAlgorithmFlags algorithm_flags_;
+  HandleAllocator geom_ids_;
+
+  nanosg::Scene<float, TriMesh<float> > trimesh_scene_;
+  std::vector<nanosg::Node<float, TriMesh<float> > > trimesh_nodes_;
+
+  // Records triangle mesh for geom_id
+  std::map<uint32_t, TriMesh<float> *> trimesh_map_;
+};
+
+class Device {
+ public:
+  Device(const std::string &config)
+      : config_(config), error_func_(NULL), user_ptr_(NULL) {}
+
+  ~Device() {}
+
+  void SetErrorFunction(RTCErrorFunc2 func, void *user_ptr) {
+    error_func_ = func;
+    user_ptr_ = user_ptr;
+  }
+
+  void AddScene(Scene *scene) { scene_map_[scene] = scene; }
+
+  bool DeleteScene(Scene *scene) {
+    if (scene_map_.find(scene) != scene_map_.end()) {
+      std::map<const Scene *, Scene *>::iterator it = scene_map_.find(scene);
+
+      scene_map_.erase(it);
+
+      delete scene;
+      return true;
+    }
+
+    return false;
+  }
+
+ private:
+  std::string config_;
+
+  std::map<const Scene *, Scene *> scene_map_;
+
+  // Callbacks
+  RTCErrorFunc2 error_func_;
+  void *user_ptr_;
+};
+
+class Context {
+ public:
+  Context() {}
+  ~Context() {
+    std::map<const Device *, Device *>::iterator it(device_map_.begin());
+    std::map<const Device *, Device *>::iterator itEnd(device_map_.end());
+
+    for (; it != itEnd; it++) {
+      delete it->second;
+      it->second = NULL;
+    }
+  }
+
+  Device *NewDevice(const char *config) {
+    std::string cfg;
+    if (config) {
+      cfg = std::string(config);
+    }
+
+    Device *device = new Device(cfg);
+
+    device_map_[device] = device;
+
+    return device;
+  }
+
+  bool DeleteDevice(Device *device) {
+    if (device_map_.find(device) != device_map_.end()) {
+      std::map<const Device *, Device *>::iterator it =
+          device_map_.find(device);
+      device_map_.erase(it);
+
+      delete device;
+      return true;
+    }
+    return false;
+  }
+
+  bool DeleteScene(Scene *scene) {
+    // Assume scene is assigned to the device uniquely
+    std::map<const Device *, Device *>::iterator it(device_map_.begin());
+    std::map<const Device *, Device *>::iterator itEnd(device_map_.end());
+
+    for (; it != itEnd; it++) {
+      if (it->second->DeleteScene(scene)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  void SetError(const std::string &err) { error_ = err; }
+
+ private:
+  std::string error_;
+  std::map<const Device *, Device *> device_map_;
 };
 
 #ifdef __clang__
@@ -405,9 +389,9 @@ class Context
 #endif
 
 static Context &GetContext() {
-	static Context s_ctx;
+  static Context s_ctx;
 
-	return s_ctx;
+  return s_ctx;
 }
 
 #ifdef __clang__
@@ -416,24 +400,22 @@ static Context &GetContext() {
 
 // TODO(LTE): Lock to avoid thread-racing.
 
-RTCORE_API RTCDevice rtcNewDevice(const char* cfg = NULL)
-{
-	Device *device = GetContext().NewDevice(cfg);
+RTCORE_API RTCDevice rtcNewDevice(const char *cfg = NULL) {
+  Device *device = GetContext().NewDevice(cfg);
 
-	return reinterpret_cast<RTCDevice>(device);
+  return reinterpret_cast<RTCDevice>(device);
 }
 
 RTCORE_API void rtcDeleteScene(RTCScene scene) {
-	Scene *s = reinterpret_cast<Scene *>(scene);
+  Scene *s = reinterpret_cast<Scene *>(scene);
 
   bool ret = GetContext().DeleteScene(s);
 
-	if (!ret) {
-		std::stringstream ss;
-		ss << "Invalid scene : " << scene << std::endl;
-		GetContext().SetError(ss.str());
-	}
-
+  if (!ret) {
+    std::stringstream ss;
+    ss << "Invalid scene : " << scene << std::endl;
+    GetContext().SetError(ss.str());
+  }
 }
 
 RTCORE_API void rtcDeleteDevice(RTCDevice device) {
@@ -441,39 +423,37 @@ RTCORE_API void rtcDeleteDevice(RTCDevice device) {
   (void)device;
   std::cout << "TODO: Implement rtcDeleteScene()" << std::endl;
 #else
-	Device *dev = reinterpret_cast<Device *>(device);
-	
+  Device *dev = reinterpret_cast<Device *>(device);
+
   bool ret = GetContext().DeleteDevice(dev);
 
-	if (!ret) {
-		std::stringstream ss;
-		ss << "Invalid device : " << device << std::endl;
-		GetContext().SetError(ss.str());
-	}
+  if (!ret) {
+    std::stringstream ss;
+    ss << "Invalid device : " << device << std::endl;
+    GetContext().SetError(ss.str());
+  }
 #endif
 }
 
-RTCORE_API void rtcDeviceSetErrorFunction2(RTCDevice device, RTCErrorFunc2 func, void* userPtr)
-{
-	Device *ptr = reinterpret_cast<Device *>(device);
-	ptr->SetErrorFunction(func, userPtr);
+RTCORE_API void rtcDeviceSetErrorFunction2(RTCDevice device, RTCErrorFunc2 func,
+                                           void *userPtr) {
+  Device *ptr = reinterpret_cast<Device *>(device);
+  ptr->SetErrorFunction(func, userPtr);
 }
 
-RTCORE_API RTCScene rtcDeviceNewScene (RTCDevice device, RTCSceneFlags flags, RTCAlgorithmFlags aflags)
-{
-	Scene *scene = new Scene(flags, aflags);
+RTCORE_API RTCScene rtcDeviceNewScene(RTCDevice device, RTCSceneFlags flags,
+                                      RTCAlgorithmFlags aflags) {
+  Scene *scene = new Scene(flags, aflags);
 
-	Device *d = reinterpret_cast<Device *>(device);
-	d->AddScene(scene);
-	
-	return reinterpret_cast<RTCScene>(scene);
+  Device *d = reinterpret_cast<Device *>(device);
+  d->AddScene(scene);
 
+  return reinterpret_cast<RTCScene>(scene);
 }
 
-RTCORE_API void rtcGetBounds(RTCScene scene, RTCBounds& bounds_o)
-{
-	Scene *s = reinterpret_cast<Scene *>(scene);
-	s->GetBounds(bounds_o);
+RTCORE_API void rtcGetBounds(RTCScene scene, RTCBounds &bounds_o) {
+  Scene *s = reinterpret_cast<Scene *>(scene);
+  s->GetBounds(bounds_o);
 }
 
 #ifdef __clang__
@@ -481,21 +461,20 @@ RTCORE_API void rtcGetBounds(RTCScene scene, RTCBounds& bounds_o)
 #pragma clang diagnostic ignored "-Wold-style-cast"
 #endif
 
-RTCORE_API void rtcIntersect (RTCScene scene, RTCRay& rtc_ray)
-{
-	Scene *s = reinterpret_cast<Scene *>(scene);
+RTCORE_API void rtcIntersect(RTCScene scene, RTCRay &rtc_ray) {
+  Scene *s = reinterpret_cast<Scene *>(scene);
 
   nanort::Ray<float> ray;
 
-	ray.org[0] = rtc_ray.org[0];
-	ray.org[1] = rtc_ray.org[1];
-	ray.org[2] = rtc_ray.org[2];
+  ray.org[0] = rtc_ray.org[0];
+  ray.org[1] = rtc_ray.org[1];
+  ray.org[2] = rtc_ray.org[2];
 
-	ray.dir[0] = rtc_ray.dir[0];
-	ray.dir[1] = rtc_ray.dir[1];
-	ray.dir[2] = rtc_ray.dir[2];
+  ray.dir[0] = rtc_ray.dir[0];
+  ray.dir[1] = rtc_ray.dir[1];
+  ray.dir[2] = rtc_ray.dir[2];
 
-	// TODO(LTE): .time, .mask
+  // TODO(LTE): .time, .mask
 
   ray.min_t = rtc_ray.tnear;
   ray.max_t = rtc_ray.tfar;
@@ -512,46 +491,49 @@ RTCORE_API void rtcIntersect (RTCScene scene, RTCRay& rtc_ray)
     rtc_ray.v = isect.v;
     rtc_ray.geomID = isect.node_id;
     rtc_ray.primID = isect.prim_id;
-    rtc_ray.instID = RTC_INVALID_GEOMETRY_ID; // Instancing is not yet supported.
+    rtc_ray.instID =
+        RTC_INVALID_GEOMETRY_ID;  // Instancing is not yet supported.
   } else {
     rtc_ray.geomID = RTC_INVALID_GEOMETRY_ID;
     rtc_ray.primID = RTC_INVALID_GEOMETRY_ID;
     rtc_ray.instID = RTC_INVALID_GEOMETRY_ID;
   }
 
-	(void)ray;
+  (void)ray;
 }
 
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
 
-RTCORE_API unsigned rtcNewTriangleMesh (RTCScene scene,                    //!< the scene the mesh belongs to
-                                        RTCGeometryFlags flags,            //!< geometry flags
-                                        size_t numTriangles,               //!< number of triangles
-                                        size_t numVertices,                //!< number of vertices
-                                        size_t numTimeSteps = 1            //!< number of motion blur time steps
-  ) {
-
+RTCORE_API unsigned rtcNewTriangleMesh(
+    RTCScene scene,          //!< the scene the mesh belongs to
+    RTCGeometryFlags flags,  //!< geometry flags
+    size_t numTriangles,     //!< number of triangles
+    size_t numVertices,      //!< number of vertices
+    size_t numTimeSteps = 1  //!< number of motion blur time steps
+    ) {
   if (numTimeSteps != 1) {
     std::stringstream ss;
-    ss << "[rtcNewTriMesh] Motion blur is not supported. numTimeSteps : " << numTimeSteps << std::endl;
+    ss << "[rtcNewTriMesh] Motion blur is not supported. numTimeSteps : "
+       << numTimeSteps << std::endl;
     GetContext().SetError(ss.str());
-    return 0; 
+    return 0;
   }
 
   if (numTriangles < 1) {
     std::stringstream ss;
-    ss << "[rtcNewTriMesh] Invalid numTriangles : " << numTriangles << std::endl;
+    ss << "[rtcNewTriMesh] Invalid numTriangles : " << numTriangles
+       << std::endl;
     GetContext().SetError(ss.str());
-    return 0; 
+    return 0;
   }
 
   if (numVertices < 1) {
     std::stringstream ss;
     ss << "[rtcNewTriMesh] Invalid numVertices : " << numVertices << std::endl;
     GetContext().SetError(ss.str());
-    return 0; 
+    return 0;
   }
 
   // TODO(LTE): Acquire lock?
@@ -560,19 +542,20 @@ RTCORE_API unsigned rtcNewTriangleMesh (RTCScene scene,                    //!< 
   const uint32_t geom_id = s->NewTriMesh(numTriangles, numVertices);
 
   // TODO(LTE): Support flags.
-	(void)flags;
+  (void)flags;
 
-	return geom_id;
+  return geom_id;
 }
 
-RTCORE_API void* rtcMapBuffer(RTCScene scene, unsigned geomID, RTCBufferType type) {
+RTCORE_API void *rtcMapBuffer(RTCScene scene, unsigned geomID,
+                              RTCBufferType type) {
   if (type == RTC_VERTEX_BUFFER) {
   } else if (type == RTC_INDEX_BUFFER) {
   } else {
     std::stringstream ss;
     ss << "[rtcMapBuffer] Unsupported type : " << type << std::endl;
     GetContext().SetError(ss.str());
-    return NULL; 
+    return NULL;
   }
 
   // TODO(LTE): Acquire lock?
@@ -587,77 +570,75 @@ RTCORE_API void* rtcMapBuffer(RTCScene scene, unsigned geomID, RTCBufferType typ
     }
   } else {
     std::stringstream ss;
-    ss << "[rtcMapBuffer] geomID : " << geomID << " not found in the scene." << std::endl;
+    ss << "[rtcMapBuffer] geomID : " << geomID << " not found in the scene."
+       << std::endl;
     GetContext().SetError(ss.str());
-    return NULL; 
+    return NULL;
   }
 
-	return NULL; // never reach here.
+  return NULL;  // never reach here.
 }
 
-RTCORE_API void rtcUnmapBuffer(RTCScene scene, unsigned geomID, RTCBufferType type) {
+RTCORE_API void rtcUnmapBuffer(RTCScene scene, unsigned geomID,
+                               RTCBufferType type) {
   if (type == RTC_VERTEX_BUFFER) {
   } else if (type == RTC_INDEX_BUFFER) {
   } else {
     std::stringstream ss;
     ss << "[rtcUnmapBuffer] Unsupported type : " << type << std::endl;
     GetContext().SetError(ss.str());
-    return; 
+    return;
   }
   // TODO(LTE): Release lock?
-	(void)scene;
-	(void)geomID;
+  (void)scene;
+  (void)geomID;
 }
 
-RTCORE_API unsigned rtcNewInstance2 (RTCScene target,                  //!< the scene the instance belongs to
-                                     RTCScene source,                  //!< the scene to instantiate
-                                     size_t numTimeSteps = 1) {         //!< number of timesteps, one matrix per timestep
-	if (numTimeSteps != 1) {
+RTCORE_API unsigned rtcNewInstance2(
+    RTCScene target,  //!< the scene the instance belongs to
+    RTCScene source,  //!< the scene to instantiate
+    size_t numTimeSteps =
+        1) {  //!< number of timesteps, one matrix per timestep
+  if (numTimeSteps != 1) {
     std::stringstream ss;
     ss << "[rtcNewInstance2] numTimeSteps must be 1" << std::endl;
     GetContext().SetError(ss.str());
-    return 0; 
-	}
+    return 0;
+  }
 
-	// TODO(LTE): Implement
-	(void)target;
-	(void)source;
+  // TODO(LTE): Implement
+  (void)target;
+  (void)source;
+
+  return 0;
 }
 
-
-RTCORE_API void rtcSetTransform2 (RTCScene scene,                         //!< scene handle
-                                  unsigned int geomID,                    //!< ID of geometry 
-                                  RTCMatrixType layout,                   //!< layout of transformation matrix
-                                  const float* xfm,                       //!< pointer to transformation matrix
-                                  size_t timeStep = 0                     //!< timestep to set the matrix for 
-  ) {
-
-	// TODO(LTE): Implement
-	(void)scene;
-	(void)geomID;
-	(void)layout;
-	(void)xfm;
-	(void)timeStep;
-
+RTCORE_API void rtcSetTransform2(
+    RTCScene scene,        //!< scene handle
+    unsigned int geomID,   //!< ID of geometry
+    RTCMatrixType layout,  //!< layout of transformation matrix
+    const float *xfm,      //!< pointer to transformation matrix
+    size_t timeStep = 0    //!< timestep to set the matrix for
+    ) {
+  // TODO(LTE): Implement
+  (void)scene;
+  (void)geomID;
+  (void)layout;
+  (void)xfm;
+  (void)timeStep;
 }
 
-
-RTCORE_API void rtcUpdate (RTCScene scene, unsigned geomID) 
-{
-	// TODO(LTE): Implement
-	(void)scene;
-	(void)geomID;
+RTCORE_API void rtcUpdate(RTCScene scene, unsigned geomID) {
+  // TODO(LTE): Implement
+  (void)scene;
+  (void)geomID;
 }
 
-RTCORE_API void rtcCommit (RTCScene scene) {
-
+RTCORE_API void rtcCommit(RTCScene scene) {
   Scene *s = reinterpret_cast<Scene *>(scene);
   assert(s);
 
   s->Build();
 }
 
-
-} // namespace nanort_embree2
-
-
+}  // namespace nanort_embree2
