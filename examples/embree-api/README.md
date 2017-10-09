@@ -19,7 +19,7 @@ Triangle + single ray intersection only.
 
 ## How to use
 
-Simply copy embree2 header files(`include/embree2/`), `nanort.h`, `nanosg.h` and `nanort-embree.cc` to your project.
+Simply copy embree2 header files(`include/embree2/`), `nanort.h`(`../../`), `nanosg.h`(`../nanosg/`) and `nanort-embree.cc` to your project.
 
 ## Notes
 
