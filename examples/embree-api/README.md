@@ -35,3 +35,7 @@ Application must care of calling Embree API with proper locking(except for `rtcI
 * [ ] Stream intersection API
 * [ ] Ray stream API
 * [ ] Multi-threading support.
+
+## Licenses
+
+* embree2 header files : Copyright 2009-2017 Intel Corporation. Apache 2.0 license.
