@@ -1,6 +1,6 @@
 # Aether-render
 
-Experimental Aether with NanoRT.
+Experimental renderer using Aether https://people.csail.mit.edu/lukea/aether/ and NanoRT.
 
 ## Status
 
@@ -8,8 +8,9 @@ Just finished build setup. No rendering code yet.
 
 ## Requirements
 
-* conan https://conan.io
-  * For installing Boost 1.64 and Eigen3
+* Boost 1.64(Boost hana required. Boost 1.62 may work. Boost 1.61 doesn't work)
+* Eigen3
+* C++1z compiler
 * CMake 3.1 or later
 * clang 3.8 or later
 
@@ -19,6 +20,8 @@ Just finished build setup. No rendering code yet.
 * clang-cl.exe 4.0.1 + Visual Studio 2017.
 
 ## Setup
+
+Clone `Aether` code to this directory.
 
 ```
 $ git clone https://github.com/aekul/aether.git
@@ -30,7 +33,7 @@ $ git clone https://github.com/aekul/aether.git
 aether-render/
 .
 ├── aether
-``
+...
 
 ## Build(Linux)
 
@@ -43,11 +46,13 @@ $ cmake --build build/
 
 ## Build(Windows)
 
-Set path to clang/LLVM, Boost and eigen in `vcbuild-clang-cl.bat`, then
+Set path to clang/LLVM, Boost and Eigen in `vcbuild-clang-cl.bat`, then
 
 ```
 > vcbuild-clang-cl.bat
 ```
+
+Then open Visual Studio 2017 to build the code.
 
 ## Run(Linux)
 
