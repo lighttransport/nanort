@@ -81,6 +81,7 @@ THE SOFTWARE.
 #define SHOW_BUFFER_DEPTH (3)
 #define SHOW_BUFFER_TEXCOORD (4)
 #define SHOW_BUFFER_VARYCOORD (5)
+#define SHOW_BUFFER_VERTEXCOLOR (6)
 
 b3gDefaultOpenGLWindow* window = 0;
 int gWidth = 512;
@@ -113,6 +114,7 @@ std::vector<float> gPositionRGBA;   // For visualizing position
 std::vector<float> gDepthRGBA;      // For visualizing depth
 std::vector<float> gTexCoordRGBA;   // For visualizing texcoord
 std::vector<float> gVaryCoordRGBA;  // For visualizing varycentric coord
+std::vector<float> gVertexColorRGBA;  // For visualizing vertex color
 
 void RequestRender() {
   {
@@ -204,11 +206,15 @@ void InitRender(example::RenderConfig* rc) {
   gVaryCoordRGBA.resize(rc->width * rc->height * 4);
   std::fill(gVaryCoordRGBA.begin(), gVaryCoordRGBA.end(), 0.0);
 
+  gVertexColorRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gVertexColorRGBA.begin(), gVertexColorRGBA.end(), 0.0);
+
   rc->normalImage = &gNormalRGBA.at(0);
   rc->positionImage = &gPositionRGBA.at(0);
   rc->depthImage = &gDepthRGBA.at(0);
   rc->texcoordImage = &gTexCoordRGBA.at(0);
   rc->varycoordImage = &gVaryCoordRGBA.at(0);
+  rc->vertexColorImage = &gVertexColorRGBA.at(0);
 
   trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
@@ -380,6 +386,10 @@ void Display(int width, int height) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gVaryCoordRGBA[i];
     }
+  } else if (gShowBufferMode == SHOW_BUFFER_VERTEXCOLOR) {
+    for (size_t i = 0; i < buf.size(); i++) {
+      buf[i] = gVertexColorRGBA[i];
+    }
   }
 
   glRasterPos2i(-1, -1);
@@ -520,6 +530,8 @@ int main(int argc, char** argv) {
       ImGui::RadioButton("texcoord", &gShowBufferMode, SHOW_BUFFER_TEXCOORD);
       ImGui::SameLine();
       ImGui::RadioButton("varycoord", &gShowBufferMode, SHOW_BUFFER_VARYCOORD);
+      ImGui::SameLine();
+      ImGui::RadioButton("vertex col", &gShowBufferMode, SHOW_BUFFER_VERTEXCOLOR);
 
       ImGui::InputFloat("show pos scale", &gShowPositionScale);
 

@@ -26,6 +26,7 @@ typedef struct {
   float *depthImage;
   float *texcoordImage;
   float *varycoordImage;
+  float *vertexColorImage;
 
   // Scene input info
   std::string obj_filename;

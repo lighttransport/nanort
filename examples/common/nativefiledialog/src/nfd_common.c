@@ -132,7 +132,7 @@ size_t NFDi_UTF8_Strlen( const nfdchar_t *str )
 		else
         {
             /* In any other case this is not valid UTF-8. */
-			return -1;
+			return (size_t)(-1);
         }
 		++i;
 	}

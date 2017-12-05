@@ -196,6 +196,7 @@ See `examples` directory for example renderer using `NanoRT`.
 * [x] [examples/par_msquare](examples/par_msquare) Render heightfield by converting it to meshes using par_msquare(marching squares)
 * [x] [examples/las](examples/las) Visualize LiDAR(LAS) point cloud as sphere geometry.
 * [x] [examples/double_precision](examples/double_precision) Double precision triangle geometry and BVH.
+* [x] [examples/embree-api](examples/embree-api) NanoRT implementation of Embree API.
 
 ### Custom geometry
 
@@ -229,6 +230,8 @@ PR are always welcome!
   * [ ] Efficient Ray Tracing Kernels for Modern CPU Architectures http://jcgt.org/published/0004/04/05/
   * [ ] ARM NEON SIMD
   * [ ] Intel SSE SIMD
+* [ ] Better cmake build.
+* [ ] Implement more Embree compatible API.
 * [ ] Scene graph support.
   * [x] NanoSG, Minimal scene graph library. [examples/nanosg](examples/nanosg)
   * [ ] Instancing support.
@@ -246,6 +249,7 @@ PR are always welcome!
 * [ ] Efficient BVH
   * [ ] Spatial split BVH
 * [ ] Motion blur
+  * [ ] STBVH: A Spatial-Temporal BVH for Efficient Multi-Segment Motion Blur http://www.highperformancegraphics.org/2017/program/
 * [ ] Accurate ray curve intersection
 * [x] Example bi-directional path tracing renderer by @tatsy.
 

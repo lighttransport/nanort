@@ -4,8 +4,32 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wreserved-id-macro"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wvariadic-macros"
+#pragma clang diagnostic ignored "-Wc++11-extensions"
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#if __has_warning("-Wdouble-promotion")
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#endif
+#if __has_warning("-Wcomma")
+#pragma clang diagnostic ignored "-Wcomma"
+#endif
+#endif
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #include <iostream>
 
@@ -40,7 +64,7 @@ static int LoadTexture(const std::string& filename, std::vector<Texture> *textur
     texture.height = h;
     texture.components = n;
 
-    size_t n_elem = w * h * n;
+    size_t n_elem = size_t(w * h * n);
     texture.image = new unsigned char[n_elem];
     for (size_t i = 0; i < n_elem; i++) {
       texture.image[i] = data[i];
@@ -125,7 +149,7 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
   // TODO(LTE): Implement tangents and binormals
 
   for (size_t i = 0; i < shapes.size(); i++) {
-    Mesh<float> mesh;
+    Mesh<float> mesh(/* stride */sizeof(float) * 3);
 
     mesh.name = shapes[i].name;
 
@@ -139,9 +163,9 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
     for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
     
       // reorder vertices. may create duplicated vertices.
-      unsigned int f0 = shapes[i].mesh.indices[3 * f + 0].vertex_index;
-      unsigned int f1 = shapes[i].mesh.indices[3 * f + 1].vertex_index;
-      unsigned int f2 = shapes[i].mesh.indices[3 * f + 2].vertex_index;
+      size_t f0 = size_t(shapes[i].mesh.indices[3 * f + 0].vertex_index);
+      size_t f1 = size_t(shapes[i].mesh.indices[3 * f + 1].vertex_index);
+      size_t f2 = size_t(shapes[i].mesh.indices[3 * f + 2].vertex_index);
 
       mesh.vertices[9 * f + 0] = scale * attrib.vertices[3 * f0 + 0];
       mesh.vertices[9 * f + 1] = scale * attrib.vertices[3 * f0 + 1];
@@ -159,16 +183,16 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
       mesh.faces[3 * f + 1] = static_cast<unsigned int>(3 * f + 1);
       mesh.faces[3 * f + 2] = static_cast<unsigned int>(3 * f + 2);
 
-      mesh.material_ids[f] = shapes[i].mesh.material_ids[f];
+      mesh.material_ids[f] = static_cast<unsigned int>(shapes[i].mesh.material_ids[f]);
     }
 
     if (attrib.normals.size() > 0) {
       for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
-        int f0, f1, f2;
+        size_t f0, f1, f2;
 
-        f0 = shapes[i].mesh.indices[3 * f + 0].normal_index;
-        f1 = shapes[i].mesh.indices[3 * f + 1].normal_index;
-        f2 = shapes[i].mesh.indices[3 * f + 2].normal_index;
+        f0 = size_t(shapes[i].mesh.indices[3 * f + 0].normal_index);
+        f1 = size_t(shapes[i].mesh.indices[3 * f + 1].normal_index);
+        f2 = size_t(shapes[i].mesh.indices[3 * f + 2].normal_index);
 
         if (f0 > 0 && f1 > 0 && f2 > 0) {
           float n0[3], n1[3], n2[3];
@@ -206,9 +230,9 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
           mesh.facevarying_normals[3 * (3 * f + 2) + 2] =
               n2[2];
         } else {  // face contains invalid normal index. calc geometric normal.
-          f0 = shapes[i].mesh.indices[3 * f + 0].vertex_index;
-          f1 = shapes[i].mesh.indices[3 * f + 1].vertex_index;
-          f2 = shapes[i].mesh.indices[3 * f + 2].vertex_index;
+          f0 = size_t(shapes[i].mesh.indices[3 * f + 0].vertex_index);
+          f1 = size_t(shapes[i].mesh.indices[3 * f + 1].vertex_index);
+          f2 = size_t(shapes[i].mesh.indices[3 * f + 2].vertex_index);
 
           float3 v0, v1, v2;
 
@@ -252,11 +276,11 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
     } else {
       // calc geometric normal
       for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
-        int f0, f1, f2;
+        size_t f0, f1, f2;
 
-        f0 = shapes[i].mesh.indices[3 * f + 0].vertex_index;
-        f1 = shapes[i].mesh.indices[3 * f + 1].vertex_index;
-        f2 = shapes[i].mesh.indices[3 * f + 2].vertex_index;
+        f0 = size_t(shapes[i].mesh.indices[3 * f + 0].vertex_index);
+        f1 = size_t(shapes[i].mesh.indices[3 * f + 1].vertex_index);
+        f2 = size_t(shapes[i].mesh.indices[3 * f + 2].vertex_index);
 
         float3 v0, v1, v2;
 
@@ -291,11 +315,11 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
 
     if (attrib.texcoords.size() > 0) {
       for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
-        int f0, f1, f2;
+        size_t f0, f1, f2;
 
-        f0 = shapes[i].mesh.indices[3 * f + 0].texcoord_index;
-        f1 = shapes[i].mesh.indices[3 * f + 1].texcoord_index;
-        f2 = shapes[i].mesh.indices[3 * f + 2].texcoord_index;
+        f0 = size_t(shapes[i].mesh.indices[3 * f + 0].texcoord_index);
+        f1 = size_t(shapes[i].mesh.indices[3 * f + 1].texcoord_index);
+        f2 = size_t(shapes[i].mesh.indices[3 * f + 2].texcoord_index);
 
         if (f0 > 0 && f1 > 0 && f2 > 0) {
           float3 n0, n1, n2;

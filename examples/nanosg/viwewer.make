@@ -15,7 +15,7 @@ ifeq ($(config),release_x64)
   TARGETDIR = bin/x64/Release
   TARGET = $(TARGETDIR)/view.exe
   OBJDIR = obj/x64/Release
-  DEFINES += -DGLEW_STATIC -DNOMINMAX -DUSE_NATIVEFILEDIALOG
+  DEFINES += -DGLEW_STATIC -DNOMINMAX -DUSE_NATIVEFILEDIALOG -DIMGUI_DISABLE_WIN32_DEFAULT_IME_FUNCS
   INCLUDES += -I../common/ThirdPartyLibs/Glew -I. -I../.. -I../common -I../common/imgui -I../common/glm -I../common/nativefiledialog/src/include
   FORCE_INCLUDE +=
   ALL_CPPFLAGS += $(CPPFLAGS) -MMD -MP $(DEFINES) $(INCLUDES)

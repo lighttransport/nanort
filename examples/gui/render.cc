@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2015 - 2016 Light Transport Entertainment, Inc.
+Copyright (c) 2015 - 2017 Light Transport Entertainment, Inc.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -102,7 +102,7 @@ typedef struct {
   std::vector<float> facevarying_binormals;  /// [xyz] * 3(triangle) * num_faces
   std::vector<float> facevarying_uvs;        /// [xy]  * 3(triangle) * num_faces
   std::vector<float>
-      facevarying_vertex_colors;           /// [xyz] * 3(triangle) * num_faces
+      vertex_colors;                         /// [rgb] * num_vertices
   std::vector<unsigned int> faces;         /// triangle x num_faces
   std::vector<unsigned int> material_ids;  /// index x num_faces
 } Mesh;
@@ -395,6 +395,7 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   mesh.num_faces = num_faces;
   mesh.num_vertices = num_vertices;
   mesh.vertices.resize(num_vertices * 3, 0.0f);
+  mesh.vertex_colors.resize(num_vertices * 3, 1.0f);
   mesh.faces.resize(num_faces * 3, 0);
   mesh.material_ids.resize(num_faces, 0);
   mesh.facevarying_normals.resize(num_faces * 3 * 3, 0.0f);
@@ -409,6 +410,10 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
 
   for (size_t i = 0; i < attrib.vertices.size(); i++) {
     mesh.vertices[i] = scale * attrib.vertices[i];
+  }
+
+  for (size_t i = 0; i < attrib.colors.size(); i++) {
+    mesh.vertex_colors[i] = attrib.colors[i];
   }
 
   for (size_t i = 0; i < shapes.size(); i++) {
@@ -997,6 +1002,32 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
                 isect.t;
             config.depthImage[4 * (y * config.width + x) + 3] = 1.0f;
 
+            float3 vcol(1.0f, 1.0f, 1.0f);
+            if (gMesh.vertex_colors.size() > 0) {
+              unsigned int f0, f1, f2;
+              f0 = gMesh.faces[3 * prim_id + 0];
+              f1 = gMesh.faces[3 * prim_id + 1];
+              f2 = gMesh.faces[3 * prim_id + 2];
+
+              float3 c0, c1, c2;
+              c0[0] = gMesh.vertex_colors[3 * f0 + 0];
+              c0[1] = gMesh.vertex_colors[3 * f0 + 1];
+              c0[2] = gMesh.vertex_colors[3 * f0 + 2];
+              c1[0] = gMesh.vertex_colors[3 * f1 + 0];
+              c1[1] = gMesh.vertex_colors[3 * f1 + 1];
+              c1[2] = gMesh.vertex_colors[3 * f1 + 2];
+              c2[0] = gMesh.vertex_colors[3 * f2 + 0];
+              c2[1] = gMesh.vertex_colors[3 * f2 + 1];
+              c2[2] = gMesh.vertex_colors[3 * f2 + 2];
+
+              vcol = Lerp3(c0, c1, c2, isect.u,
+                         isect.v);
+
+              config.vertexColorImage[4 * (y * config.width + x) + 0] = vcol[0];
+              config.vertexColorImage[4 * (y * config.width + x) + 1] = vcol[1];
+              config.vertexColorImage[4 * (y * config.width + x) + 2] = vcol[2];
+            }
+
             float3 UV;
             if (gMesh.facevarying_uvs.size() > 0) {
               float3 uv0, uv1, uv2;
@@ -1095,6 +1126,10 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               config.varycoordImage[4 * (y * config.width + x) + 1] = 0.0f;
               config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
               config.varycoordImage[4 * (y * config.width + x) + 3] = 0.0f;
+              config.vertexColorImage[4 * (y * config.width + x) + 0] = 1.0f;
+              config.vertexColorImage[4 * (y * config.width + x) + 1] = 1.0f;
+              config.vertexColorImage[4 * (y * config.width + x) + 2] = 1.0f;
+              config.vertexColorImage[4 * (y * config.width + x) + 3] = 1.0f;
             }
           }
         }
