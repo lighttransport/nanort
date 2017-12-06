@@ -33,9 +33,17 @@
 
 #include <iostream>
 
+
+#include <unordered_map>
+#define USE_TEX_CACHE 1
+
+
 namespace example {
 
 typedef nanort::real3<float> float3;
+
+std::unordered_map<std::string,int> hashed_tex;
+
 
 inline void CalcNormal(float3& N, float3 v0, float3 v1, float3 v2) {
   float3 v10 = v1 - v0;
@@ -52,11 +60,23 @@ static std::string GetBaseDir(const std::string &filepath) {
 }
 
 static int LoadTexture(const std::string& filename, std::vector<Texture> *textures) {
+int idx;
+	
   if (filename.empty()) return -1;
 
   std::cout << "  Loading texture : " << filename << std::endl;
   Texture texture;
 
+  //tigra: find in cache. get index
+  if(USE_TEX_CACHE)
+  {
+	if(hashed_tex.find(filename) != hashed_tex.end())
+	  {
+		  puts("from cache");
+		  return hashed_tex[filename];
+	  }
+  } 
+  
   int w, h, n;
   unsigned char* data = stbi_load(filename.c_str(), &w, &h, &n, 0);
   if (data) {
@@ -73,7 +93,16 @@ static int LoadTexture(const std::string& filename, std::vector<Texture> *textur
     free(data);
 
     textures->push_back(texture);
-    return int(textures->size()) - 1;
+	
+	idx = int(textures->size()) - 1;
+	
+	//tigra: store index to cache
+	if(USE_TEX_CACHE)
+	{
+		hashed_tex[filename] = idx;
+	}
+	
+    return idx;
   }
 
   std::cout << "  Failed to load : " << filename << std::endl;
