@@ -706,6 +706,9 @@ void BuildSceneItems(
 
 }
 
+//tigra: add default material
+  example::Material default_material;
+
 int main(int argc, char** argv) {
   std::string config_filename = "config.json";
 
@@ -728,6 +731,15 @@ int main(int argc, char** argv) {
     std::vector<example::Mesh<float> > meshes;
     std::vector<example::Material> materials;
     std::vector<example::Texture> textures;
+  
+	  //tigra: set default material to 95% white diffuse
+	  default_material.diffuse[0] = 0.95f;
+	  default_material.diffuse[1] = 0.95f;
+	  default_material.diffuse[2] = 0.95f;
+	  
+	  default_material.specular[0] = 0;
+	  default_material.specular[1] = 0;
+	  default_material.specular[2] = 0;
 
     bool ret = LoadObj(gRenderConfig.obj_filename, gRenderConfig.scene_scale, &meshes, &materials, &textures);
     if (!ret) {
@@ -736,6 +748,7 @@ int main(int argc, char** argv) {
     }
 
     gAsset.materials = materials;
+    gAsset.default_material = default_material;
     gAsset.textures = textures;
 
     for (size_t n = 0; n < meshes.size(); n++) {

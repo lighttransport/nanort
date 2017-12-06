@@ -170,6 +170,12 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
 		  assert((shapes[i].mesh.indices.size() % 3) == 0);
 
 		  total_num_faces += shapes[i].mesh.indices.size() / 3;
+		  
+		  //tigra: empty name convert to _id
+		  if(shapes[i].name.length()==0) {
+			  shapes[i].name = "_"+ std::to_string(i);
+			  std::cout << "  EMPTY shape[" << i << "].name, new : " << shapes[i].name << std::endl;		  
+		  }
 	  }
 	  std::cout << "[LoadOBJ] # of faces: " << total_num_faces << std::endl;
 	  std::cout << "[LoadOBJ] # of vertices: " << total_num_vertices << std::endl;
