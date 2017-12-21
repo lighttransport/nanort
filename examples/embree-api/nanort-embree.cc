@@ -34,6 +34,9 @@ THE SOFTWARE.
 #pragma clang diagnostic ignored "-Wvariadic-macros"
 #pragma clang diagnostic ignored "-Wc++11-extensions"
 #pragma clang diagnostic ignored "-Wexit-time-destructors"
+#if __has_warning("-Wcast-qual")
+#pragma clang diagnostic ignored "-Wcast-qual"
+#endif
 #endif
 
 #ifdef _MSC_VER

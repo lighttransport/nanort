@@ -2,11 +2,14 @@ set(BUILD_TARGET "gui")
 
 find_package(OpenGL REQUIRED)
 
-if(NOT MSVC)
-find_package(X11 REQUIRED)
+if(WIN32)
+    # nothing.
+elseif(APPLE)
+    find_library(COCOA Cocoa REQUIRED)
+else()
+    find_package(X11 REQUIRED)
 endif()
 
-#include_directories(${GLEW_INCLUDE_DIR})
 include_directories(${OPENGL_INCLUDE_DIR})
 include_directories(${X11_INCLUDE_DIR})
 
@@ -48,10 +51,18 @@ target_link_libraries(
     ${OPENGL_LIBRARIES}
 )
 
-if(NOT MSVC)
-target_link_libraries(
-    ${X11_LIBRARIES}
-)
+if(WIN32)
+    # nothing.
+elseif(APPLE)
+    target_link_libraries(
+        ${BUILD_TARGET}
+        ${COCOA}
+    )
+else()
+    target_link_libraries(
+        ${BUILD_TARGET}
+        ${X11_LIBRARIES}
+    )
 endif()
 
 source_group("Source Files" FILES ${SOURCES})

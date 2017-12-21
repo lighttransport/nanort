@@ -22,6 +22,9 @@ namespace example {
 struct Asset {
   std::vector<Mesh<float> > meshes;
   std::vector<Material> materials;
+  
+  //tigra: add default material
+  Material default_material;
   std::vector<Texture> textures;
 };
 

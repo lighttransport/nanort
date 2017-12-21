@@ -241,6 +241,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
   //if (!gAccel.IsValid()) {
   //  return false;
   //}
+  
+  
+  
 
   int width = config.width;
   int height = config.height;
@@ -335,6 +338,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             const std::vector<Material> &materials = asset.materials;
             const std::vector<Texture> &textures = asset.textures;
             const Mesh<float> &mesh = asset.meshes[isect.node_id];
+			
+			//tigra: add default material
+			const Material &default_material = asset.default_material;
 
             float3 p;
             p[0] =
@@ -425,26 +431,49 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             // Fetch texture
             unsigned int material_id =
                 mesh.material_ids[isect.prim_id];
+				
+			//printf("material_id=%d materials=%lld\n", material_id, materials.size());
 
             float diffuse_col[3];
-            int diffuse_texid = materials[material_id].diffuse_texid;
-            if (diffuse_texid >= 0) {
-              FetchTexture(textures[diffuse_texid], UV[0], UV[1], diffuse_col);
-            } else {
-              diffuse_col[0] = materials[material_id].diffuse[0];
-              diffuse_col[1] = materials[material_id].diffuse[1];
-              diffuse_col[2] = materials[material_id].diffuse[2];
-            }
 
             float specular_col[3];
-            int specular_texid = materials[material_id].specular_texid;
-            if (specular_texid >= 0) {
-              FetchTexture(textures[specular_texid], UV[0], UV[1], specular_col);
-            } else {
-              specular_col[0] = materials[material_id].specular[0];
-              specular_col[1] = materials[material_id].specular[1];
-              specular_col[2] = materials[material_id].specular[2];
-            }
+			
+			//tigra: material_id is ok
+			if(material_id>=0 && material_id<materials.size())
+			{
+				//printf("ok mat\n");
+				
+				int diffuse_texid = materials[material_id].diffuse_texid;
+				if (diffuse_texid >= 0) {
+				  FetchTexture(textures[diffuse_texid], UV[0], UV[1], diffuse_col);
+				} else {
+				  diffuse_col[0] = materials[material_id].diffuse[0];
+				  diffuse_col[1] = materials[material_id].diffuse[1];
+				  diffuse_col[2] = materials[material_id].diffuse[2];
+				}
+				
+				int specular_texid = materials[material_id].specular_texid;
+				if (specular_texid >= 0) {
+				  FetchTexture(textures[specular_texid], UV[0], UV[1], specular_col);
+				} else {
+				  specular_col[0] = materials[material_id].specular[0];
+				  specular_col[1] = materials[material_id].specular[1];
+				  specular_col[2] = materials[material_id].specular[2];
+				}
+			}
+			else
+				//tigra: wrong material_id, use default_material
+				{
+					
+				//printf("default_material\n");
+				
+					diffuse_col[0] = default_material.diffuse[0];
+					diffuse_col[1] = default_material.diffuse[1];
+					diffuse_col[2] = default_material.diffuse[2];
+					specular_col[0] = default_material.specular[0];
+					specular_col[1] = default_material.specular[1];
+					specular_col[2] = default_material.specular[2];
+				}
 
             // Simple shading
             float NdotV = fabsf(vdot(N, dir));
