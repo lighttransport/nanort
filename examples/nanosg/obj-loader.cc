@@ -1,5 +1,5 @@
 #include "obj-loader.h"
-#include "../../nanort.h" // for float3
+#include "../../nanort.h"  // for float3
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
@@ -22,6 +22,9 @@
 #if __has_warning("-Wcomma")
 #pragma clang diagnostic ignored "-Wcomma"
 #endif
+#if __has_warning("-Wcast-qual")
+#pragma clang diagnostic ignored "-Wcast-qual"
+#endif
 #endif
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -33,19 +36,36 @@
 
 #include <iostream>
 
-
+#ifdef NANOSG_USE_CXX11
 #include <unordered_map>
-#define USE_TEX_CACHE 1
+#else
+#include <map>
+#endif
 
+#define USE_TEX_CACHE 1
 
 namespace example {
 
 typedef nanort::real3<float> float3;
 
-std::unordered_map<std::string,int> hashed_tex;
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wglobal-constructors"
+#endif
 
+// TODO(LTE): Remove global static definition.
+#ifdef NANOSG_USE_CXX11
+static std::unordered_map<std::string, int> hashed_tex;
+#else
+static std::map<std::string, int> hashed_tex;
+#endif
 
-inline void CalcNormal(float3& N, float3 v0, float3 v1, float3 v2) {
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+inline void CalcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
   float3 v10 = v1 - v0;
   float3 v20 = v2 - v0;
 
@@ -59,26 +79,25 @@ static std::string GetBaseDir(const std::string &filepath) {
   return "";
 }
 
-static int LoadTexture(const std::string& filename, std::vector<Texture> *textures) {
-int idx;
-	
+static int LoadTexture(const std::string &filename,
+                       std::vector<Texture> *textures) {
+  int idx;
+
   if (filename.empty()) return -1;
 
   std::cout << "  Loading texture : " << filename << std::endl;
   Texture texture;
 
-  //tigra: find in cache. get index
-  if(USE_TEX_CACHE)
-  {
-	if(hashed_tex.find(filename) != hashed_tex.end())
-	  {
-		  puts("from cache");
-		  return hashed_tex[filename];
-	  }
-  } 
-  
+  // tigra: find in cache. get index
+  if (USE_TEX_CACHE) {
+    if (hashed_tex.find(filename) != hashed_tex.end()) {
+      puts("from cache");
+      return hashed_tex[filename];
+    }
+  }
+
   int w, h, n;
-  unsigned char* data = stbi_load(filename.c_str(), &w, &h, &n, 0);
+  unsigned char *data = stbi_load(filename.c_str(), &w, &h, &n, 0);
   if (data) {
     texture.width = w;
     texture.height = h;
@@ -93,15 +112,14 @@ int idx;
     free(data);
 
     textures->push_back(texture);
-	
-	idx = int(textures->size()) - 1;
-	
-	//tigra: store index to cache
-	if(USE_TEX_CACHE)
-	{
-		hashed_tex[filename] = idx;
-	}
-	
+
+    idx = int(textures->size()) - 1;
+
+    // tigra: store index to cache
+    if (USE_TEX_CACHE) {
+      hashed_tex[filename] = idx;
+    }
+
     return idx;
   }
 
@@ -109,48 +127,52 @@ int idx;
   return -1;
 }
 
-static void ComputeBoundingBoxOfMesh(float bmin[3], float bmax[3], const example::Mesh<float> &mesh)
-{
+static void ComputeBoundingBoxOfMesh(float bmin[3], float bmax[3],
+                                     const example::Mesh<float> &mesh) {
   bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<float>::max();
   bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<float>::max();
 
   for (size_t i = 0; i < mesh.vertices.size() / 3; i++) {
-    bmin[0] = std::min(bmin[0], mesh.vertices[3 * i + 0]);    
-    bmin[1] = std::min(bmin[1], mesh.vertices[3 * i + 1]);    
-    bmin[2] = std::min(bmin[1], mesh.vertices[3 * i + 2]);    
+    bmin[0] = std::min(bmin[0], mesh.vertices[3 * i + 0]);
+    bmin[1] = std::min(bmin[1], mesh.vertices[3 * i + 1]);
+    bmin[2] = std::min(bmin[1], mesh.vertices[3 * i + 2]);
 
-    bmax[0] = std::max(bmax[0], mesh.vertices[3 * i + 0]);    
-    bmax[1] = std::max(bmax[1], mesh.vertices[3 * i + 1]);    
-    bmax[2] = std::max(bmax[2], mesh.vertices[3 * i + 2]);    
+    bmax[0] = std::max(bmax[0], mesh.vertices[3 * i + 0]);
+    bmax[1] = std::max(bmax[1], mesh.vertices[3 * i + 1]);
+    bmax[2] = std::max(bmax[2], mesh.vertices[3 * i + 2]);
   }
 }
 
-bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> > *meshes, std::vector<Material> *out_materials, std::vector<Texture> *out_textures) {
+bool LoadObj(const std::string &filename, float scale,
+             std::vector<Mesh<float> > *meshes,
+             std::vector<Material> *out_materials,
+             std::vector<Texture> *out_textures) {
   tinyobj::attrib_t attrib;
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
   std::string err;
 
   std::string basedir = GetBaseDir(filename) + "/";
-  const char* basepath = (basedir.compare("/") == 0) ? NULL : basedir.c_str();
+  const char *basepath = (basedir.compare("/") == 0) ? NULL : basedir.c_str();
 
-  //auto t_start = std::chrono::system_clock::now();
+  // auto t_start = std::chrono::system_clock::now();
 
-  bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename.c_str(),
-                              basepath, /* triangulate */ true);
+  bool ret =
+      tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename.c_str(),
+                       basepath, /* triangulate */ true);
 
-  //auto t_end = std::chrono::system_clock::now();
-  //std::chrono::duration<double, std::milli> ms = t_end - t_start;
+  // auto t_end = std::chrono::system_clock::now();
+  // std::chrono::duration<double, std::milli> ms = t_end - t_start;
 
   if (!err.empty()) {
     std::cerr << err << std::endl;
   }
-  
+
   if (!ret) {
     return false;
   }
 
-  //std::cout << "[LoadOBJ] Parse time : " << ms.count() << " [msecs]"
+  // std::cout << "[LoadOBJ] Parse time : " << ms.count() << " [msecs]"
   //          << std::endl;
 
   std::cout << "[LoadOBJ] # of shapes in .obj : " << shapes.size() << std::endl;
@@ -158,33 +180,42 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
             << std::endl;
 
   {
-	  size_t total_num_vertices = 0;
-	  size_t total_num_faces = 0;
+    size_t total_num_vertices = 0;
+    size_t total_num_faces = 0;
 
-	  total_num_vertices = attrib.vertices.size() / 3;
-	  std::cout << "  vertices : " << attrib.vertices.size() / 3 << std::endl;
+    total_num_vertices = attrib.vertices.size() / 3;
+    std::cout << "  vertices : " << attrib.vertices.size() / 3 << std::endl;
 
-	  for (size_t i = 0; i < shapes.size(); i++) {
-		  std::cout << "  shape[" << i << "].name : " << shapes[i].name << std::endl;
-		  std::cout << "  shape[" << i << "].indices : " << shapes[i].mesh.indices.size() << std::endl;
-		  assert((shapes[i].mesh.indices.size() % 3) == 0);
+    for (size_t i = 0; i < shapes.size(); i++) {
+      std::cout << "  shape[" << i << "].name : " << shapes[i].name
+                << std::endl;
+      std::cout << "  shape[" << i
+                << "].indices : " << shapes[i].mesh.indices.size() << std::endl;
+      assert((shapes[i].mesh.indices.size() % 3) == 0);
 
-		  total_num_faces += shapes[i].mesh.indices.size() / 3;
-		  
-		  //tigra: empty name convert to _id
-		  if(shapes[i].name.length()==0) {
-			  shapes[i].name = "_"+ std::to_string(i);
-			  std::cout << "  EMPTY shape[" << i << "].name, new : " << shapes[i].name << std::endl;		  
-		  }
-	  }
-	  std::cout << "[LoadOBJ] # of faces: " << total_num_faces << std::endl;
-	  std::cout << "[LoadOBJ] # of vertices: " << total_num_vertices << std::endl;
+      total_num_faces += shapes[i].mesh.indices.size() / 3;
+
+      // tigra: empty name convert to _id
+      if (shapes[i].name.length() == 0) {
+#ifdef NANOSG_USE_CXX11
+        shapes[i].name = "_" + std::to_string(i);
+#else
+        std::stringstream ss;
+        ss << i;
+        shapes[i].name = "_" + ss.str();
+#endif
+        std::cout << "  EMPTY shape[" << i << "].name, new : " << shapes[i].name
+                  << std::endl;
+      }
+    }
+    std::cout << "[LoadOBJ] # of faces: " << total_num_faces << std::endl;
+    std::cout << "[LoadOBJ] # of vertices: " << total_num_vertices << std::endl;
   }
 
   // TODO(LTE): Implement tangents and binormals
 
   for (size_t i = 0; i < shapes.size(); i++) {
-    Mesh<float> mesh(/* stride */sizeof(float) * 3);
+    Mesh<float> mesh(/* stride */ sizeof(float) * 3);
 
     mesh.name = shapes[i].name;
 
@@ -196,7 +227,6 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
     mesh.vertices.resize(num_faces * 3 * 3);
 
     for (size_t f = 0; f < shapes[i].mesh.indices.size() / 3; f++) {
-    
       // reorder vertices. may create duplicated vertices.
       size_t f0 = size_t(shapes[i].mesh.indices[3 * f + 0].vertex_index);
       size_t f1 = size_t(shapes[i].mesh.indices[3 * f + 1].vertex_index);
@@ -218,7 +248,8 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
       mesh.faces[3 * f + 1] = static_cast<unsigned int>(3 * f + 1);
       mesh.faces[3 * f + 2] = static_cast<unsigned int>(3 * f + 2);
 
-      mesh.material_ids[f] = static_cast<unsigned int>(shapes[i].mesh.material_ids[f]);
+      mesh.material_ids[f] =
+          static_cast<unsigned int>(shapes[i].mesh.material_ids[f]);
     }
 
     if (attrib.normals.size() > 0) {
@@ -244,26 +275,17 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
           n2[1] = attrib.normals[3 * f2 + 1];
           n2[2] = attrib.normals[3 * f2 + 2];
 
-          mesh.facevarying_normals[3 * (3 * f + 0) + 0] =
-              n0[0];
-          mesh.facevarying_normals[3 * (3 * f + 0) + 1] =
-              n0[1];
-          mesh.facevarying_normals[3 * (3 * f + 0) + 2] =
-              n0[2];
+          mesh.facevarying_normals[3 * (3 * f + 0) + 0] = n0[0];
+          mesh.facevarying_normals[3 * (3 * f + 0) + 1] = n0[1];
+          mesh.facevarying_normals[3 * (3 * f + 0) + 2] = n0[2];
 
-          mesh.facevarying_normals[3 * (3 * f + 1) + 0] =
-              n1[0];
-          mesh.facevarying_normals[3 * (3 * f + 1) + 1] =
-              n1[1];
-          mesh.facevarying_normals[3 * (3 * f + 1) + 2] =
-              n1[2];
+          mesh.facevarying_normals[3 * (3 * f + 1) + 0] = n1[0];
+          mesh.facevarying_normals[3 * (3 * f + 1) + 1] = n1[1];
+          mesh.facevarying_normals[3 * (3 * f + 1) + 2] = n1[2];
 
-          mesh.facevarying_normals[3 * (3 * f + 2) + 0] =
-              n2[0];
-          mesh.facevarying_normals[3 * (3 * f + 2) + 1] =
-              n2[1];
-          mesh.facevarying_normals[3 * (3 * f + 2) + 2] =
-              n2[2];
+          mesh.facevarying_normals[3 * (3 * f + 2) + 0] = n2[0];
+          mesh.facevarying_normals[3 * (3 * f + 2) + 1] = n2[1];
+          mesh.facevarying_normals[3 * (3 * f + 2) + 2] = n2[2];
         } else {  // face contains invalid normal index. calc geometric normal.
           f0 = size_t(shapes[i].mesh.indices[3 * f + 0].vertex_index);
           f1 = size_t(shapes[i].mesh.indices[3 * f + 1].vertex_index);
@@ -286,26 +308,17 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
           float3 N;
           CalcNormal(N, v0, v1, v2);
 
-          mesh.facevarying_normals[3 * (3 * f + 0) + 0] =
-              N[0];
-          mesh.facevarying_normals[3 * (3 * f + 0) + 1] =
-              N[1];
-          mesh.facevarying_normals[3 * (3 * f + 0) + 2] =
-              N[2];
+          mesh.facevarying_normals[3 * (3 * f + 0) + 0] = N[0];
+          mesh.facevarying_normals[3 * (3 * f + 0) + 1] = N[1];
+          mesh.facevarying_normals[3 * (3 * f + 0) + 2] = N[2];
 
-          mesh.facevarying_normals[3 * (3 * f + 1) + 0] =
-              N[0];
-          mesh.facevarying_normals[3 * (3 * f + 1) + 1] =
-              N[1];
-          mesh.facevarying_normals[3 * (3 * f + 1) + 2] =
-              N[2];
+          mesh.facevarying_normals[3 * (3 * f + 1) + 0] = N[0];
+          mesh.facevarying_normals[3 * (3 * f + 1) + 1] = N[1];
+          mesh.facevarying_normals[3 * (3 * f + 1) + 2] = N[2];
 
-          mesh.facevarying_normals[3 * (3 * f + 2) + 0] =
-              N[0];
-          mesh.facevarying_normals[3 * (3 * f + 2) + 1] =
-              N[1];
-          mesh.facevarying_normals[3 * (3 * f + 2) + 2] =
-              N[2];
+          mesh.facevarying_normals[3 * (3 * f + 2) + 0] = N[0];
+          mesh.facevarying_normals[3 * (3 * f + 2) + 1] = N[1];
+          mesh.facevarying_normals[3 * (3 * f + 2) + 2] = N[2];
         }
       }
     } else {
@@ -418,7 +431,6 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
     meshes->push_back(mesh);
   }
 
-
   // material_t -> Material and Texture
   out_materials->resize(materials.size());
   out_textures->resize(0);
@@ -433,12 +445,14 @@ bool LoadObj(const std::string &filename, float scale, std::vector<Mesh<float> >
     (*out_materials)[i].id = int(i);
 
     // map_Kd
-    (*out_materials)[i].diffuse_texid = LoadTexture(materials[i].diffuse_texname, out_textures);
+    (*out_materials)[i].diffuse_texid =
+        LoadTexture(materials[i].diffuse_texname, out_textures);
     // map_Ks
-    (*out_materials)[i].specular_texid = LoadTexture(materials[i].specular_texname, out_textures);
+    (*out_materials)[i].specular_texid =
+        LoadTexture(materials[i].specular_texname, out_textures);
   }
 
   return true;
 }
 
-} // namespace example
+}  // namespace example
