@@ -23,8 +23,8 @@ Simply copy embree2 header files(`include/embree2/`), `nanort.h`(`../../`), `nan
 
 ## Notes
 
-Current implementation does not consider calling Embree API from multi-threaded context.
-Application must care of calling Embree API with proper locking(except for `rtcIntersect`)
+Current implementation does not consider calling Embree API from a multi-threaded environment.
+Application must care of calling Embree API with proper thread locking(except for `rtcIntersect`)
 
 ## TODO
 
@@ -34,7 +34,7 @@ Application must care of calling Embree API with proper locking(except for `rtcI
 * [ ] Instanciation
 * [ ] Stream intersection API
 * [ ] Ray stream API
-* [ ] Multi-threading support.
+* [ ] Reentrant API support(thread-safe API).
 * [ ] DLL build of nanort-embree module.
 
 ## Licenses

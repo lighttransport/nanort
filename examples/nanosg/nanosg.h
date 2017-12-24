@@ -302,12 +302,12 @@ struct Intersection {
   float u;
   float v;
 
-  unsigned int node_id;  // node ID of the hit.
-  unsigned int instance_id; // Instance ID of the hit. 0 = original.
+  unsigned int node_id;      // node ID of the hit.
+  unsigned int instance_id;  // instance ID of the hit. 0 = original.
 
-  nanort::real3<T> P;    // intersection point
-  nanort::real3<T> Ns;   // shading normal
-  nanort::real3<T> Ng;   // geometric normal
+  nanort::real3<T> P;   // intersection point
+  nanort::real3<T> Ns;  // shading normal
+  nanort::real3<T> Ng;  // geometric normal
 };
 
 ///
@@ -318,11 +318,12 @@ class Node {
  public:
   typedef Node<T, M> type;
 
-
   ///
-  /// NOTE: Instanciation is done by using same pointer to the mesh, but having different instance ID.
+  /// NOTE: Instanciation is done by using same pointer to the mesh, but having
+  /// different instance ID.
   ///
-  /// User application must explicitly manage instance ID through SetInstanceId()
+  /// User application must explicitly manage instance ID through
+  /// SetInstanceId()
   ///
   explicit Node(const M *mesh) : mesh_(mesh), instance_id_(0) {
     xbmin_[0] = xbmin_[1] = xbmin_[2] = std::numeric_limits<T>::max();
@@ -365,7 +366,7 @@ class Node {
     xbmax_[1] = rhs.xbmax_[1];
     xbmax_[2] = rhs.xbmax_[2];
 
-    instance_id_ = rhs.instance_id_; // FIXME(LTE): This should be different.
+    instance_id_ = rhs.instance_id_;  // FIXME(LTE): This should be different.
 
     mesh_ = rhs.mesh_;
     name_ = rhs.name_;
@@ -460,13 +461,9 @@ class Node {
 
   const nanort::BVHAccel<T> &GetAccel() const { return accel_; }
 
-  unsigned int GetInstanceId() const {
-    return instance_id_;
-  }
+  unsigned int GetInstanceId() const { return instance_id_; }
 
-  void SetInstanceId(unsigned int id) {
-    instance_id_ = id;
-  }
+  void SetInstanceId(unsigned int id) { instance_id_ = id; }
 
   inline void GetWorldBoundingBox(T bmin[3], T bmax[3]) const {
     bmin[0] = xbmin_[0];

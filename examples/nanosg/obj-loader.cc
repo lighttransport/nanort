@@ -1,8 +1,17 @@
 #include "obj-loader.h"
 #include "../../nanort.h"  // for float3
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
+
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -16,6 +25,7 @@
 #pragma clang diagnostic ignored "-Wvariadic-macros"
 #pragma clang diagnostic ignored "-Wc++11-extensions"
 #pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
 #if __has_warning("-Wdouble-promotion")
 #pragma clang diagnostic ignored "-Wdouble-promotion"
 #endif
@@ -24,6 +34,9 @@
 #endif
 #if __has_warning("-Wcast-qual")
 #pragma clang diagnostic ignored "-Wcast-qual"
+#endif
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 #endif
 #endif
 
@@ -45,6 +58,10 @@
 #define USE_TEX_CACHE 1
 
 namespace example {
+
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
 
 typedef nanort::real3<float> float3;
 

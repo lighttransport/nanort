@@ -37,6 +37,9 @@ THE SOFTWARE.
 #if __has_warning("-Wcast-qual")
 #pragma clang diagnostic ignored "-Wcast-qual"
 #endif
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
 #endif
 
 #ifdef _MSC_VER
@@ -67,9 +70,20 @@ THE SOFTWARE.
 #include <string>
 #include <vector>
 
+#ifdef NANORT_EMBREE2_USE_CXX11
+#include <mutex>
+#include <atomic>
+#include <thread>
+#include <cstdint>
+#else
+#include <stdint.h>
+#endif
+
 #include "nanosg.h"
 
-#include <stdint.h>  // Use cstint for C++11 compiler.
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
 
 namespace nanort_embree2 {
 
@@ -277,7 +291,7 @@ class Scene {
   }
 
   ///
-  ///
+  /// Create new triangle mesh.
   ///
   uint32_t NewTriMesh(size_t num_triangles, size_t num_vertices) {
     uint32_t geom_id = geom_ids_.Allocate();
@@ -296,6 +310,9 @@ class Scene {
     return NULL;
   }
 
+  ///
+  /// Get the number of shapes in the scene.
+  ///
   size_t NumShapes() { return trimesh_map_.size(); }
 
   void Build() {
@@ -321,6 +338,7 @@ class Scene {
   RTCSceneFlags scene_flags_;
   RTCAlgorithmFlags algorithm_flags_;
   HandleAllocator geom_ids_;
+  HandleAllocator instance_ids_;
 
   nanosg::Scene<float, TriMesh<float> > trimesh_scene_;
   std::vector<nanosg::Node<float, TriMesh<float> > > trimesh_nodes_;
@@ -533,8 +551,7 @@ RTCORE_API void rtcIntersect(RTCScene scene, RTCRay &rtc_ray) {
     rtc_ray.v = isect.v;
     rtc_ray.geomID = isect.node_id;
     rtc_ray.primID = isect.prim_id;
-    rtc_ray.instID =
-        RTC_INVALID_GEOMETRY_ID;  // Instancing is not yet supported.
+    rtc_ray.instID = isect.instance_id;
   } else {
     rtc_ray.geomID = RTC_INVALID_GEOMETRY_ID;
     rtc_ray.primID = RTC_INVALID_GEOMETRY_ID;
@@ -600,22 +617,29 @@ RTCORE_API void *rtcMapBuffer(RTCScene scene, unsigned geomID,
     return NULL;
   }
 
-  // TODO(LTE): Acquire lock?
-  Scene *s = reinterpret_cast<Scene *>(scene);
-  assert(s);
-  TriMesh<float> *trimesh = s->GetTriMesh(geomID);
-  if (trimesh) {
-    if (type == RTC_VERTEX_BUFFER) {
-      return reinterpret_cast<void *>(trimesh->vertices.data());
-    } else if (type == RTC_INDEX_BUFFER) {
-      return reinterpret_cast<void *>(trimesh->faces.data());
+  {
+#ifdef NANORT_EMBREE2_USE_CXX11
+    static std::mutex mtx;
+    std::atomic<std::mutex> lock(mtx);
+#else
+    // TODO(LTE): Acquire lock in non-C++11 path
+#endif
+    Scene *s = reinterpret_cast<Scene *>(scene);
+    assert(s);
+    TriMesh<float> *trimesh = s->GetTriMesh(geomID);
+    if (trimesh) {
+      if (type == RTC_VERTEX_BUFFER) {
+        return reinterpret_cast<void *>(trimesh->vertices.data());
+      } else if (type == RTC_INDEX_BUFFER) {
+        return reinterpret_cast<void *>(trimesh->faces.data());
+      }
+    } else {
+      std::stringstream ss;
+      ss << "[rtcMapBuffer] geomID : " << geomID << " not found in the scene."
+         << std::endl;
+      GetContext().SetError(ss.str());
+      return NULL;
     }
-  } else {
-    std::stringstream ss;
-    ss << "[rtcMapBuffer] geomID : " << geomID << " not found in the scene."
-       << std::endl;
-    GetContext().SetError(ss.str());
-    return NULL;
   }
 
   return NULL;  // never reach here.

@@ -3,6 +3,11 @@
 
 #include <cstdlib>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
+
 namespace example {
 
 struct Material {
@@ -64,5 +69,8 @@ struct Texture {
 
 }  // namespace example
 
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #endif  // EXAMPLE_MATERIAL_H_

@@ -5,7 +5,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2015 - 2016 Light Transport Entertainment, Inc.
+Copyright (c) 2015 - 2017 Light Transport Entertainment, Inc.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -48,6 +48,10 @@ namespace nanort {
 // thus turn off if you face a problem when building BVH.
 #define NANORT_ENABLE_PARALLEL_BUILD (1)
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
 // ----------------------------------------------------------------------------
 // Small vector class useful for multi-threaded environment.
 //
@@ -162,6 +166,10 @@ class StackAllocator : public std::allocator<T> {
  private:
   Source *source_;
 };
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 // A wrapper around STL containers that maintains a stack-sized buffer that the
 // initial capacity of the vector is based on. Growing the container beyond the
@@ -384,6 +392,22 @@ class BVHNode {
   BVHNode() {}
   ~BVHNode() {}
 
+  BVHNode(const BVHNode &rhs) {
+    bmin[0] = rhs.bmin[0];
+    bmin[1] = rhs.bmin[1];
+    bmin[2] = rhs.bmin[2];
+
+    bmax[0] = rhs.bmax[0];
+    bmax[1] = rhs.bmax[1];
+    bmax[2] = rhs.bmax[2];
+
+    flag = rhs.flag;
+    axis = rhs.axis;
+
+    data[0] = rhs.data[0];
+    data[1] = rhs.data[1];
+  }
+
   T bmin[3];
   T bmax[3];
 
@@ -483,6 +507,19 @@ class NodeHit {
       : t_min(std::numeric_limits<T>::max()),
         t_max(-std::numeric_limits<T>::max()),
         node_id(static_cast<unsigned int>(-1)) {}
+
+  NodeHit(const NodeHit &rhs) {
+    t_min = rhs.t_min;
+    t_max = rhs.t_max;
+    node_id = rhs.node_id;
+  }
+
+  NodeHit operator=(const NodeHit &rhs) {
+    this->t_min = rhs.t_min;
+    this->t_max = rhs.t_max;
+    this->node_id = rhs.node_id;
+    return (*this);
+  }
 
   ~NodeHit() {}
 
@@ -1373,7 +1410,6 @@ unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
       unsigned int *begin = &indices_[left_idx];
       unsigned int *end =
           &indices_[right_idx - 1] + 1;  // mimics end() iterator.
-      unsigned int *mid = 0;
 
       // try min_cut_axis first.
       cut_axis = (min_cut_axis + axis_try) % 3;
@@ -1385,7 +1421,7 @@ unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
       // Split at (cut_axis, cut_pos)
       // indices_ will be modified.
       //
-      mid = std::partition(begin, end, pred);
+      unsigned int *mid = std::partition(begin, end, pred);
 
       mid_idx = left_idx + static_cast<unsigned int>((mid - begin));
       if ((mid_idx == left_idx) || (mid_idx == right_idx)) {
@@ -1506,7 +1542,6 @@ unsigned int BVHAccel<T>::BuildTree(BVHBuildStatistics *out_stat,
   for (int axis_try = 0; axis_try < 3; axis_try++) {
     unsigned int *begin = &indices_[left_idx];
     unsigned int *end = &indices_[right_idx - 1] + 1;  // mimics end() iterator.
-    unsigned int *mid = 0;
 
     // try min_cut_axis first.
     cut_axis = (min_cut_axis + axis_try) % 3;
@@ -1517,7 +1552,7 @@ unsigned int BVHAccel<T>::BuildTree(BVHBuildStatistics *out_stat,
     // Split at (cut_axis, cut_pos)
     // indices_ will be modified.
     //
-    mid = std::partition(begin, end, pred);
+    unsigned int *mid = std::partition(begin, end, pred);
 
     mid_idx = left_idx + static_cast<unsigned int>((mid - begin));
     if ((mid_idx == left_idx) || (mid_idx == right_idx)) {
