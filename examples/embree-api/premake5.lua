@@ -8,6 +8,11 @@ newoption {
    description = "Enable Address Sanitizer(gcc5+ ang clang only)"
 }
 
+newoption {
+   trigger = "cpp11",
+   description = "Enable C++11"
+}
+
 sources = {
    "main.cc",
    "nanort-embree.cc",
@@ -28,6 +33,10 @@ solution "EmbreeAPISolution"
       kind "ConsoleApp"
       language "C++"
       files { sources }
+
+      if _OPTIONS['cpp11'] then
+         flags { "c++11" }
+      end 
 
       includedirs { "./", "../../" }
       includedirs { "./include" }

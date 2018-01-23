@@ -3,6 +3,13 @@
 
 #include <cstdlib>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
+#endif
+
 namespace example {
 
 struct Material {

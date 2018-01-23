@@ -44,6 +44,13 @@ THE SOFTWARE.
 
 namespace nanort {
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
+#endif
+
 // Parallelized BVH build is not yet fully tested,
 // thus turn off if you face a problem when building BVH.
 #define NANORT_ENABLE_PARALLEL_BUILD (1)
@@ -382,6 +389,38 @@ template <typename T = float>
 class BVHNode {
  public:
   BVHNode() {}
+  BVHNode(const BVHNode &rhs) {
+    bmin[0] = rhs.bmin[0];
+    bmin[1] = rhs.bmin[1];
+    bmin[2] = rhs.bmin[2];
+    flag = rhs.flag;
+
+    bmax[0] = rhs.bmax[0];
+    bmax[1] = rhs.bmax[1];
+    bmax[2] = rhs.bmax[2];
+    axis = rhs.axis;
+
+    data[0] = rhs.data[0];
+    data[1] = rhs.data[1];
+  }
+
+  BVHNode &operator=(const BVHNode &rhs) {
+    bmin[0] = rhs.bmin[0];
+    bmin[1] = rhs.bmin[1];
+    bmin[2] = rhs.bmin[2];
+    flag = rhs.flag;
+
+    bmax[0] = rhs.bmax[0];
+    bmax[1] = rhs.bmax[1];
+    bmax[2] = rhs.bmax[2];
+    axis = rhs.axis;
+
+    data[0] = rhs.data[0];
+    data[1] = rhs.data[1];
+
+    return (*this);
+  }
+
   ~BVHNode() {}
 
   T bmin[3];
@@ -484,6 +523,20 @@ class NodeHit {
         t_max(-std::numeric_limits<T>::max()),
         node_id(static_cast<unsigned int>(-1)) {}
 
+  NodeHit(const NodeHit<T> &rhs) {
+    t_min = rhs.t_min;
+    t_max = rhs.t_max;
+    node_id = rhs.node_id;
+  }
+
+  NodeHit &operator=(const NodeHit<T> &rhs) {
+    t_min = rhs.t_min;
+    t_max = rhs.t_max;
+    node_id = rhs.node_id;
+
+    return (*this);
+  }
+
   ~NodeHit() {}
 
   T t_min;
@@ -505,24 +558,34 @@ class BVHAccel {
   BVHAccel() : pad0_(0) { (void)pad0_; }
   ~BVHAccel() {}
 
+  ///
   /// Build BVH for input primitives.
+  ///
   template <class P, class Pred>
   bool Build(const unsigned int num_primitives, const P &p, const Pred &pred,
              const BVHBuildOptions<T> &options = BVHBuildOptions<T>());
 
+  ///
   /// Get statistics of built BVH tree. Valid after Build()
+  ///
   BVHBuildStatistics GetStatistics() const { return stats_; }
 
+  ///
   /// Dump built BVH to the file.
+  ///
   bool Dump(const char *filename);
 
+  ///
   /// Load BVH binary
+  ///
   bool Load(const char *filename);
 
   void Debug();
 
+  ///
   /// Traverse into BVH along ray and find closest hit point & primitive if
   /// found
+  ///
   template <class I, class H>
   bool Traverse(const Ray<T> &ray, const I &intersector, H *isect,
                 const BVHTraceOptions &options = BVHTraceOptions()) const;
@@ -550,7 +613,9 @@ class BVHAccel {
   const std::vector<BVHNode<T> > &GetNodes() const { return nodes_; }
   const std::vector<unsigned int> &GetIndices() const { return indices_; }
 
+  ///
   /// Returns bounding box of built BVH.
+  ///
   void BoundingBox(T bmin[3], T bmax[3]) const {
     if (nodes_.empty()) {
       bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<T>::max();
@@ -2237,6 +2302,10 @@ bool BVHAccel<T>::MultiHitTraverse(const Ray<T> &ray,
 
   return false;
 }
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic pop
 #endif
 
 }  // namespace nanort

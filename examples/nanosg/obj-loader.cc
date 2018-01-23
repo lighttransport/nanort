@@ -16,6 +16,7 @@
 #pragma clang diagnostic ignored "-Wvariadic-macros"
 #pragma clang diagnostic ignored "-Wc++11-extensions"
 #pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
 #if __has_warning("-Wdouble-promotion")
 #pragma clang diagnostic ignored "-Wdouble-promotion"
 #endif

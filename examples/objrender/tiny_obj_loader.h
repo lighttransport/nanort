@@ -25,6 +25,7 @@ typedef struct {
   float dissolve; // 1 == opaque; 0 == fully transparent
   // illumination model (see http://www.fileformat.info/format/material/)
   int illum;
+  int _pad;
 
   std::string ambient_texname;            // map_Ka
   std::string diffuse_texname;            // map_Kd
@@ -49,6 +50,11 @@ typedef struct {
   mesh_t mesh;
 } shape_t;
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wweak-vtables"
+#endif
+
 class MaterialReader {
 public:
   MaterialReader() {}
@@ -58,6 +64,11 @@ public:
                                  std::vector<material_t> &materials,
                                  std::map<std::string, int> &matMap) = 0;
 };
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
 
 class MaterialFileReader : public MaterialReader {
 public:

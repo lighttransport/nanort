@@ -37,6 +37,9 @@ THE SOFTWARE.
 #if __has_warning("-Wcast-qual")
 #pragma clang diagnostic ignored "-Wcast-qual"
 #endif
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
 #endif
 
 #ifdef _MSC_VER
@@ -72,6 +75,12 @@ THE SOFTWARE.
 #include <stdint.h>  // Use cstint for C++11 compiler.
 
 namespace nanort_embree2 {
+
+#ifdef __clang__
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
+#endif
 
 template <typename T>
 inline void lerp(T dst[3], const T v0[3], const T v1[3], const T v2[3], float u,

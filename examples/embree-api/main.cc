@@ -45,6 +45,7 @@ THE SOFTWARE.
 #pragma clang diagnostic ignored "-Wc++11-extensions"
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wshadow"
+#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
 #if __has_warning("-Wcomma")
 #pragma clang diagnostic ignored "-Wcomma"
 #endif
@@ -53,6 +54,9 @@ THE SOFTWARE.
 #endif
 #if __has_warning("-Wcast-qual")
 #pragma clang diagnostic ignored "-Wcast-qual"
+#endif
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 #endif
 #endif
 

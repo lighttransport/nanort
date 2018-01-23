@@ -3,8 +3,17 @@
 #define TINYEXR_IMPLEMENTATION
 #include "tinyexr.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+#endif
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #include "nanort.h"
 
@@ -30,6 +39,13 @@ extern "C" {
 #else
 #include <ctime>
 #endif
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wunused-member-function"
 #endif
 
 class timerutil {
@@ -138,8 +154,8 @@ struct float3 {
 
   void normalize() {
     float len = length();
-    if (fabs(len) > 1.0e-6) {
-      float inv_len = 1.0 / len;
+    if (std::fabs(len) > 1.0e-6f) {
+      float inv_len = 1.0f / len;
       x *= inv_len;
       y *= inv_len;
       z *= inv_len;
@@ -223,19 +239,20 @@ void calcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
   N.normalize();
 }
 
+#if 0
 // Save in RAW headerless format, for use when exr tools are not available in
 // system
 void SaveImageRaw(const char *filename, const float *rgb, int width,
                   int height) {
   std::vector<unsigned char> rawbuf;
-  rawbuf.resize(3 * width * height);
+  rawbuf.resize(size_t(3 * width * height));
   unsigned char *raw = &rawbuf.at(0);
 
   // @note { Apply gamma correction would be nice? }
   for (int i = 0; i < width * height; i++) {
-    raw[i * 3] = (char)(rgb[3 * i + 0] * 255.0);
-    raw[i * 3 + 1] = (char)(rgb[3 * i + 1] * 255.0);
-    raw[i * 3 + 2] = (char)(rgb[3 * i + 2] * 255.0);
+    raw[i * 3] = (char)(rgb[3 * i + 0] * 255.0f);
+    raw[i * 3 + 1] = (char)(rgb[3 * i + 1] * 255.0f);
+    raw[i * 3 + 2] = (char)(rgb[3 * i + 2] * 255.0f);
   }
   FILE *f = fopen(filename, "wb");
   if (!f) {
@@ -247,6 +264,7 @@ void SaveImageRaw(const char *filename, const float *rgb, int width,
   printf("Info: Saved RAW RGB image of [%dx%d] dimensions to [ %s ]\n", width,
          height, filename);
 }
+#endif
 
 void SaveImageEXR(const char *filename, const float *rgb, int width,
                   int height) {
@@ -538,7 +556,7 @@ int main(int argc, char **argv) {
   }
 
   if (argc > 2) {
-    scale = atof(argv[2]);
+    scale = float(atof(argv[2]));
   }
 
   bool ret = false;
@@ -565,12 +583,11 @@ int main(int argc, char **argv) {
   nanort::TriangleSAHPred<float> triangle_pred(mesh.vertices, mesh.faces,
                                                sizeof(float) * 3);
 
-  printf("num_triangles = %lu\n", mesh.num_faces);
-  printf("faces = %p\n", mesh.faces);
+  std::cout << "num_triangles = " << mesh.num_faces << std::endl;
 
   nanort::BVHAccel<float> accel;
   ret =
-      accel.Build(mesh.num_faces, triangle_mesh, triangle_pred, build_options);
+      accel.Build(static_cast<unsigned int>(mesh.num_faces), triangle_mesh, triangle_pred, build_options);
   assert(ret);
 
   t.end();
