@@ -10478,7 +10478,7 @@ static int DecodeChunk(EXRImage *exr_image, const EXRHeader *exr_header,
                                 &channel_offset, num_channels,
                                 exr_header->channels);
 
-  bool invalid_data = false;
+  bool invalid_data = false; // TODO(LTE): Use atomic lock for MT safety.
 
   if (exr_header->tiled) {
     size_t num_tiles = offsets.size();  // = # of blocks
@@ -10564,56 +10564,58 @@ static int DecodeChunk(EXRImage *exr_image, const EXRHeader *exr_header,
       size_t y_idx = static_cast<size_t>(y);
 
       if (offsets[y_idx] + sizeof(int) * 2 > size) {
-        return TINYEXR_ERROR_INVALID_DATA;
-      }
-
-      // 4 byte: scan line
-      // 4 byte: data size
-      // ~     : pixel data(uncompressed or compressed)
-      size_t data_size = size - (offsets[y_idx] + sizeof(int) * 2);
-      const unsigned char *data_ptr =
-          reinterpret_cast<const unsigned char *>(head + offsets[y_idx]);
-
-      int line_no;
-      memcpy(&line_no, data_ptr, sizeof(int));
-      int data_len;
-      memcpy(&data_len, data_ptr + 4, sizeof(int));
-      tinyexr::swap4(reinterpret_cast<unsigned int *>(&line_no));
-      tinyexr::swap4(reinterpret_cast<unsigned int *>(&data_len));
-
-      if (size_t(data_len) > data_size) {
-        return TINYEXR_ERROR_INVALID_DATA;
-      }
-
-      int end_line_no = (std::min)(line_no + num_scanline_blocks,
-                                   (exr_header->data_window[3] + 1));
-
-      int num_lines = end_line_no - line_no;
-      //assert(num_lines > 0);
-
-      if (num_lines <= 0) {
         invalid_data = true;
       } else {
 
-        // Move to data addr: 8 = 4 + 4;
-        data_ptr += 8;
+        // 4 byte: scan line
+        // 4 byte: data size
+        // ~     : pixel data(uncompressed or compressed)
+        size_t data_size = size - (offsets[y_idx] + sizeof(int) * 2);
+        const unsigned char *data_ptr =
+            reinterpret_cast<const unsigned char *>(head + offsets[y_idx]);
 
-        // Adjust line_no with data_window.bmin.y
-        line_no -= exr_header->data_window[1];
+        int line_no;
+        memcpy(&line_no, data_ptr, sizeof(int));
+        int data_len;
+        memcpy(&data_len, data_ptr + 4, sizeof(int));
+        tinyexr::swap4(reinterpret_cast<unsigned int *>(&line_no));
+        tinyexr::swap4(reinterpret_cast<unsigned int *>(&data_len));
 
-        if (line_no < 0) {
+        if (size_t(data_len) > data_size) {
           invalid_data = true;
         } else {
-          if (!tinyexr::DecodePixelData(
-              exr_image->images, exr_header->requested_pixel_types, data_ptr,
-              static_cast<size_t>(data_len), exr_header->compression_type,
-              exr_header->line_order, data_width, data_height, data_width, y,
-              line_no, num_lines, static_cast<size_t>(pixel_data_size),
-              static_cast<size_t>(exr_header->num_custom_attributes),
-              exr_header->custom_attributes,
-              static_cast<size_t>(exr_header->num_channels), exr_header->channels,
-              channel_offset_list)) {
+
+          int end_line_no = (std::min)(line_no + num_scanline_blocks,
+                                       (exr_header->data_window[3] + 1));
+
+          int num_lines = end_line_no - line_no;
+          //assert(num_lines > 0);
+
+          if (num_lines <= 0) {
             invalid_data = true;
+          } else {
+
+            // Move to data addr: 8 = 4 + 4;
+            data_ptr += 8;
+
+            // Adjust line_no with data_window.bmin.y
+            line_no -= exr_header->data_window[1];
+
+            if (line_no < 0) {
+              invalid_data = true;
+            } else {
+              if (!tinyexr::DecodePixelData(
+                  exr_image->images, exr_header->requested_pixel_types, data_ptr,
+                  static_cast<size_t>(data_len), exr_header->compression_type,
+                  exr_header->line_order, data_width, data_height, data_width, y,
+                  line_no, num_lines, static_cast<size_t>(pixel_data_size),
+                  static_cast<size_t>(exr_header->num_custom_attributes),
+                  exr_header->custom_attributes,
+                  static_cast<size_t>(exr_header->num_channels), exr_header->channels,
+                  channel_offset_list)) {
+                invalid_data = true;
+              }
+            }
           }
         }
       }
