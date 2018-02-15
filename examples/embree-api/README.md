@@ -1,4 +1,4 @@
-# NanoRT + Embree2 compatile API
+# NanoRT + Embree2 compatible API
 
 Drop-in replacement of raytracing engine with Embree API for cross-platform support(e.g. raytracing on ARM, PowerPC)
 
