@@ -22,7 +22,7 @@ Path tracing example contributed by https://github.com/daseyb
 * Cross platform
   * MacOSX, Linux, Windows, iOS, Android, ARM, x86, SPARC, (maybe)MIPS, (will be)RISC-V, etc.
   * For example, NanoRT works finely on Raspberry Pi 2(arm 32bit) and Raspberrry Pi 3!(AARCH64 kernel)
-* GPU effient data structure
+* GPU efficient data structure
   * Built BVH tree from `NanoRT` is a linear array and does not have pointers, thus it is suited for GPU raytracing(GPU ray traversal).
 * OpenMP multithreaded BVH build.
 * Robust intersection calculation.
@@ -31,7 +31,7 @@ Path tracing example contributed by https://github.com/daseyb
 
 ## Applications
 
-* Test renderer for your light trasport algorithm development.
+* Test renderer for your light transport algorithm development.
 * Test renderer for your shader language development.
 * Collision detection(ray casting).
 * BVH builder for GPU/Accelerator ray traversal.
