@@ -379,7 +379,7 @@ class Ray {
 
   T org[3];         // must set
   T dir[3];         // must set
-  T min_t;          // minium ray hit distance.
+  T min_t;          // minimum ray hit distance.
   T max_t;          // maximum ray hit distance.
   T inv_dir[3];     // filled internally
   int dir_sign[3];  // filled internally
