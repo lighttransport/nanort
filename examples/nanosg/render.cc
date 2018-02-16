@@ -200,6 +200,7 @@ void BuildCameraFrame(float3* origin, float3* corner, float3* u, float3* v,
   }
 }
 
+#if 0 // TODO(LTE): Not used method. Delete.
 nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
                                const float3& du, const float3& dv, float u,
                                float v) {
@@ -217,9 +218,12 @@ nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
   ray.org[1] = origin[1];
   ray.org[2] = origin[2];
   ray.dir[0] = dir[0];
+  ray.dir[1] = dir[1];
+  ray.dir[2] = dir[2];
 
   return ray;
 }
+#endif
 
 void FetchTexture(const Texture &texture, float u, float v, float* col) {
   int tx = u * texture.width;
