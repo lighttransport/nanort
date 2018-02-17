@@ -38,9 +38,9 @@ typedef int ssize_t;
 #endif
 #endif
 
-#ifdef _WIN32
+#if defined(_MSC_VER)
 #  define RTCORE_ALIGN(...) __declspec(align(__VA_ARGS__))
-#else
+#else // assume gcc
 #  define RTCORE_ALIGN(...) __attribute__((aligned(__VA_ARGS__)))
 #endif
 
