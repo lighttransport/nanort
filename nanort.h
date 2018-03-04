@@ -1255,7 +1255,7 @@ void ComputeBoundingBoxOMP(real3<T> *bmin, real3<T> *bmax,
 #pragma omp parallel firstprivate(local_bmin, local_bmax) if (n > (1024 * 128))
   {
 #pragma omp for
-    for (int i = left_index; i < right_index; i++) {  // for each faces
+    for (unsigned int i = left_index; i < right_index; i++) {  // for each faces
       unsigned int idx = indices[i];
 
       real3<T> bbox_min, bbox_max;
