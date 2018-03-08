@@ -28,6 +28,8 @@ Path tracing example contributed by https://github.com/daseyb
 * Robust intersection calculation.
   * Robust BVH Ray Traversal(using up to 4 ulp version): http://jcgt.org/published/0002/02/02/
   * Watertight Ray/Triangle Intesection: http://jcgt.org/published/0002/01/05/
+* Double precision support
+  * Benefitical for HPC and scientific visualization.
 
 ## Applications
 
