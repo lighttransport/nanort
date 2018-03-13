@@ -335,7 +335,7 @@ template <typename T>
 inline real3<T> vnormalize(const real3<T> &rhs) {
   real3<T> v = rhs;
   T len = vlength(rhs);
-  if (std::fabs(len) > static_cast<T>(1.0e-6)) {
+  if (std::fabs(len) > std::numeric_limits<T>::epsilon()) {
     T inv_len = static_cast<T>(1.0) / len;
     v.v[0] *= inv_len;
     v.v[1] *= inv_len;
@@ -462,7 +462,7 @@ struct BVHBuildOptions {
 
   // Set default value: Taabb = 0.2
   BVHBuildOptions()
-      : cost_t_aabb(0.2f),
+      : cost_t_aabb(static_cast<T>(0.2)),
         min_leaf_primitives(4),
         max_tree_depth(256),
         bin_size(64),
@@ -694,7 +694,7 @@ class TriangleSAHPred {
       const T *vertices, const unsigned int *faces,
       size_t vertex_stride_bytes)  // e.g. 12 for sizeof(float) * XYZ
       : axis_(0),
-        pos_(0.0f),
+        pos_(static_cast<T>(0.0)),
         vertices_(vertices),
         faces_(faces),
         vertex_stride_bytes_(vertex_stride_bytes) {}
@@ -943,19 +943,19 @@ class TriangleIntersector {
     if (ray_coeff_.ky == 3) ray_coeff_.ky = 0;
 
     // Swap kx and ky dimention to preserve widing direction of triangles.
-    if (ray.dir[ray_coeff_.kz] < 0.0f) std::swap(ray_coeff_.kx, ray_coeff_.ky);
+    if (ray.dir[ray_coeff_.kz] < static_cast<T>(0.0)) std::swap(ray_coeff_.kx, ray_coeff_.ky);
 
     // Claculate shear constants.
     ray_coeff_.Sx = ray.dir[ray_coeff_.kx] / ray.dir[ray_coeff_.kz];
     ray_coeff_.Sy = ray.dir[ray_coeff_.ky] / ray.dir[ray_coeff_.kz];
-    ray_coeff_.Sz = 1.0f / ray.dir[ray_coeff_.kz];
+    ray_coeff_.Sz = static_cast<T>(1.0) / ray.dir[ray_coeff_.kz];
 
     trace_options_ = trace_options;
 
     t_min_ = ray.min_t;
 
-    u_ = 0.0f;
-    v_ = 0.0f;
+    u_ = static_cast<T>(0.0);
+    v_ = static_cast<T>(0.0);
   }
 
   /// Post BVH traversal stuff.
@@ -2020,15 +2020,15 @@ bool BVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
   intersector.PrepareTraversal(ray, options);
 
   int dir_sign[3];
-  dir_sign[0] = ray.dir[0] < 0.0f ? 1 : 0;
-  dir_sign[1] = ray.dir[1] < 0.0f ? 1 : 0;
-  dir_sign[2] = ray.dir[2] < 0.0f ? 1 : 0;
+  dir_sign[0] = ray.dir[0] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
+  dir_sign[1] = ray.dir[1] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
+  dir_sign[2] = ray.dir[2] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
 
-  // @fixme { Check edge case; i.e., 1/0 }
+  // FIXME(LTE): Check edge case; e.g, 1/0 
   real3<T> ray_inv_dir;
-  ray_inv_dir[0] = 1.0f / (ray.dir[0] + 1.0e-12f);
-  ray_inv_dir[1] = 1.0f / (ray.dir[1] + 1.0e-12f);
-  ray_inv_dir[2] = 1.0f / (ray.dir[2] + 1.0e-12f);
+  ray_inv_dir[0] = static_cast<T>(1.0) / (ray.dir[0]);
+  ray_inv_dir[1] = static_cast<T>(1.0) / (ray.dir[1]);
+  ray_inv_dir[2] = static_cast<T>(1.0) / (ray.dir[2]);
 
   real3<T> ray_org;
   ray_org[0] = ray.org[0];

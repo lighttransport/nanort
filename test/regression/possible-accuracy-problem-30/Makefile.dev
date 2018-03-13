@@ -1,0 +1,2 @@
+all:
+	clang++ -I../../../ -std=c++11 -fsanitize=address -g -O0 -o bug main.cc	
