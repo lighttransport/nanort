@@ -149,7 +149,7 @@ static unsigned int CreateTriangleMesh(const example::Mesh<float> &mesh,
 
 static void SaveImagePNG(const char *filename, const float *rgb, int width,
                          int height) {
-  unsigned char *bytes = new unsigned char[width * height * 3];
+  unsigned char *bytes = new unsigned char[size_t(width * height * 3)];
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
       const int index = y * width + x;
