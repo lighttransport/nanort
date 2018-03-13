@@ -133,7 +133,7 @@ struct double3 {
 
   double3 neg() { return double3(-x, -y, -z); }
 
-  double length() { return sqrtf(x * x + y * y + z * z); }
+  double length() { return sqrt(x * x + y * y + z * z); }
 
   void normalize() {
     double len = length();
@@ -215,7 +215,7 @@ struct Material {
   }
 };
 
-void calcNormal(double3& N, double3 v0, double3 v1, double3 v2)
+void calcNormal(double3& N, const double3& v0, const double3& v1, const double3& v2)
 {
   double3 v10 = v1 - v0;
   double3 v20 = v2 - v0;
