@@ -942,10 +942,10 @@ class TriangleIntersector {
     ray_coeff_.ky = ray_coeff_.kx + 1;
     if (ray_coeff_.ky == 3) ray_coeff_.ky = 0;
 
-    // Swap kx and ky dimention to preserve widing direction of triangles.
+    // Swap kx and ky dimension to preserve widing direction of triangles.
     if (ray.dir[ray_coeff_.kz] < static_cast<T>(0.0)) std::swap(ray_coeff_.kx, ray_coeff_.ky);
 
-    // Claculate shear constants.
+    // Calculate shear constants.
     ray_coeff_.Sx = ray.dir[ray_coeff_.kx] / ray.dir[ray_coeff_.kz];
     ray_coeff_.Sy = ray.dir[ray_coeff_.ky] / ray.dir[ray_coeff_.kz];
     ray_coeff_.Sz = static_cast<T>(1.0) / ray.dir[ray_coeff_.kz];
