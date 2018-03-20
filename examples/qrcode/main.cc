@@ -268,7 +268,7 @@ void mouseMoveCallback(float x, float y) {
       gRenderConfig.eye[2] += dolly_scale * (gMousePosY - y);
       gRenderConfig.look_at[2] += dolly_scale * (gMousePosY - y);
     } else if (gShiftPressed) {
-      const float trans_scale = 0.02;
+      const float trans_scale = 0.01;
       gRenderConfig.eye[0] += trans_scale * (gMousePosX - x);
       gRenderConfig.eye[1] -= trans_scale * (gMousePosY - y);
       gRenderConfig.look_at[0] += trans_scale * (gMousePosX - x);
@@ -417,12 +417,12 @@ int main(int argc, char** argv) {
       return -1;
     }
 
-    // Load .las model
-    bool las_ret = gRenderer.LoadLAS(gRenderConfig.las_filename.c_str(),
-                                         gRenderConfig.scene_scale);
+    // Generate cube data from QR code
+    bool las_ret = gRenderer.GenQR(gRenderConfig.text,
+                                    gRenderConfig.scene_scale);
     if (!las_ret) {
-      fprintf(stderr, "Failed to load [ %s ]\n",
-              gRenderConfig.las_filename.c_str());
+      fprintf(stderr, "Failed to generate QR code object [ %s ]\n",
+              gRenderConfig.text.c_str());
       return -1;
     }
   }
@@ -472,8 +472,8 @@ int main(int argc, char** argv) {
   ImGui_ImplBtGui_Init(window);
 
   ImGuiIO& io = ImGui::GetIO();
-  // io.Fonts->AddFontDefault();
-  io.Fonts->AddFontFromFileTTF("./Inconsolata-Regular.ttf", 15.0f);
+  io.Fonts->AddFontDefault();
+  // io.Fonts->AddFontFromFileTTF("./Inconsolata-Regular.ttf", 15.0f);
 
   std::thread renderThread(RenderThread);
 

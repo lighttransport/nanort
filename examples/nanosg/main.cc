@@ -1031,6 +1031,7 @@ int main(int argc, char **argv) {
   }
 
   ImGui_ImplBtGui_Shutdown();
+  ImGui::DestroyContext();
   delete window;
 
   return EXIT_SUCCESS;
