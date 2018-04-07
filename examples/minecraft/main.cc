@@ -468,6 +468,7 @@ int main(int argc, char** argv) {
   window->setResizeCallback(resizeCallback);
   checkErrors("resize");
 
+  ImGui::CreateContext();
   ImGui_ImplBtGui_Init(window);
 
   ImGuiIO& io = ImGui::GetIO();
@@ -562,6 +563,7 @@ int main(int argc, char** argv) {
   }
 
   ImGui_ImplBtGui_Shutdown();
+  ImGui::DestroyContext();
   delete window;
 
   return EXIT_SUCCESS;

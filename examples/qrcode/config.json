@@ -1,0 +1,8 @@
+{ "text" : "No ray tracing, no life!",
+  "width" : 800,
+  "height" : 800,
+  "eye" : [0, 0, 100],
+  "up" : [0, 1, 0],
+  "look_at" : [0, 0, 0],
+  "dummy" : 0
+}
