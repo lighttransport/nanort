@@ -377,6 +377,12 @@ void Display(int width, int height) {
                static_cast<const GLvoid*>(&buf.at(0)));
 }
 
+std::string GetFileExtension(const std::string &filename) {
+  if (filename.find_last_of(".") != std::string::npos)
+    return filename.substr(filename.find_last_of(".") + 1);
+  return "";
+}
+
 int main(int argc, char** argv) {
   std::string config_filename = "config.json";
 
@@ -396,9 +402,19 @@ int main(int argc, char** argv) {
 
   // Load particle data.
   {
-    bool ret = gRenderer.LoadPartio(gRenderConfig.partio_filename.c_str(),
-                                    gRenderConfig.scene_scale,
-                                    gRenderConfig.constant_radius);
+    bool ret = false;
+    std::string ext = GetFileExtension(gRenderConfig.partio_filename);
+
+    if (ext.compare("xyz") == 0) {
+      ret = gRenderer.LoadXYZ(gRenderConfig.partio_filename.c_str(),
+                                      gRenderConfig.scene_scale,
+                                      gRenderConfig.constant_radius);
+    } else {
+      ret = gRenderer.LoadPartio(gRenderConfig.partio_filename.c_str(),
+                                      gRenderConfig.scene_scale,
+                                      gRenderConfig.constant_radius);
+    }
+
     if (!ret) {
       fprintf(stderr, "Failed to load partio data [ %s ]\n",
               gRenderConfig.partio_filename.c_str());

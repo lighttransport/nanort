@@ -17,6 +17,10 @@ class Renderer {
   bool LoadPartio(const char* partio_filename, const float scene_scale,
                   const float constant_radius = 1.0f);
 
+  /// Loads XYZ data.
+  bool LoadXYZ(const char* partio_filename, const float scene_scale,
+                  const float constant_radius = 1.0f);
+
   /// Builds bvh.
   bool BuildBVH();
 

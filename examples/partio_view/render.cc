@@ -41,6 +41,7 @@ THE SOFTWARE.
 #include <vector>
 
 #include <iostream>
+#include <fstream>
 
 #include "../../nanort.h"
 #include "matrix.h"
@@ -425,6 +426,40 @@ static std::string GetBaseDir(const std::string& filepath) {
   if (filepath.find_last_of("/\\") != std::string::npos)
     return filepath.substr(0, filepath.find_last_of("/\\"));
   return "";
+}
+
+bool Renderer::LoadXYZ(const char* filename, const float scene_scale,
+                          const float constant_radius) {
+  (void)scene_scale;
+
+  std::ifstream ifs(filename);
+  if (!ifs) {
+    std::cerr << "File not found or invalid : " << filename << std::endl;
+    return false;
+  }
+
+  vertices_.clear();
+
+  float x, y, z;
+  while (ifs >> x >> y >> z) {
+    vertices_.push_back(x);
+    vertices_.push_back(y);
+    vertices_.push_back(z);
+  }
+
+  if (!ifs.eof()) {
+    std::cerr << "Invalid .xyz file : " << filename << std::endl;
+    return false;
+  }
+
+  std::cout << "# of points : " << vertices_.size() / 3 << std::endl;
+
+  for (size_t i = 0; i < vertices_.size() / 3; i++) {
+    radiuss_.push_back(constant_radius);
+  }
+
+  return true;
+
 }
 
 bool Renderer::LoadPartio(const char* filename, const float scene_scale,
