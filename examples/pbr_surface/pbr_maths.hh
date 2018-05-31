@@ -95,24 +95,43 @@ struct PBRShaderCPU {
   /// Virtual output : color of the "fragment" (aka: the pixel here)
   vec4 gl_FragColor;
 
+//TODO This is just a pass-through function. This will de pend on the color space used on the fed textures...
+vec4 SRGBtoLINEAR(vec4 srgbIn) {
+#ifdef MANUAL_SRGB
+#ifdef SRGB_FAST_APPROXIMATION
+    vec3 linOut = pow(srgbIn.xyz, vec3(2.2));
+#else   // SRGB_FAST_APPROXIMATION
+    vec3 bLess = step(vec3(0.04045), srgbIn.xyz);
+    vec3 linOut =
+        mix(srgbIn.xyz / vec3(12.92),
+            pow((srgbIn.xyz + vec3(0.055)) / vec3(1.055), vec3(2.4)), bLess);
+#endif  // SRGB_FAST_APPROXIMATION
+    return vec4(linOut, srgbIn.w);
+    ;
+#else   // MANUAL_SRGB
+    return srgbIn;
+#endif  // MANUAL_SRGB
+  }
+
   void main() {
     // Metallic and Roughness material properties are packed together
     // In glTF, these factors can be specified by fixed scalar values
     // or from a metallic-roughness map
     float perceptualRoughness = u_MetallicRoughnessValues.y;
     float metallic = u_MetallicRoughnessValues.x;
-#ifdef HAS_METALROUGHNESSMAP  // TODO make this switchable by some "material
-                              // configuration"
-    // Roughness is stored in the 'g' channel, metallic is stored in the 'b'
-    // channel. This layout intentionally reserves the 'r' channel for
-    // (optional) occlusion map data
-    vec4 mrSample = texture2D(u_MetallicRoughnessSampler,
-                              v_UV);  // TODO implement an equivalent of the
-                                      // texture sampler 2D that return the
-                                      // value from an image, and UV coords
-    perceptualRoughness = mrSample.g * perceptualRoughness;
-    metallic = mrSample.b * metallic;
-#endif
+
+    if (useMetalRoughMap) {
+      // Roughness is stored in the 'g' channel, metallic is stored in the 'b'
+      // channel. This layout intentionally reserves the 'r' channel for
+      // (optional) occlusion map data
+      vec4 mrSample = texture2D(u_MetallicRoughnessSampler, v_UV);
+
+      // NOTE: G channel of the map is used for roughness, B channel is used for
+      // metalness
+      perceptualRoughness = mrSample.g * perceptualRoughness;
+      metallic = mrSample.b * metallic;
+    }
+
     perceptualRoughness = clamp(perceptualRoughness, c_MinRoughness, 1.0f);
     metallic = clamp(metallic, 0.0f, 1.0f);
     // Roughness is authored as perceptual roughness; as is convention,
@@ -120,12 +139,13 @@ struct PBRShaderCPU {
     float alphaRoughness = perceptualRoughness * perceptualRoughness;
 
     // The albedo may be defined from a base texture or a flat color
-#ifdef HAS_BASECOLORMAP
-    vec4 baseColor =
-        SRGBtoLINEAR(texture2D(u_BaseColorSampler, v_UV)) * u_BaseColorFactor;
-#else
-    vec4 baseColor = u_BaseColorFactor;
-#endif
+    vec4 baseColor;
+    if (useBaseColorMap) {
+      baseColor =
+          SRGBtoLINEAR(texture2D(u_BaseColorSampler, v_UV)) * u_BaseColorFactor;
+    } else {
+      baseColor = u_BaseColorFactor;
+    }
 
     vec3 f0 = vec3(0.04);
     vec3 diffuseColor = vec3(baseColor) * (vec3(1.0) - f0);
@@ -189,16 +209,19 @@ struct PBRShaderCPU {
 #endif
 
     // Apply optional PBR terms for additional (optional) shading
-#ifdef HAS_OCCLUSIONMAP
+
+  if (useOcclusionMap)
+      {
     float ao = texture2D(u_OcclusionSampler, v_UV).r;
     color = mix(color, color * ao, u_OcclusionStrength);
-#endif
+    }
 
-#ifdef HAS_EMISSIVEMAP
+  if (useEmissiveMap)
+      {
     vec3 emissive =
-        SRGBtoLINEAR(texture2D(u_EmissiveSampler, v_UV)).rgb * u_EmissiveFactor;
+        SRGBtoLINEAR(vec4(vec3(texture2D(u_EmissiveSampler, v_UV)) * u_EmissiveFactor, 1));
     color += emissive;
-#endif
+    }
 
     // This section uses mix to override final color for reference app
     // visualization of various parameters in the lighting equation.
@@ -219,7 +242,7 @@ struct PBRShaderCPU {
   // map
   // or from the interpolated mesh normal and tangent attributes.
   vec3 getNormal() {
-    // Retrieve the tangent space matrix
+  // Retrieve the tangent space matrix
 #ifndef HAS_TANGENTS
     /*    vec3 pos_dx = dFdx(v_Position);
     vec3 pos_dy = dFdy(v_Position);
@@ -252,16 +275,15 @@ struct PBRShaderCPU {
 #else  // HAS_TANGENTS
     mat3 tbn = v_TBN;
 #endif
-
-#ifdef HAS_NORMALMAP
-    vec3 n = texture2D(u_NormalSampler, v_UV).rgb;
-    n = normalize(tbn *
-                  ((2.0 * n - 1.0) * vec3(u_NormalScale, u_NormalScale, 1.0)));
-#else
-    // The tbn matrix is linearly interpolated, so we need to re-normalize
-    vec3 n = normalize(tbn[2]);
-#endif
-
+    vec3 n;
+    if (useNormalMap) {
+      n = vec3(texture2D(u_NormalSampler, v_UV));
+      n = normalize(
+          tbn * ((2.0f * n - 1.0f) * vec3(u_NormalScale, u_NormalScale, 1.0)));
+    } else {
+      // The tbn matrix is linearly interpolated, so we need to re-normalize
+      n = normalize(tbn[2]);
+    }
     return n;
   }
 
@@ -311,7 +333,7 @@ struct PBRShaderCPU {
     return roughnessSq / (M_PI * f * f);
   }
 
-  // Global stuff pasted from glsl file
+    // Global stuff pasted from glsl file
 
 #define uniform
 #define varying
@@ -325,24 +347,23 @@ struct PBRShaderCPU {
   uniform sampler2D u_brdfLUT;
 #endif
 
-#ifdef HAS_BASECOLORMAP
+  bool useBaseColorMap = false;
   uniform sampler2D u_BaseColorSampler;
-#endif
-#ifdef HAS_NORMALMAP
+
+  bool useNormalMap = false;
   uniform sampler2D u_NormalSampler;
   uniform float u_NormalScale;
-#endif
-#ifdef HAS_EMISSIVEMAP
+
+  bool useEmissiveMap = false;
   uniform sampler2D u_EmissiveSampler;
   uniform vec3 u_EmissiveFactor;
-#endif
-#ifdef HAS_METALROUGHNESSMAP
+
+  bool useMetalRoughMap = false;
   uniform sampler2D u_MetallicRoughnessSampler;
-#endif
-#ifdef HAS_OCCLUSIONMAP
+
+  bool useOcclusionMap = false;
   uniform sampler2D u_OcclusionSampler;
   uniform float u_OcclusionStrength;
-#endif
 
   uniform vec2 u_MetallicRoughnessValues;
   uniform vec4 u_BaseColorFactor;
