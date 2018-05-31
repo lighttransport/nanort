@@ -9,9 +9,10 @@
 
 namespace pbr_maths {
 
-constexpr static float c_MinRoughness = 0.04;
-constexpr static float M_PI = 3.141592653589793;
-
+constexpr static float const c_MinRoughness = 0.04;
+#ifndef M_PI
+constexpr static float const M_PI = 3.141592653589793;
+#endif
 // GLSL data types
 using glm::mat3;
 using glm::mat4;
