@@ -33,7 +33,7 @@ struct Mesh {
   std::vector<T> vertices;
   std::vector<T> facevarying_normals;
   std::vector<unsigned int> faces;
-  // std::vector<T> facevarying_uvs;
+  std::vector<T> facevarying_uvs;
 };
 
 #pragma pack(push, 1)
@@ -79,9 +79,11 @@ int main() {
   mesh.vertices.push_back(-1);
   mesh.vertices.push_back(+1);
   mesh.vertices.push_back(-2);
+
   mesh.vertices.push_back(+1);
   mesh.vertices.push_back(+1);
   mesh.vertices.push_back(-2);
+
   mesh.vertices.push_back(-1);
   mesh.vertices.push_back(-1);
   mesh.vertices.push_back(-2);
@@ -90,9 +92,11 @@ int main() {
   mesh.vertices.push_back(+1);
   mesh.vertices.push_back(+1);
   mesh.vertices.push_back(-2);
+
   mesh.vertices.push_back(+1);
   mesh.vertices.push_back(-1);
   mesh.vertices.push_back(-2);
+
   mesh.vertices.push_back(-1);
   mesh.vertices.push_back(-1);
   mesh.vertices.push_back(-2);
@@ -116,6 +120,20 @@ int main() {
   mesh.facevarying_normals.push_back(0);
   mesh.facevarying_normals.push_back(0);
   mesh.facevarying_normals.push_back(+1);
+
+  mesh.facevarying_uvs.push_back(0);
+  mesh.facevarying_uvs.push_back(1);
+  mesh.facevarying_uvs.push_back(1);
+  mesh.facevarying_uvs.push_back(1);
+  mesh.facevarying_uvs.push_back(0);
+  mesh.facevarying_uvs.push_back(0);
+
+  mesh.facevarying_uvs.push_back(1);
+  mesh.facevarying_uvs.push_back(1);
+  mesh.facevarying_uvs.push_back(0);
+  mesh.facevarying_uvs.push_back(0);
+  mesh.facevarying_uvs.push_back(1);
+  mesh.facevarying_uvs.push_back(0);
 
   mesh.faces.push_back(0);
   mesh.faces.push_back(1);
