@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm.hpp>
+#include <vector>
 
 #define HAS_NORMALS
 
@@ -26,7 +27,6 @@ using glm::cross;
 using glm::length;
 using glm::max;
 using glm::mix;
-using glm::mix;
 using glm::normalize;
 
 // template <typename T>
@@ -35,6 +35,41 @@ using glm::normalize;
 //  if (x > max) return max;
 //  return x
 //}
+
+// Implement GLSL sampler2D/texture2D system for accessing textures
+struct sampler2D {
+  struct pixel {
+    uint8_t r, g, b, a;
+    static float to_float(uint8_t v) { return float(v) / 255.f; }
+
+    operator glm::vec4() const {
+      return {to_float(r), to_float(g), to_float(b), to_float(a)};
+    }
+  };
+
+  size_t width;
+  size_t height;
+  std::vector<pixel> pixels;
+};
+
+vec4 texture2D(const sampler2D& sampler, const vec2& uv) {
+  // wrap uvs
+  vec2 buv;
+
+  auto in_bound = [](float a) {
+    if (a >= 0 && a <= 1) return a;
+    return a < 0 ? -fmod(a, 1.f) : fmod(a, 1.f);
+  };
+
+  buv.x = in_bound(uv.x);
+  buv.y = in_bound(uv.y);
+
+  // get best matching pixel coordinates
+  auto px_x = size_t(buv.x * sampler.width);
+  auto px_y = size_t(buv.y * sampler.height);
+  // return the selected pixel
+  return sampler.pixels[px_y * sampler.width + px_x];
+}
 
 // This datastructure is used throughough the code here
 struct PBRInfo {
@@ -72,11 +107,10 @@ struct PBRShaderCPU {
     // Roughness is stored in the 'g' channel, metallic is stored in the 'b'
     // channel. This layout intentionally reserves the 'r' channel for
     // (optional) occlusion map data
-    vec4 mrSample =
-        texture2D(u_MetallicRoughnessSampler,
-                  v_UV);  // TODO implement an equivalent of the
-                          // texture sampler 2D that return the value
-                          // from an image, and UV coords
+    vec4 mrSample = texture2D(u_MetallicRoughnessSampler,
+                              v_UV);  // TODO implement an equivalent of the
+                                      // texture sampler 2D that return the
+                                      // value from an image, and UV coords
     perceptualRoughness = mrSample.g * perceptualRoughness;
     metallic = mrSample.b * metallic;
 #endif
@@ -186,14 +220,15 @@ struct PBRShaderCPU {
   // map
   // or from the interpolated mesh normal and tangent attributes.
   vec3 getNormal() {
-  // Retrieve the tangent space matrix
+    // Retrieve the tangent space matrix
 #ifndef HAS_TANGENTS
     /*    vec3 pos_dx = dFdx(v_Position);
     vec3 pos_dy = dFdy(v_Position);
     vec3 tex_dx = dFdx(vec3(v_UV, 0.0));
     vec3 tex_dy = dFdy(vec3(v_UV, 0.0));
     vec3 t = (tex_dy.t * pos_dx - tex_dx.t * pos_dy) /
-             (tex_dx.s * tex_dy.t - tex_dy.s * tex_dx.t)*/;
+             (tex_dx.s * tex_dy.t - tex_dy.s * tex_dx.t)*/
+    ;
 #ifdef HAS_NORMALS
     vec3 ng = normalize(v_Normal);
 #else
@@ -277,7 +312,7 @@ struct PBRShaderCPU {
     return roughnessSq / (M_PI * f * f);
   }
 
-    // Global stuff pasted from glsl file
+  // Global stuff pasted from glsl file
 
 #define uniform
 #define varying

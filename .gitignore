@@ -46,3 +46,5 @@ viwewer.make
 bin/
 *.csv
 build/
+
+.vscode/
