@@ -1,7 +1,6 @@
 #pragma once
 
 #include <glm.hpp>
-#include <vector>
 
 #define HAS_NORMALS
 
@@ -49,7 +48,7 @@ struct sampler2D {
 
   size_t width;
   size_t height;
-  std::vector<pixel> pixels;
+  pixel* pixels;
 };
 
 vec4 texture2D(const sampler2D& sampler, const vec2& uv) {
