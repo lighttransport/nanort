@@ -57,6 +57,16 @@ struct sampler2D {
   }
 };
 
+struct samplerCube {
+  enum cubemap_faces : size_t { LEFT, RIGHT, UP, DOWN, FRONT, BACK };
+  sampler2D& getFace(cubemap_faces f) { return faces[f]; }
+  sampler2D faces[6];
+};
+
+vec4 textureCube(const samplerCube& sampler, const vec3 direction) {
+  return {};
+}
+
 vec4 texture2D(const sampler2D& sampler, const vec2& uv) {
   // wrap uvs
   vec2 buv;
@@ -94,7 +104,7 @@ struct PBRInfo {
   vec3 specularColor;         // color contribution from specular lighting
 };
 
-  #define MANUAL_SRGB ;
+#define MANUAL_SRGB ;
 
 /// Object that represent the fragment shader, and all of it's global state, but
 /// in C++. The intended use is that you set all the parameters that *should* be
@@ -121,6 +131,42 @@ struct PBRShaderCPU {
     return srgbIn;
 #endif  // MANUAL_SRGB
   }
+#ifdef USE_IBL
+  // Calculation of the lighting contribution from an optional Image Based Light
+  // source.
+  // Precomputed Environment Maps are required uniform inputs and are computed
+  // as outlined in [1]. See our README.md on Environment Maps [3] for
+  // additional discussion.
+  vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection) {
+    float mipCount = 9.0;  // resolution of 512x512
+    float lod = (pbrInputs.perceptualRoughness * mipCount);
+    // retrieve a scale and bias to F0. See [1], Figure 3
+    vec3 brdf =
+        SRGBtoLINEAR(
+            texture2D(u_brdfLUT, vec2(pbrInputs.NdotV,
+                                      1.0 - pbrInputs.perceptualRoughness)))
+            .rgb;
+    vec3 diffuseLight = SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, n)).rgb;
+
+#ifdef USE_TEX_LOD
+    vec3 specularLight =
+        SRGBtoLINEAR(textureCubeLodEXT(u_SpecularEnvSampler, reflection, lod))
+            .rgb;
+#else
+    vec3 specularLight =
+        SRGBtoLINEAR(textureCube(u_SpecularEnvSampler, reflection)).rgb;
+#endif
+
+    vec3 diffuse = diffuseLight * pbrInputs.diffuseColor;
+    vec3 specular = specularLight * (pbrInputs.specularColor * brdf.x + brdf.y);
+
+    // For presentation, this allows us to disable IBL terms
+    diffuse *= u_ScaleIBLAmbient.x;
+    specular *= u_ScaleIBLAmbient.y;
+
+    return diffuse + specular;
+  }
+#endif
 
   void main() {
     // Metallic and Roughness material properties are packed together
@@ -249,7 +295,7 @@ struct PBRShaderCPU {
   // map
   // or from the interpolated mesh normal and tangent attributes.
   vec3 getNormal() {
-  // Retrieve the tangent space matrix
+    // Retrieve the tangent space matrix
 #ifndef HAS_TANGENTS
     /*    vec3 pos_dx = dFdx(v_Position);
     vec3 pos_dy = dFdy(v_Position);
@@ -340,7 +386,7 @@ struct PBRShaderCPU {
     return roughnessSq / (M_PI * f * f);
   }
 
-    // Global stuff pasted from glsl file
+  // Global stuff pasted from glsl file
 
 #define uniform
 #define varying
