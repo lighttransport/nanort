@@ -34,6 +34,33 @@ struct Mesh {
   std::vector<T> facevarying_normals;
   std::vector<unsigned int> faces;
   std::vector<T> facevarying_uvs;
+
+  inline void lerp(T dst[3], const T v0[3], const T v1[3], const T v2[3],
+                   float u, float v) {
+    dst[0] = (static_cast<T>(1.0) - u - v) * v0[0] + u * v1[0] + v * v2[0];
+    dst[1] = (static_cast<T>(1.0) - u - v) * v0[1] + u * v1[1] + v * v2[1];
+    dst[2] = (static_cast<T>(1.0) - u - v) * v0[2] + u * v1[2] + v * v2[2];
+  }
+
+  glm::vec2 getTextureCoord(unsigned int face, T u, T v) {
+    T t0[3], t1[3], t2[3];
+    t0[0] = facevarying_uvs[6 * face + 0];
+    t0[1] = facevarying_uvs[6 * face + 1];
+    t0[2] = T(0);
+
+    t1[0] = facevarying_uvs[6 * face + 2];
+    t1[1] = facevarying_uvs[6 * face + 3];
+    t1[2] = T(0);
+
+    t2[0] = facevarying_uvs[6 * face + 4];
+    t2[1] = facevarying_uvs[6 * face + 5];
+    t2[2] = T(0);
+
+    T tcoord[3];
+    lerp(tcoord, t0, t1, t2, u, v);
+
+    return {tcoord[0], tcoord[1]};
+  }
 };
 
 #pragma pack(push, 1)
@@ -177,18 +204,24 @@ int main() {
   mesh.facevarying_normals.push_back(0);
   mesh.facevarying_normals.push_back(+1);
 
+  // 1
   mesh.facevarying_uvs.push_back(0);
   mesh.facevarying_uvs.push_back(1);
+  // 2
   mesh.facevarying_uvs.push_back(1);
   mesh.facevarying_uvs.push_back(1);
+  // 3
   mesh.facevarying_uvs.push_back(0);
   mesh.facevarying_uvs.push_back(0);
 
+  // 4
   mesh.facevarying_uvs.push_back(1);
+  mesh.facevarying_uvs.push_back(1);
+  // 5
   mesh.facevarying_uvs.push_back(1);
   mesh.facevarying_uvs.push_back(0);
+  // 6
   mesh.facevarying_uvs.push_back(0);
-  mesh.facevarying_uvs.push_back(1);
   mesh.facevarying_uvs.push_back(0);
 
   mesh.faces.push_back(0);
@@ -265,7 +298,7 @@ int main() {
 
       if (accel.Traverse(camRay, triangle_intersector, &isect)) {
         glm::vec3 hit = org + isect.t * dir;
-        glm::vec2 uv = { isect.u, isect.v};
+        glm::vec2 uv = mesh.getTextureCoord(isect.prim_id, isect.u, isect.v);
 
         // std::cout << "hit at " << hit.x << ',' << hit.y << ',' << hit.z <<
         // '\n';
@@ -308,29 +341,24 @@ int main() {
                           mesh.facevarying_normals[3 * 3 * isect.prim_id + 2]};
             shader.v_UV = uv;
 
-            if (normalMap.pixels)
-            {
+            if (normalMap.pixels) {
               shader.useNormalMap = true;
               shader.u_NormalSampler = normalMap;
             } else {
               shader.useNormalMap = false;
             }
 
-            if (baseColorMap.pixels)
-            {
+            if (baseColorMap.pixels) {
               shader.useBaseColorMap = true;
               shader.u_BaseColorSampler = baseColorMap;
-            } else
-            {
+            } else {
               shader.useBaseColorMap = false;
             }
 
-            if (metalRoughMap.pixels)
-            {
+            if (metalRoughMap.pixels) {
               shader.useMetalRoughMap = true;
               shader.u_MetallicRoughnessSampler = metalRoughMap;
-            } else
-            {
+            } else {
               shader.useMetalRoughMap = false;
             }
 
