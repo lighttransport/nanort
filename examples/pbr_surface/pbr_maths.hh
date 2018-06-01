@@ -27,6 +27,7 @@ using glm::length;
 using glm::max;
 using glm::mix;
 using glm::normalize;
+using glm::step;
 
 // template <typename T>
 // T clamp(T x, T min, T max) {
@@ -46,9 +47,14 @@ struct sampler2D {
     }
   };
 
-  size_t width;
-  size_t height;
-  pixel* pixels;
+  size_t width = 0;
+  size_t height = 0;
+  pixel* pixels = nullptr;
+
+  void releasePixels() {
+    delete[] pixels;
+    pixels = nullptr;
+  }
 };
 
 vec4 texture2D(const sampler2D& sampler, const vec2& uv) {
@@ -88,6 +94,8 @@ struct PBRInfo {
   vec3 specularColor;         // color contribution from specular lighting
 };
 
+  #define MANUAL_SRGB ;
+
 /// Object that represent the fragment shader, and all of it's global state, but
 /// in C++. The intended use is that you set all the parameters that *should* be
 /// global for the shader and set by OpenGL call when using the program
@@ -95,16 +103,17 @@ struct PBRShaderCPU {
   /// Virtual output : color of the "fragment" (aka: the pixel here)
   vec4 gl_FragColor;
 
-//TODO This is just a pass-through function. This will de pend on the color space used on the fed textures...
-vec4 SRGBtoLINEAR(vec4 srgbIn) {
+  // TODO This is just a pass-through function. This will de pend on the color
+  // space used on the fed textures...
+  vec4 SRGBtoLINEAR(vec4 srgbIn) {
 #ifdef MANUAL_SRGB
 #ifdef SRGB_FAST_APPROXIMATION
     vec3 linOut = pow(srgbIn.xyz, vec3(2.2));
 #else   // SRGB_FAST_APPROXIMATION
-    vec3 bLess = step(vec3(0.04045), srgbIn.xyz);
+    vec3 bLess = step(vec3(0.04045), vec3(srgbIn));
     vec3 linOut =
-        mix(srgbIn.xyz / vec3(12.92),
-            pow((srgbIn.xyz + vec3(0.055)) / vec3(1.055), vec3(2.4)), bLess);
+        mix(vec3(srgbIn) / vec3(12.92),
+            pow((vec3(srgbIn) + vec3(0.055)) / vec3(1.055), vec3(2.4)), bLess);
 #endif  // SRGB_FAST_APPROXIMATION
     return vec4(linOut, srgbIn.w);
     ;
@@ -210,17 +219,15 @@ vec4 SRGBtoLINEAR(vec4 srgbIn) {
 
     // Apply optional PBR terms for additional (optional) shading
 
-  if (useOcclusionMap)
-      {
-    float ao = texture2D(u_OcclusionSampler, v_UV).r;
-    color = mix(color, color * ao, u_OcclusionStrength);
+    if (useOcclusionMap) {
+      float ao = texture2D(u_OcclusionSampler, v_UV).r;
+      color = mix(color, color * ao, u_OcclusionStrength);
     }
 
-  if (useEmissiveMap)
-      {
-    vec3 emissive =
-        SRGBtoLINEAR(vec4(vec3(texture2D(u_EmissiveSampler, v_UV)) * u_EmissiveFactor, 1));
-    color += emissive;
+    if (useEmissiveMap) {
+      vec3 emissive = SRGBtoLINEAR(
+          vec4(vec3(texture2D(u_EmissiveSampler, v_UV)) * u_EmissiveFactor, 1));
+      color += emissive;
     }
 
     // This section uses mix to override final color for reference app
@@ -352,7 +359,7 @@ vec4 SRGBtoLINEAR(vec4 srgbIn) {
 
   bool useNormalMap = false;
   uniform sampler2D u_NormalSampler;
-  uniform float u_NormalScale;
+  uniform float u_NormalScale = 1;
 
   bool useEmissiveMap = false;
   uniform sampler2D u_EmissiveSampler;
@@ -363,9 +370,9 @@ vec4 SRGBtoLINEAR(vec4 srgbIn) {
 
   bool useOcclusionMap = false;
   uniform sampler2D u_OcclusionSampler;
-  uniform float u_OcclusionStrength;
+  uniform float u_OcclusionStrength = 1;
 
-  uniform vec2 u_MetallicRoughnessValues;
+  uniform vec2 u_MetallicRoughnessValues = {1, 1};
   uniform vec4 u_BaseColorFactor;
 
   uniform vec3 u_Camera;

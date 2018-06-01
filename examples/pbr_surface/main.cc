@@ -18,7 +18,7 @@
 
 template <typename T>
 glm::vec3 toVec3(T arr) {
-  return { arr[0], arr[1], arr[2] };
+  return {arr[0], arr[1], arr[2]};
 }
 
 template <typename T>
@@ -59,17 +59,73 @@ struct PbrMaterial {
   Color<T> albedo;
 };
 
+void loadSampler(pbr_maths::sampler2D& sampler, const stbi_uc* data, int w,
+                 int h, int c) {
+  sampler.width = w;
+  sampler.height = h;
+  sampler.pixels = new pbr_maths::sampler2D::pixel[w * h];
+
+  for (size_t i = 0; i < w * h; ++i) {
+    sampler.pixels[i].r = data[i * c + 0];
+    sampler.pixels[i].g = data[i * c + 1];
+    sampler.pixels[i].b = data[i * c + 2];
+    if (c == 4) sampler.pixels[i].a = data[i * c + 3];
+  }
+}
+
+void loadCombineMetalRoughSampler(pbr_maths::sampler2D& sampler,
+                                  const stbi_uc* metalData, int mw, int mh,
+                                  int mc, const stbi_uc* roughnessData, int rw,
+                                  int rh, int rc) {
+  assert(mw == rw);
+  assert(mh == rh);
+
+  sampler.pixels = new pbr_maths::sampler2D::pixel[mw * mh];
+
+  for (size_t i = 0; i < mw * mh; ++i) {
+    // We don't really care about these ones
+    sampler.pixels[i].r = 0;
+    sampler.pixels[i].a = 255;
+
+    sampler.pixels[i].g = roughnessData[i * rc];
+    sampler.pixels[i].b = metalData[i * mc];
+  }
+}
+
 int main() {
+  pbr_maths::sampler2D normalMap, baseColorMap;
+  int w, h, c;
+  auto normdata = stbi_load("./MetalPlates02_nrm.jpg", &w, &h, &c, 0);
+  if (normdata) loadSampler(normalMap, normdata, w, h, c);
+
+  auto colData = stbi_load("./MetalPlates02_col.jpg", &w, &h, &c, 0);
+  if (colData) loadSampler(baseColorMap, colData, w, h, c);
+
+  pbr_maths::sampler2D metalRoughMap;
+  int rw, rh, rc, mw, mh, mc;
+  auto roughData = stbi_load("./MetalPlates02_rgh.jpg", &rw, &rh, &rc, 0);
+  auto metalData = stbi_load("./MetalPlates02_met.jpg", &mw, &mh, &mc, 0);
+  if (roughData && metalData)
+    loadCombineMetalRoughSampler(metalRoughMap, metalData, mw, mh, mc,
+                                 roughData, rw, rh, rc);
+
+  stbi_image_free(normdata);
+  stbi_image_free(colData);
+  stbi_image_free(roughData);
+  stbi_image_free(metalData);
+
+  // Here the metal and roughness data are mixed together
+
   PbrMaterial<float> material;
-  material.metalness = 0.999;
-  material.roughness = 0.2f;
-  material.albedo.r = 0.50;
-  material.albedo.g = 0.55;
-  material.albedo.b = 0.65;
+  material.metalness = 1;
+  material.roughness = 1;
+  material.albedo.r = 1;
+  material.albedo.g = 1;
+  material.albedo.b = 1;
 
   std::vector<PointLight> lights;
 
-  lights.emplace_back(glm::vec3{0, 0.5, 2}, Color<float>{.8f, 0.6f, 0.55f});
+  lights.emplace_back(glm::vec3{0, 0.5, 2}, Color<float>{1, 1, 1});
 
   Mesh<float> mesh;
   mesh.num_faces = 2;
@@ -209,6 +265,7 @@ int main() {
 
       if (accel.Traverse(camRay, triangle_intersector, &isect)) {
         glm::vec3 hit = org + isect.t * dir;
+        glm::vec2 uv = { isect.u, isect.v};
 
         // std::cout << "hit at " << hit.x << ',' << hit.y << ',' << hit.z <<
         // '\n';
@@ -226,7 +283,6 @@ int main() {
 
           // 2) if nothing was hit, draw pixel with shader
           if (!accel.Traverse(lightRay, triangle_intersector, &isect)) {
-
             // This object represet a fragment shader, and is literally a
             // translation in C++ from an official example from khronos
             static pbr_maths::PBRShaderCPU shader;
@@ -250,6 +306,33 @@ int main() {
                 glm::vec3{mesh.facevarying_normals[3 * 3 * isect.prim_id + 0],
                           mesh.facevarying_normals[3 * 3 * isect.prim_id + 1],
                           mesh.facevarying_normals[3 * 3 * isect.prim_id + 2]};
+            shader.v_UV = uv;
+
+            if (normalMap.pixels)
+            {
+              shader.useNormalMap = true;
+              shader.u_NormalSampler = normalMap;
+            } else {
+              shader.useNormalMap = false;
+            }
+
+            if (baseColorMap.pixels)
+            {
+              shader.useBaseColorMap = true;
+              shader.u_BaseColorSampler = baseColorMap;
+            } else
+            {
+              shader.useBaseColorMap = false;
+            }
+
+            if (metalRoughMap.pixels)
+            {
+              shader.useMetalRoughMap = true;
+              shader.u_MetallicRoughnessSampler = metalRoughMap;
+            } else
+            {
+              shader.useMetalRoughMap = false;
+            }
 
             //"Execute shader" on the current pixel, for the current light
             // source
@@ -266,8 +349,12 @@ int main() {
       pixel.a = 255;
     }
 
-  stbi_flip_vertically_on_write(true); //Flip Y
-  stbi_write_bmp("out.bmp", width, height, 4, (void*)img.data());
+  stbi_flip_vertically_on_write(true);  // Flip Y
+  stbi_write_png("out.png", width, height, 4, (void*)img.data(), 0);
+
+  normalMap.releasePixels();
+  baseColorMap.releasePixels();
+  metalRoughMap.releasePixels();
 
   return 0;
 }
