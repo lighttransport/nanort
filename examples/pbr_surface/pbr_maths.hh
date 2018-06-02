@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <glm.hpp>
 
 #define HAS_NORMALS
@@ -51,30 +52,24 @@ struct sampler2D {
   size_t height = 0;
   pixel* pixels = nullptr;
 
+  bool linearFiltering = false;
   void releasePixels() {
     delete[] pixels;
     pixels = nullptr;
   }
 };
 
-struct samplerCube {
-  enum cubemap_faces : size_t { LEFT, RIGHT, UP, DOWN, FRONT, BACK };
-  sampler2D& getFace(cubemap_faces f) { return faces[f]; }
-  sampler2D faces[6];
-};
-
-vec4 textureCube(const samplerCube& sampler, const vec3 direction) {
-  return {};
-}
+float lerp(float a, float b, float f) { return a + f * (b - a); }
 
 vec4 texture2D(const sampler2D& sampler, const vec2& uv) {
   // wrap uvs
   vec2 buv;
 
   auto in_bound = [](float a) {
-    if (a >= 0 && a <= 1) return a;
-    return a < 0 ? -std::fmod(a, 1.f) : std::fmod(a, 1.f);
+    clamp(a, 0.f, 0.99999f);
+    return a;
   };
+
 
   buv.x = in_bound(uv.x);
   buv.y = in_bound(uv.y);
@@ -82,8 +77,104 @@ vec4 texture2D(const sampler2D& sampler, const vec2& uv) {
   // get best matching pixel coordinates
   auto px_x = size_t(buv.x * sampler.width);
   auto px_y = size_t(buv.y * sampler.height);
+  // TODO linear interpolation on pixel values
+  if (sampler.linearFiltering) {
+  }
+
   // return the selected pixel
   return sampler.pixels[px_y * sampler.width + px_x];
+}
+
+struct samplerCube {
+  enum cubemap_faces : size_t { LEFT, RIGHT, UP, DOWN, FRONT, BACK };
+  sampler2D& getFace(cubemap_faces f) { return faces[f]; }
+  sampler2D faces[6];
+
+  void releasePixels() {
+    for (auto& face : faces) face.releasePixels();
+  }
+};
+
+void convert_xyz_to_cube_uv(float x, float y, float z, int* index, float* u,
+                            float* v) {
+  float absX = fabs(x);
+  float absY = fabs(y);
+  float absZ = fabs(z);
+
+  int isXPositive = x > 0 ? 1 : 0;
+  int isYPositive = y > 0 ? 1 : 0;
+  int isZPositive = z > 0 ? 1 : 0;
+
+  float maxAxis, uc, vc;
+
+  // POSITIVE X
+  if (isXPositive && absX >= absY && absX >= absZ) {
+    // u (0 to 1) goes from +z to -z
+    // v (0 to 1) goes from -y to +y
+    maxAxis = absX;
+    uc = -z;
+    vc = y;
+    *index = 0;
+  }
+  // NEGATIVE X
+  if (!isXPositive && absX >= absY && absX >= absZ) {
+    // u (0 to 1) goes from -z to +z
+    // v (0 to 1) goes from -y to +y
+    maxAxis = absX;
+    uc = z;
+    vc = y;
+    *index = 1;
+  }
+  // POSITIVE Y
+  if (isYPositive && absY >= absX && absY >= absZ) {
+    // u (0 to 1) goes from -x to +x
+    // v (0 to 1) goes from +z to -z
+    maxAxis = absY;
+    uc = x;
+    vc = -z;
+    *index = 2;
+  }
+  // NEGATIVE Y
+  if (!isYPositive && absY >= absX && absY >= absZ) {
+    // u (0 to 1) goes from -x to +x
+    // v (0 to 1) goes from -z to +z
+    maxAxis = absY;
+    uc = x;
+    vc = z;
+    *index = 3;
+  }
+  // POSITIVE Z
+  if (isZPositive && absZ >= absX && absZ >= absY) {
+    // u (0 to 1) goes from -x to +x
+    // v (0 to 1) goes from -y to +y
+    maxAxis = absZ;
+    uc = x;
+    vc = y;
+    *index = 4;
+  }
+  // NEGATIVE Z
+  if (!isZPositive && absZ >= absX && absZ >= absY) {
+    // u (0 to 1) goes from +x to -x
+    // v (0 to 1) goes from -y to +y
+    maxAxis = absZ;
+    uc = -x;
+    vc = y;
+    *index = 5;
+  }
+
+  // Convert range from -1 to 1 to 0 to 1
+  *u = 0.5f * (uc / maxAxis + 1.0f);
+  *v = 0.5f * (vc / maxAxis + 1.0f);
+}
+
+vec4 textureCube(const samplerCube& sampler, vec3 direction) {
+  int i;
+  vec2 uv;
+  normalize(direction);
+  convert_xyz_to_cube_uv(direction.x, direction.y, direction.z, &i, &uv.s,
+                         &uv.t);
+  uv.t = 1 - uv.t;
+  return texture2D(sampler.faces[i], uv);
 }
 
 // This datastructure is used throughough the code here
@@ -131,7 +222,6 @@ struct PBRShaderCPU {
     return srgbIn;
 #endif  // MANUAL_SRGB
   }
-#ifdef USE_IBL
   // Calculation of the lighting contribution from an optional Image Based Light
   // source.
   // Precomputed Environment Maps are required uniform inputs and are computed
@@ -139,14 +229,13 @@ struct PBRShaderCPU {
   // additional discussion.
   vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection) {
     float mipCount = 9.0;  // resolution of 512x512
-    float lod = (pbrInputs.perceptualRoughness * mipCount);
+    float lod = pbrInputs.perceptualRoughness * mipCount;
     // retrieve a scale and bias to F0. See [1], Figure 3
-    vec3 brdf =
-        SRGBtoLINEAR(
-            texture2D(u_brdfLUT, vec2(pbrInputs.NdotV,
-                                      1.0 - pbrInputs.perceptualRoughness)))
-            .rgb;
-    vec3 diffuseLight = SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, n)).rgb;
+    vec3 brdf = vec3(SRGBtoLINEAR(
+        texture2D(u_brdfLUT,
+                  vec2(pbrInputs.NdotV, 1.0 - pbrInputs.perceptualRoughness))));
+
+    vec3 diffuseLight = vec3(SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, n)));
 
 #ifdef USE_TEX_LOD
     vec3 specularLight =
@@ -154,7 +243,7 @@ struct PBRShaderCPU {
             .rgb;
 #else
     vec3 specularLight =
-        SRGBtoLINEAR(textureCube(u_SpecularEnvSampler, reflection)).rgb;
+        vec3(SRGBtoLINEAR(textureCube(u_SpecularEnvSampler, reflection)));
 #endif
 
     vec3 diffuse = diffuseLight * pbrInputs.diffuseColor;
@@ -166,7 +255,6 @@ struct PBRShaderCPU {
 
     return diffuse + specular;
   }
-#endif
 
   void main() {
     // Metallic and Roughness material properties are packed together
@@ -259,10 +347,11 @@ struct PBRShaderCPU {
     vec3 color = NdotL * u_LightColor * (diffuseContrib + specContrib);
 
     // Calculate lighting contribution from image based lighting source (IBL)
-#ifdef USE_IBL
-    color += getIBLContribution(pbrInputs, n, reflection);
-#endif
 
+    if (useILB) {
+      const auto contrib = getIBLContribution(pbrInputs, n, reflection);
+      color += contrib;
+    }
     // Apply optional PBR terms for additional (optional) shading
 
     if (useOcclusionMap) {
@@ -295,7 +384,7 @@ struct PBRShaderCPU {
   // map
   // or from the interpolated mesh normal and tangent attributes.
   vec3 getNormal() {
-    // Retrieve the tangent space matrix
+  // Retrieve the tangent space matrix
 #ifndef HAS_TANGENTS
     /*    vec3 pos_dx = dFdx(v_Position);
     vec3 pos_dy = dFdy(v_Position);
@@ -386,7 +475,7 @@ struct PBRShaderCPU {
     return roughnessSq / (M_PI * f * f);
   }
 
-  // Global stuff pasted from glsl file
+    // Global stuff pasted from glsl file
 
 #define uniform
 #define varying
@@ -394,11 +483,10 @@ struct PBRShaderCPU {
   uniform vec3 u_LightDirection;
   uniform vec3 u_LightColor;
 
-#ifdef USE_IBL
+  bool useILB = false;
   uniform samplerCube u_DiffuseEnvSampler;
   uniform samplerCube u_SpecularEnvSampler;
   uniform sampler2D u_brdfLUT;
-#endif
 
   bool useBaseColorMap = false;
   uniform sampler2D u_BaseColorSampler;

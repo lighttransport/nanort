@@ -84,6 +84,7 @@ struct PbrMaterial {
   T metalness;
   T roughness;
   Color<T> albedo;
+  T ILBContrib;
 };
 
 void loadSampler(pbr_maths::sampler2D& sampler, const stbi_uc* data, int w,
@@ -119,14 +120,37 @@ void loadCombineMetalRoughSampler(pbr_maths::sampler2D& sampler,
   }
 }
 
+//PLEASE RESPECT ORDER LEFT, RIGHT, UP, DOWN, FRONT, BACK
+void loadSamplerCube(pbr_maths::samplerCube& cubemap,
+                     const std::array<std::string, 6>& files)
+{
+  for (size_t i{0}; i < 6; ++i)
+  {
+    cubemap.faces[i].linearFiltering = true;
+    const auto file = files[i];
+    int w, h, c;
+    auto mapData = stbi_load(file.c_str(), &w, &h, &c, 0);
+    if (mapData) loadSampler(cubemap.faces[i], mapData, w, h, c);
+    else
+    {
+      std::cerr << "Cannot load " << file << " as part of the cubemap!";
+      exit(-1);
+    }
+    stbi_image_free(mapData);
+  }
+}
+
 int main() {
-  pbr_maths::sampler2D normalMap, baseColorMap;
+  pbr_maths::sampler2D normalMap, baseColorMap, brdfLUT;
   int w, h, c;
   auto normdata = stbi_load("./MetalPlates02_nrm.jpg", &w, &h, &c, 0);
   if (normdata) loadSampler(normalMap, normdata, w, h, c);
 
   auto colData = stbi_load("./MetalPlates02_col.jpg", &w, &h, &c, 0);
   if (colData) loadSampler(baseColorMap, colData, w, h, c);
+
+  auto brdfLUTData = stbi_load("./brdfLUT.png", &w, &h, &c, 0);
+  if (brdfLUTData) loadSampler(brdfLUT, brdfLUTData, w, h, c);
 
   pbr_maths::sampler2D metalRoughMap;
   int rw, rh, rc, mw, mh, mc;
@@ -136,19 +160,32 @@ int main() {
     loadCombineMetalRoughSampler(metalRoughMap, metalData, mw, mh, mc,
                                  roughData, rw, rh, rc);
 
+  pbr_maths::samplerCube specularEnvMap, diffuseEnvMap;
+
+  loadSamplerCube(diffuseEnvMap, {"diffuse_left_0.jpg", "diffuse_right_0.jpg",
+                               "diffuse_top_0.jpg", "diffuse_bottom_0.jpg",
+                               "diffuse_front_0.jpg", "diffuse_back_0.jpg"});
+  loadSamplerCube(specularEnvMap,
+                  {"environment_left_0.jpg", "environment_right_0.jpg",
+                   "environment_top_0.jpg", "environment_bottom_0.jpg",
+                   "environment_front_0.jpg", "environment_back_0.jpg"});
+
+
   stbi_image_free(normdata);
   stbi_image_free(colData);
   stbi_image_free(roughData);
   stbi_image_free(metalData);
+  stbi_image_free(brdfLUTData);
 
   // Here the metal and roughness data are mixed together
 
   PbrMaterial<float> material;
   material.metalness = 1;
-  material.roughness = 1;
-  material.albedo.r = 1;
-  material.albedo.g = 1;
-  material.albedo.b = 1;
+  material.roughness = 0;
+  material.albedo.r = 0.5;
+  material.albedo.g = 0.5;
+  material.albedo.b = 0.5;
+  material.ILBContrib = 1;
 
   std::vector<PointLight> lights;
 
@@ -256,8 +293,8 @@ int main() {
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
 
-  const size_t width = 1024;
-  const size_t height = 1024;
+  const size_t width = 4096;
+  const size_t height = 4096;
 
   std::vector<pixel> img(width * height);
   // memset(img.data(), 255, img.size() * sizeof(pixel));
@@ -270,7 +307,7 @@ int main() {
       nanort::BVHTraceOptions trace_options;
 
       nanort::Ray<float> camRay;
-      glm::vec3 org{0, 0, 3};
+      glm::vec3 org{0, 0, 1};
       camRay.org[0] = org.x;
       camRay.org[1] = org.y;
       camRay.org[2] = org.z;
@@ -362,6 +399,18 @@ int main() {
               shader.useMetalRoughMap = false;
             }
 
+            if (brdfLUT.pixels) {
+              shader.useILB = true;
+              shader.u_brdfLUT = brdfLUT;
+              shader.u_DiffuseEnvSampler = diffuseEnvMap;
+              shader.u_SpecularEnvSampler = specularEnvMap;
+              shader.u_ScaleIBLAmbient = {
+                  material.ILBContrib, material.ILBContrib, material.ILBContrib,
+                  material.ILBContrib};
+            } else {
+              shader.useILB = false;
+            }
+
             //"Execute shader" on the current pixel, for the current light
             // source
             shader.main();
@@ -383,6 +432,8 @@ int main() {
   normalMap.releasePixels();
   baseColorMap.releasePixels();
   metalRoughMap.releasePixels();
+  specularEnvMap.releasePixels();
+  diffuseEnvMap.releasePixels();
 
   return 0;
 }
