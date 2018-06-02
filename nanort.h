@@ -345,7 +345,7 @@ inline real3<T> vnormalize(const real3<T> &rhs) {
 }
 
 template <typename T>
-inline real3<T> vcross(real3<T> a, real3<T> b) {
+inline real3<T> vcross(const real3<T> a, const real3<T> b) {
   real3<T> c;
   c[0] = a[1] * b[2] - a[2] * b[1];
   c[1] = a[2] * b[0] - a[0] * b[2];
@@ -354,8 +354,36 @@ inline real3<T> vcross(real3<T> a, real3<T> b) {
 }
 
 template <typename T>
-inline T vdot(real3<T> a, real3<T> b) {
+inline T vdot(const real3<T> a, const real3<T> b) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+template <typename T>
+inline real3<T> vsafe_inverse(const real3<T> v) {
+
+  real3<T> r;
+
+  // TODO(LTE): Handle signed zero using std::signbit() or std::copysign() when C++11 compiler is available.
+
+  if (std::fabs(v[0]) < std::numeric_limits<T>::epsilon()) {
+    r[0] = std::numeric_limits<T>::infinity();
+  } else {
+    r[0] = static_cast<T>(1.0) / v[0];
+  }
+
+  if (std::fabs(v[1]) < std::numeric_limits<T>::epsilon()) {
+    r[1] = std::numeric_limits<T>::infinity();
+  } else {
+    r[1] = static_cast<T>(1.0) / v[1];
+  }
+
+  if (std::fabs(v[2]) < std::numeric_limits<T>::epsilon()) {
+    r[2] = std::numeric_limits<T>::infinity();
+  } else {
+    r[2] = static_cast<T>(1.0) / v[2];
+  }
+
+  return r;
 }
 
 template <typename real>
@@ -2069,11 +2097,13 @@ bool BVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
   dir_sign[1] = ray.dir[1] < static_cast<T>(0.0) ? 1 : 0;
   dir_sign[2] = ray.dir[2] < static_cast<T>(0.0) ? 1 : 0;
 
-  // FIXME(LTE): Check edge case; e.g, 1/0 
   real3<T> ray_inv_dir;
-  ray_inv_dir[0] = static_cast<T>(1.0) / (ray.dir[0]);
-  ray_inv_dir[1] = static_cast<T>(1.0) / (ray.dir[1]);
-  ray_inv_dir[2] = static_cast<T>(1.0) / (ray.dir[2]);
+  real3<T> ray_dir;
+  ray_dir[0] = ray.dir[0];
+  ray_dir[1] = ray.dir[1];
+  ray_dir[2] = ray.dir[2];
+
+  ray_inv_dir = vsafe_inverse(ray_dir);
 
   real3<T> ray_org;
   ray_org[0] = ray.org[0];
@@ -2198,11 +2228,14 @@ bool BVHAccel<T>::ListNodeIntersections(
   dir_sign[2] =
       ray.dir[2] < static_cast<T>(0.0) ? 1 : 0;
 
-  // @fixme { Check edge case; i.e., 1/0 }
   real3<T> ray_inv_dir;
-  ray_inv_dir[0] = static_cast<T>(1.0) / ray.dir[0];
-  ray_inv_dir[1] = static_cast<T>(1.0) / ray.dir[1];
-  ray_inv_dir[2] = static_cast<T>(1.0) / ray.dir[2];
+  real3<T> ray_dir;
+
+  ray_dir[0] = ray.dir[0];
+  ray_dir[1] = ray.dir[1];
+  ray_dir[2] = ray.dir[2];
+
+  ray_inv_dir = vsafe_inverse(ray_dir);
 
   real3<T> ray_org;
   ray_org[0] = ray.org[0];
@@ -2286,11 +2319,14 @@ bool BVHAccel<T>::MultiHitTraverse(const Ray<T> &ray,
   dir_sign[1] = ray.dir[1] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
   dir_sign[2] = ray.dir[2] < static_cast<T>(0.0) ? static_cast<T>(1) : static_cast<T>(0);
 
-  // @fixme { Check edge case; i.e., 1/0 }
   real3<T> ray_inv_dir;
-  ray_inv_dir[0] = static_cast<T>(1.0) / ray.dir[0];
-  ray_inv_dir[1] = static_cast<T>(1.0) / ray.dir[1];
-  ray_inv_dir[2] = static_cast<T>(1.0) / ray.dir[2];
+  real3<T> ray_dir;
+
+  ray_dir[0] = ray.dir[0];
+  ray_dir[1] = ray.dir[1];
+  ray_dir[2] = ray.dir[2];
+
+  ray_inv_dir = vsafe_inverse(ray_dir);
 
   real3<T> ray_org;
   ray_org[0] = ray.org[0];
