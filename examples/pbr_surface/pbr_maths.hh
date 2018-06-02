@@ -58,7 +58,7 @@ vec4 texture2D(const sampler2D& sampler, const vec2& uv) {
 
   auto in_bound = [](float a) {
     if (a >= 0 && a <= 1) return a;
-    return a < 0 ? -fmod(a, 1.f) : fmod(a, 1.f);
+    return a < 0 ? -std::fmod(a, 1.f) : std::fmod(a, 1.f);
   };
 
   buv.x = in_bound(uv.x);
@@ -153,7 +153,7 @@ struct PBRShaderCPU {
     vec3 reflection = -normalize(reflect(v, n));
 
     float NdotL = clamp(dot(n, l), 0.001f, 1.0f);
-    float NdotV = clamp(abs(dot(n, v)), 0.001f, 1.0f);
+    float NdotV = clamp(std::abs(dot(n, v)), 0.001f, 1.0f);
     float NdotH = clamp(dot(n, h), 0.0f, 1.0f);
     float LdotH = clamp(dot(l, h), 0.0f, 1.0f);
     float VdotH = clamp(dot(v, h), 0.0f, 1.0f);
@@ -279,7 +279,7 @@ struct PBRShaderCPU {
   vec3 specularReflection(PBRInfo pbrInputs) {
     return pbrInputs.reflectance0 +
            (pbrInputs.reflectance90 - pbrInputs.reflectance0) *
-               pow(clamp(1.0f - pbrInputs.VdotH, 0.0f, 1.0f), 5.0f);
+               std::pow(clamp(1.0f - pbrInputs.VdotH, 0.0f, 1.0f), 5.0f);
   }
 
   // This calculates the specular geometric attenuation (aka G()),
