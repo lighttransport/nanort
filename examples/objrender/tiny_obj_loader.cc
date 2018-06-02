@@ -47,6 +47,9 @@ namespace tinyobj {
 #pragma clang diagnostic ignored "-Wold-style-cast"
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
 #endif
 
 #define TINYOBJ_SSCANF_BUFFER_SIZE  (4096)

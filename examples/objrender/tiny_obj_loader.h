@@ -53,6 +53,9 @@ typedef struct {
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wweak-vtables"
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
 #endif
 
 class MaterialReader {
@@ -64,11 +67,6 @@ public:
                                  std::vector<material_t> &materials,
                                  std::map<std::string, int> &matMap) = 0;
 };
-
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
-
 
 class MaterialFileReader : public MaterialReader {
 public:
@@ -104,5 +102,11 @@ std::string LoadObj(std::vector<shape_t> &shapes,       // [output]
 std::string LoadMtl(std::map<std::string, int> &material_map,
                     std::vector<material_t> &materials, std::istream &inStream);
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
+
 
 #endif // TINY_OBJ_LOADER_H_
