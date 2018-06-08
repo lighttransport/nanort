@@ -24,68 +24,110 @@ using glm::vec4;
 // GLSL funtions
 using glm::clamp;
 using glm::cross;
+using glm::fract;
 using glm::length;
 using glm::max;
 using glm::mix;
 using glm::normalize;
 using glm::step;
 
-// template <typename T>
-// T clamp(T x, T min, T max) {
-//  if (x < min) return min;
-//  if (x > max) return max;
-//  return x
-//}
-
-// Implement GLSL sampler2D/texture2D system for accessing textures
+/// GLSL sampler2D object
 struct sampler2D {
+  /// Represent a single pixel on a texture
   struct pixel {
+    /// Each byte is a componant. Value from 0 to 255
     uint8_t r, g, b, a;
+
+    /// Return a number between 0 and 1 that correspound to the byte vale
+    /// between 0 to 255
     static float to_float(uint8_t v) { return float(v) / 255.f; }
 
+    /// Convert this object to a glm::vec4 (like a color in GLSL) implicitly
     operator glm::vec4() const {
       return {to_float(r), to_float(g), to_float(b), to_float(a)};
     }
   };
 
+  /// Width of the texture
   size_t width = 0;
+  /// Height of the texture
   size_t height = 0;
+  /// The actual pixel array
   pixel* pixels = nullptr;
 
-  bool linearFiltering = false;
+  pixel getPixel(size_t x, size_t y) const { return pixels[y * width + x]; }
+
+  pixel getPixel(std::tuple<size_t, size_t> coord) const {
+    return getPixel(std::get<0>(coord), std::get<1>(coord));
+  }
+
+  std::tuple<size_t, size_t> getPixelUV(const vec2& uv) const {
+    // wrap uvs
+    vec2 buv;
+
+    auto in_bound = [](float a) {
+      clamp(a, 0.f, 0.99999f);
+      return a;
+    };
+
+    buv.x = in_bound(uv.x);
+    buv.y = in_bound(uv.y);
+
+    // get best matching pixel coordinates
+    auto px_x = size_t(buv.x * width);
+    auto px_y = size_t(buv.y * height);
+
+    return std::make_tuple(px_x, px_y);
+  }
+
+  pixel getPixel(const vec2& uv) const
+  { return getPixel(getPixelUV(uv));
+  }
+
+  /// Activate texture filtering
+  mutable bool linearFiltering = false;
+
+  /// Clear the pixel array
   void releasePixels() {
     delete[] pixels;
     pixels = nullptr;
   }
 };
 
+/// Simple linear interpolation on floats
 float lerp(float a, float b, float f) { return a + f * (b - a); }
 
+
+
+/// Replicate the texture2D function from GLSL
 vec4 texture2D(const sampler2D& sampler, const vec2& uv) {
-  // wrap uvs
-  vec2 buv;
+  auto pixelUV = sampler.getPixelUV(uv);
+  auto px_x = std::get<0>(pixelUV);
+  auto px_y = std::get<1>(pixelUV);
 
-  auto in_bound = [](float a) {
-    clamp(a, 0.f, 0.99999f);
-    return a;
-  };
-
-
-  buv.x = in_bound(uv.x);
-  buv.y = in_bound(uv.y);
-
-  // get best matching pixel coordinates
-  auto px_x = size_t(buv.x * sampler.width);
-  auto px_y = size_t(buv.y * sampler.height);
   // TODO linear interpolation on pixel values
   if (sampler.linearFiltering) {
+    const auto textureSize = vec2(sampler.width, sampler.height);
+    const auto texelSize = vec2(1.0f / textureSize.x, 1.0f / textureSize.y);
+
+    vec4 tl = sampler.getPixel(uv);
+    vec4 tr = sampler.getPixel(uv + vec2(texelSize.x, 0));
+    vec4 bl = sampler.getPixel(uv + vec2(0, texelSize.y));
+    vec4 br = sampler.getPixel(uv + texelSize);
+
+    vec2 f = fract(uv * textureSize);
+    vec4 tA = mix(tl, tr, f.x);
+    vec4 tB = mix(bl, br, f.x);
+    return mix(tA, tB, f.y);
   }
 
   // return the selected pixel
   return sampler.pixels[px_y * sampler.width + px_x];
 }
 
+/// Cubemap sampler object
 struct samplerCube {
+  /// Indexes for the faces of the cubemap
   enum cubemap_faces : size_t { LEFT, RIGHT, UP, DOWN, FRONT, BACK };
   sampler2D& getFace(cubemap_faces f) { return faces[f]; }
   sampler2D faces[6];
