@@ -69,6 +69,9 @@ struct Color {
   T r, g, b, a;
 };
 
+struct pixel : public Color<uint8_t> {};
+#pragma pack(pop)
+
 struct PointLight {
   PointLight(const glm::vec3& p, const Color<float>& c = {1, 1, 1})
       : position{p}, color{c} {}
@@ -76,9 +79,8 @@ struct PointLight {
   Color<float> color;
 };
 
-struct pixel : public Color<uint8_t> {};
-#pragma pack(pop)
-
+// TODO add default values
+// TODO add texture pointers
 template <typename T>
 struct PbrMaterial {
   T metalness;
@@ -101,6 +103,9 @@ void loadSampler(pbr_maths::sampler2D& sampler, const stbi_uc* data, int w,
   }
 }
 
+// This permit to load metal and roughness maps from different textures (instead
+// of the standard GREEN/BLUE combined one)  The shader expect theses two maps as
+// a cobined one, so we are building it ourselves
 void loadCombineMetalRoughSampler(pbr_maths::sampler2D& sampler,
                                   const stbi_uc* metalData, int mw, int mh,
                                   int mc, const stbi_uc* roughnessData, int rw,
@@ -120,19 +125,17 @@ void loadCombineMetalRoughSampler(pbr_maths::sampler2D& sampler,
   }
 }
 
-//PLEASE RESPECT ORDER LEFT, RIGHT, UP, DOWN, FRONT, BACK
+// PLEASE RESPECT ORDER LEFT, RIGHT, UP, DOWN, FRONT, BACK
 void loadSamplerCube(pbr_maths::samplerCube& cubemap,
-                     const std::array<std::string, 6>& files)
-{
-  for (size_t i{0}; i < 6; ++i)
-  {
+                     const std::array<std::string, 6>& files) {
+  for (size_t i{0}; i < 6; ++i) {
     cubemap.faces[i].linearFiltering = true;
     const auto file = files[i];
     int w, h, c;
     auto mapData = stbi_load(file.c_str(), &w, &h, &c, 0);
-    if (mapData) loadSampler(cubemap.faces[i], mapData, w, h, c);
-    else
-    {
+    if (mapData)
+      loadSampler(cubemap.faces[i], mapData, w, h, c);
+    else {
       std::cerr << "Cannot load " << file << " as part of the cubemap!";
       exit(-1);
     }
@@ -163,14 +166,14 @@ int main() {
   pbr_maths::samplerCube specularEnvMap, diffuseEnvMap;
 
   loadSamplerCube(diffuseEnvMap, {"diffuse_left_0.jpg", "diffuse_right_0.jpg",
-                               "diffuse_top_0.jpg", "diffuse_bottom_0.jpg",
-                               "diffuse_front_0.jpg", "diffuse_back_0.jpg"});
+                                  "diffuse_top_0.jpg", "diffuse_bottom_0.jpg",
+                                  "diffuse_front_0.jpg", "diffuse_back_0.jpg"});
   loadSamplerCube(specularEnvMap,
                   {"environment_left_0.jpg", "environment_right_0.jpg",
                    "environment_top_0.jpg", "environment_bottom_0.jpg",
                    "environment_front_0.jpg", "environment_back_0.jpg"});
 
-
+  // Free the
   stbi_image_free(normdata);
   stbi_image_free(colData);
   stbi_image_free(roughData);
@@ -293,14 +296,19 @@ int main() {
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
 
-  const size_t width = 4096;
-  const size_t height = 4096;
+  const size_t width = 8192;
+  const size_t height = 8192;
 
   std::vector<pixel> img(width * height);
   // memset(img.data(), 255, img.size() * sizeof(pixel));
 
-  for (size_t y{0}; y < height; ++y)
-    for (size_t x{0}; x < width; ++x) {
+#ifdef _OPENMP
+  printf("This program was buit with OpenMP support\n");
+  printf("NanoRT main loop using #pragma omp parallel for");
+#pragma omp parallel for
+#endif
+  for (int y{0}; y < height; ++y)
+    for (int x{0}; x < width; ++x) {
       // access pixel we are going to calculate
       auto& pixel = img[(y * width) + x];
       pixel.r = pixel.g = pixel.b = 0;
@@ -355,7 +363,7 @@ int main() {
           if (!accel.Traverse(lightRay, triangle_intersector, &isect)) {
             // This object represet a fragment shader, and is literally a
             // translation in C++ from an official example from khronos
-            static pbr_maths::PBRShaderCPU shader;
+            pbr_maths::PBRShaderCPU shader;
 
             // Fill in the uniform/varying variables
             shader.u_Camera.x = camRay.org[0];
