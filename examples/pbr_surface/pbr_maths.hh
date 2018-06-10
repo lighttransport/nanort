@@ -1,7 +1,7 @@
 #pragma once
 
+#include <chrono>
 #include <glm.hpp>
-#include <vector>
 
 #define HAS_NORMALS
 
@@ -24,51 +24,199 @@ using glm::vec4;
 // GLSL funtions
 using glm::clamp;
 using glm::cross;
+using glm::fract;
 using glm::length;
 using glm::max;
 using glm::mix;
 using glm::normalize;
+using glm::step;
 
-// template <typename T>
-// T clamp(T x, T min, T max) {
-//  if (x < min) return min;
-//  if (x > max) return max;
-//  return x
-//}
-
-// Implement GLSL sampler2D/texture2D system for accessing textures
+/// GLSL sampler2D object
 struct sampler2D {
+  /// Represent a single pixel on a texture
   struct pixel {
+    /// Each byte is a componant. Value from 0 to 255
     uint8_t r, g, b, a;
+
+    /// Return a number between 0 and 1 that correspound to the byte vale
+    /// between 0 to 255
     static float to_float(uint8_t v) { return float(v) / 255.f; }
 
+    /// Convert this object to a glm::vec4 (like a color in GLSL) implicitly
     operator glm::vec4() const {
       return {to_float(r), to_float(g), to_float(b), to_float(a)};
     }
   };
 
-  size_t width;
-  size_t height;
-  std::vector<pixel> pixels;
+  /// Width of the texture
+  size_t width = 0;
+  /// Height of the texture
+  size_t height = 0;
+  /// The actual pixel array
+  pixel* pixels = nullptr;
+
+  pixel getPixel(size_t x, size_t y) const { return pixels[y * width + x]; }
+
+  pixel getPixel(std::tuple<size_t, size_t> coord) const {
+    return getPixel(std::get<0>(coord), std::get<1>(coord));
+  }
+
+  std::tuple<size_t, size_t> getPixelUV(const vec2& uv) const {
+    // wrap uvs
+    vec2 buv;
+
+    auto in_bound = [](float a) {
+      clamp(a, 0.f, 0.99999f);
+      return a;
+    };
+
+    buv.x = in_bound(uv.x);
+    buv.y = in_bound(uv.y);
+
+    // get best matching pixel coordinates
+    auto px_x = std::min(width-1, size_t(buv.x * width));
+    auto px_y = std::min(height-1, size_t(buv.y * height));
+
+    return std::make_tuple(px_x, px_y);
+  }
+
+  pixel getPixel(const vec2& uv) const
+  { return getPixel(getPixelUV(uv));
+  }
+
+  /// Activate texture filtering
+  mutable bool linearFiltering = false;
+
+  /// Clear the pixel array
+  void releasePixels() {
+    delete[] pixels;
+    pixels = nullptr;
+  }
 };
 
+/// Simple linear interpolation on floats
+float lerp(float a, float b, float f) { return a + f * (b - a); }
+
+
+
+/// Replicate the texture2D function from GLSL
 vec4 texture2D(const sampler2D& sampler, const vec2& uv) {
-  // wrap uvs
-  vec2 buv;
+  auto pixelUV = sampler.getPixelUV(uv);
+  auto px_x = std::get<0>(pixelUV);
+  auto px_y = std::get<1>(pixelUV);
 
-  auto in_bound = [](float a) {
-    if (a >= 0 && a <= 1) return a;
-    return a < 0 ? -std::fmod(a, 1.f) : std::fmod(a, 1.f);
-  };
+  // TODO linear interpolation on pixel values
+  if (sampler.linearFiltering) {
+    const auto textureSize = vec2(sampler.width, sampler.height);
+    const auto texelSize = vec2(1.0f / textureSize.x, 1.0f / textureSize.y);
 
-  buv.x = in_bound(uv.x);
-  buv.y = in_bound(uv.y);
+    vec4 tl = sampler.getPixel(uv);
+    vec4 tr = sampler.getPixel(uv + vec2(texelSize.x, 0));
+    vec4 bl = sampler.getPixel(uv + vec2(0, texelSize.y));
+    vec4 br = sampler.getPixel(uv + texelSize);
 
-  // get best matching pixel coordinates
-  auto px_x = size_t(buv.x * sampler.width);
-  auto px_y = size_t(buv.y * sampler.height);
+    vec2 f = fract(uv * textureSize);
+    vec4 tA = mix(tl, tr, f.x);
+    vec4 tB = mix(bl, br, f.x);
+    return mix(tA, tB, f.y);
+  }
+
   // return the selected pixel
   return sampler.pixels[px_y * sampler.width + px_x];
+}
+
+/// Cubemap sampler object
+struct samplerCube {
+  /// Indexes for the faces of the cubemap
+  enum cubemap_faces : size_t { LEFT, RIGHT, UP, DOWN, FRONT, BACK };
+  sampler2D& getFace(cubemap_faces f) { return faces[f]; }
+  sampler2D faces[6];
+
+  void releasePixels() {
+    for (auto& face : faces) face.releasePixels();
+  }
+};
+
+void convert_xyz_to_cube_uv(float x, float y, float z, int* index, float* u,
+                            float* v) {
+  float absX = fabs(x);
+  float absY = fabs(y);
+  float absZ = fabs(z);
+
+  int isXPositive = x > 0 ? 1 : 0;
+  int isYPositive = y > 0 ? 1 : 0;
+  int isZPositive = z > 0 ? 1 : 0;
+
+  float maxAxis, uc, vc;
+
+  // POSITIVE X
+  if (isXPositive && absX >= absY && absX >= absZ) {
+    // u (0 to 1) goes from +z to -z
+    // v (0 to 1) goes from -y to +y
+    maxAxis = absX;
+    uc = -z;
+    vc = y;
+    *index = 0;
+  }
+  // NEGATIVE X
+  if (!isXPositive && absX >= absY && absX >= absZ) {
+    // u (0 to 1) goes from -z to +z
+    // v (0 to 1) goes from -y to +y
+    maxAxis = absX;
+    uc = z;
+    vc = y;
+    *index = 1;
+  }
+  // POSITIVE Y
+  if (isYPositive && absY >= absX && absY >= absZ) {
+    // u (0 to 1) goes from -x to +x
+    // v (0 to 1) goes from +z to -z
+    maxAxis = absY;
+    uc = x;
+    vc = -z;
+    *index = 2;
+  }
+  // NEGATIVE Y
+  if (!isYPositive && absY >= absX && absY >= absZ) {
+    // u (0 to 1) goes from -x to +x
+    // v (0 to 1) goes from -z to +z
+    maxAxis = absY;
+    uc = x;
+    vc = z;
+    *index = 3;
+  }
+  // POSITIVE Z
+  if (isZPositive && absZ >= absX && absZ >= absY) {
+    // u (0 to 1) goes from -x to +x
+    // v (0 to 1) goes from -y to +y
+    maxAxis = absZ;
+    uc = x;
+    vc = y;
+    *index = 4;
+  }
+  // NEGATIVE Z
+  if (!isZPositive && absZ >= absX && absZ >= absY) {
+    // u (0 to 1) goes from +x to -x
+    // v (0 to 1) goes from -y to +y
+    maxAxis = absZ;
+    uc = -x;
+    vc = y;
+    *index = 5;
+  }
+
+  // Convert range from -1 to 1 to 0 to 1
+  *u = 0.5f * (uc / maxAxis + 1.0f);
+  *v = 0.5f * (vc / maxAxis + 1.0f);
+}
+
+vec4 textureCube(const samplerCube& sampler, vec3 direction) {
+  int i;
+  vec2 uv;
+  normalize(direction);
+  convert_xyz_to_cube_uv(direction.x, direction.y, direction.z, &i, &uv.s,
+                         &uv.t);
+  uv.t = 1 - uv.t;
+  return texture2D(sampler.faces[i], uv);
 }
 
 // This datastructure is used throughough the code here
@@ -89,6 +237,8 @@ struct PBRInfo {
   vec3 specularColor;         // color contribution from specular lighting
 };
 
+#define MANUAL_SRGB ;
+
 /// Object that represent the fragment shader, and all of it's global state, but
 /// in C++. The intended use is that you set all the parameters that *should* be
 /// global for the shader and set by OpenGL call when using the program
@@ -96,24 +246,77 @@ struct PBRShaderCPU {
   /// Virtual output : color of the "fragment" (aka: the pixel here)
   vec4 gl_FragColor;
 
+  // TODO This is just a pass-through function. This will de pend on the color
+  // space used on the fed textures...
+  vec4 SRGBtoLINEAR(vec4 srgbIn) {
+#ifdef MANUAL_SRGB
+#ifdef SRGB_FAST_APPROXIMATION
+    vec3 linOut = pow(srgbIn.xyz, vec3(2.2));
+#else   // SRGB_FAST_APPROXIMATION
+    vec3 bLess = step(vec3(0.04045), vec3(srgbIn));
+    vec3 linOut =
+        mix(vec3(srgbIn) / vec3(12.92),
+            pow((vec3(srgbIn) + vec3(0.055)) / vec3(1.055), vec3(2.4)), bLess);
+#endif  // SRGB_FAST_APPROXIMATION
+    return vec4(linOut, srgbIn.w);
+    ;
+#else   // MANUAL_SRGB
+    return srgbIn;
+#endif  // MANUAL_SRGB
+  }
+  // Calculation of the lighting contribution from an optional Image Based Light
+  // source.
+  // Precomputed Environment Maps are required uniform inputs and are computed
+  // as outlined in [1]. See our README.md on Environment Maps [3] for
+  // additional discussion.
+  vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection) {
+    float mipCount = 9.0;  // resolution of 512x512
+    float lod = pbrInputs.perceptualRoughness * mipCount;
+    // retrieve a scale and bias to F0. See [1], Figure 3
+    vec3 brdf = vec3(SRGBtoLINEAR(
+        texture2D(u_brdfLUT,
+                  vec2(pbrInputs.NdotV, 1.0 - pbrInputs.perceptualRoughness))));
+
+    vec3 diffuseLight = vec3(SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, n)));
+
+#ifdef USE_TEX_LOD
+    vec3 specularLight =
+        SRGBtoLINEAR(textureCubeLodEXT(u_SpecularEnvSampler, reflection, lod))
+            .rgb;
+#else
+    vec3 specularLight =
+        vec3(SRGBtoLINEAR(textureCube(u_SpecularEnvSampler, reflection)));
+#endif
+
+    vec3 diffuse = diffuseLight * pbrInputs.diffuseColor;
+    vec3 specular = specularLight * (pbrInputs.specularColor * brdf.x + brdf.y);
+
+    // For presentation, this allows us to disable IBL terms
+    diffuse *= u_ScaleIBLAmbient.x;
+    specular *= u_ScaleIBLAmbient.y;
+
+    return diffuse + specular;
+  }
+
   void main() {
     // Metallic and Roughness material properties are packed together
     // In glTF, these factors can be specified by fixed scalar values
     // or from a metallic-roughness map
     float perceptualRoughness = u_MetallicRoughnessValues.y;
     float metallic = u_MetallicRoughnessValues.x;
-#ifdef HAS_METALROUGHNESSMAP  // TODO make this switchable by some "material
-                              // configuration"
-    // Roughness is stored in the 'g' channel, metallic is stored in the 'b'
-    // channel. This layout intentionally reserves the 'r' channel for
-    // (optional) occlusion map data
-    vec4 mrSample = texture2D(u_MetallicRoughnessSampler,
-                              v_UV);  // TODO implement an equivalent of the
-                                      // texture sampler 2D that return the
-                                      // value from an image, and UV coords
-    perceptualRoughness = mrSample.g * perceptualRoughness;
-    metallic = mrSample.b * metallic;
-#endif
+
+    if (useMetalRoughMap) {
+      // Roughness is stored in the 'g' channel, metallic is stored in the 'b'
+      // channel. This layout intentionally reserves the 'r' channel for
+      // (optional) occlusion map data
+      vec4 mrSample = texture2D(u_MetallicRoughnessSampler, v_UV);
+
+      // NOTE: G channel of the map is used for roughness, B channel is used for
+      // metalness
+      perceptualRoughness = mrSample.g * perceptualRoughness;
+      metallic = mrSample.b * metallic;
+    }
+
     perceptualRoughness = clamp(perceptualRoughness, c_MinRoughness, 1.0f);
     metallic = clamp(metallic, 0.0f, 1.0f);
     // Roughness is authored as perceptual roughness; as is convention,
@@ -121,12 +324,13 @@ struct PBRShaderCPU {
     float alphaRoughness = perceptualRoughness * perceptualRoughness;
 
     // The albedo may be defined from a base texture or a flat color
-#ifdef HAS_BASECOLORMAP
-    vec4 baseColor =
-        SRGBtoLINEAR(texture2D(u_BaseColorSampler, v_UV)) * u_BaseColorFactor;
-#else
-    vec4 baseColor = u_BaseColorFactor;
-#endif
+    vec4 baseColor;
+    if (useBaseColorMap) {
+      baseColor =
+          SRGBtoLINEAR(texture2D(u_BaseColorSampler, v_UV)) * u_BaseColorFactor;
+    } else {
+      baseColor = u_BaseColorFactor;
+    }
 
     vec3 f0 = vec3(0.04);
     vec3 diffuseColor = vec3(baseColor) * (vec3(1.0) - f0);
@@ -185,21 +389,23 @@ struct PBRShaderCPU {
     vec3 color = NdotL * u_LightColor * (diffuseContrib + specContrib);
 
     // Calculate lighting contribution from image based lighting source (IBL)
-#ifdef USE_IBL
-    color += getIBLContribution(pbrInputs, n, reflection);
-#endif
 
+    if (useILB) {
+      const auto contrib = getIBLContribution(pbrInputs, n, reflection);
+      color += contrib;
+    }
     // Apply optional PBR terms for additional (optional) shading
-#ifdef HAS_OCCLUSIONMAP
-    float ao = texture2D(u_OcclusionSampler, v_UV).r;
-    color = mix(color, color * ao, u_OcclusionStrength);
-#endif
 
-#ifdef HAS_EMISSIVEMAP
-    vec3 emissive =
-        SRGBtoLINEAR(texture2D(u_EmissiveSampler, v_UV)).rgb * u_EmissiveFactor;
-    color += emissive;
-#endif
+    if (useOcclusionMap) {
+      float ao = texture2D(u_OcclusionSampler, v_UV).r;
+      color = mix(color, color * ao, u_OcclusionStrength);
+    }
+
+    if (useEmissiveMap) {
+      vec3 emissive = SRGBtoLINEAR(
+          vec4(vec3(texture2D(u_EmissiveSampler, v_UV)) * u_EmissiveFactor, 1));
+      color += emissive;
+    }
 
     // This section uses mix to override final color for reference app
     // visualization of various parameters in the lighting equation.
@@ -220,7 +426,7 @@ struct PBRShaderCPU {
   // map
   // or from the interpolated mesh normal and tangent attributes.
   vec3 getNormal() {
-    // Retrieve the tangent space matrix
+  // Retrieve the tangent space matrix
 #ifndef HAS_TANGENTS
     /*    vec3 pos_dx = dFdx(v_Position);
     vec3 pos_dy = dFdy(v_Position);
@@ -253,16 +459,15 @@ struct PBRShaderCPU {
 #else  // HAS_TANGENTS
     mat3 tbn = v_TBN;
 #endif
-
-#ifdef HAS_NORMALMAP
-    vec3 n = texture2D(u_NormalSampler, v_UV).rgb;
-    n = normalize(tbn *
-                  ((2.0 * n - 1.0) * vec3(u_NormalScale, u_NormalScale, 1.0)));
-#else
-    // The tbn matrix is linearly interpolated, so we need to re-normalize
-    vec3 n = normalize(tbn[2]);
-#endif
-
+    vec3 n;
+    if (useNormalMap) {
+      n = vec3(texture2D(u_NormalSampler, v_UV));
+      n = normalize(
+          tbn * ((2.0f * n - 1.0f) * vec3(u_NormalScale, u_NormalScale, 1.0)));
+    } else {
+      // The tbn matrix is linearly interpolated, so we need to re-normalize
+      n = normalize(tbn[2]);
+    }
     return n;
   }
 
@@ -312,7 +517,7 @@ struct PBRShaderCPU {
     return roughnessSq / (M_PI * f * f);
   }
 
-  // Global stuff pasted from glsl file
+    // Global stuff pasted from glsl file
 
 #define uniform
 #define varying
@@ -320,32 +525,30 @@ struct PBRShaderCPU {
   uniform vec3 u_LightDirection;
   uniform vec3 u_LightColor;
 
-#ifdef USE_IBL
+  bool useILB = false;
   uniform samplerCube u_DiffuseEnvSampler;
   uniform samplerCube u_SpecularEnvSampler;
   uniform sampler2D u_brdfLUT;
-#endif
 
-#ifdef HAS_BASECOLORMAP
+  bool useBaseColorMap = false;
   uniform sampler2D u_BaseColorSampler;
-#endif
-#ifdef HAS_NORMALMAP
+
+  bool useNormalMap = false;
   uniform sampler2D u_NormalSampler;
-  uniform float u_NormalScale;
-#endif
-#ifdef HAS_EMISSIVEMAP
+  uniform float u_NormalScale = 1;
+
+  bool useEmissiveMap = false;
   uniform sampler2D u_EmissiveSampler;
   uniform vec3 u_EmissiveFactor;
-#endif
-#ifdef HAS_METALROUGHNESSMAP
-  uniform sampler2D u_MetallicRoughnessSampler;
-#endif
-#ifdef HAS_OCCLUSIONMAP
-  uniform sampler2D u_OcclusionSampler;
-  uniform float u_OcclusionStrength;
-#endif
 
-  uniform vec2 u_MetallicRoughnessValues;
+  bool useMetalRoughMap = false;
+  uniform sampler2D u_MetallicRoughnessSampler;
+
+  bool useOcclusionMap = false;
+  uniform sampler2D u_OcclusionSampler;
+  uniform float u_OcclusionStrength = 1;
+
+  uniform vec2 u_MetallicRoughnessValues = {1, 1};
   uniform vec4 u_BaseColorFactor;
 
   uniform vec3 u_Camera;
