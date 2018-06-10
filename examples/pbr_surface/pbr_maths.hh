@@ -74,8 +74,8 @@ struct sampler2D {
     buv.y = in_bound(uv.y);
 
     // get best matching pixel coordinates
-    auto px_x = size_t(buv.x * width);
-    auto px_y = size_t(buv.y * height);
+    auto px_x = std::min(width-1, size_t(buv.x * width));
+    auto px_y = std::min(height-1, size_t(buv.y * height));
 
     return std::make_tuple(px_x, px_y);
   }
