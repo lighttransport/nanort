@@ -33,6 +33,9 @@ using glm::step;
 
 /// GLSL sampler2D object
 struct sampler2D {
+  enum class outOfBounds { clamp, wrap };
+  outOfBounds boundsOperation;
+
   /// Represent a single pixel on a texture
   struct pixel {
     /// Each byte is a componant. Value from 0 to 255
@@ -65,8 +68,19 @@ struct sampler2D {
     // wrap uvs
     vec2 buv;
 
-    auto in_bound = [](float a) {
-      clamp(a, 0.f, 0.99999f);
+    auto in_bound = [=](float a) {
+      switch (boundsOperation) {
+        case outOfBounds::clamp:
+          clamp(a, 0.f, 0.99999f);
+          break;
+
+        case outOfBounds::wrap:
+          if (a > 1) a = fmod(a, 1.0);
+          if (a < 0) {
+            a = 1 - fmod(abs(a), 1.0);
+            }
+          break;
+      }
       return a;
     };
 
@@ -74,15 +88,13 @@ struct sampler2D {
     buv.y = in_bound(uv.y);
 
     // get best matching pixel coordinates
-    auto px_x = std::min(width-1, size_t(buv.x * width));
-    auto px_y = std::min(height-1, size_t(buv.y * height));
+    auto px_x = std::min(width - 1, size_t(buv.x * width));
+    auto px_y = std::min(height - 1, size_t(buv.y * height));
 
     return std::make_tuple(px_x, px_y);
   }
 
-  pixel getPixel(const vec2& uv) const
-  { return getPixel(getPixelUV(uv));
-  }
+  pixel getPixel(const vec2& uv) const { return getPixel(getPixelUV(uv)); }
 
   /// Activate texture filtering
   mutable bool linearFiltering = false;
@@ -96,8 +108,6 @@ struct sampler2D {
 
 /// Simple linear interpolation on floats
 float lerp(float a, float b, float f) { return a + f * (b - a); }
-
-
 
 /// Replicate the texture2D function from GLSL
 vec4 texture2D(const sampler2D& sampler, const vec2& uv) {

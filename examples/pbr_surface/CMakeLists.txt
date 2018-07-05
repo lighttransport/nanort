@@ -13,4 +13,4 @@ SET(CMAKE_CXX_STANDARD 11)
 
 include_directories(. ../../ ../common/glm/glm ../common)
 
-add_executable(pbr_surface main.cc pbr_maths.hh)
+add_executable(pbr_surface main.cc pbr_maths.hh gltf-loader.cc gltf-loader.h material.h mesh.h texture.h utility.h)
