@@ -366,19 +366,22 @@ inline real3<T> vsafe_inverse(const real3<T> v) {
   // TODO(LTE): Handle signed zero using std::signbit() or std::copysign() when C++11 compiler is available.
 
   if (std::fabs(v[0]) < std::numeric_limits<T>::epsilon()) {
-    r[0] = std::numeric_limits<T>::infinity();
+    T sgn = (v[0] < static_cast<T>(0)) ? static_cast<T>(-1) : static_cast<T>(1);
+    r[0] = std::numeric_limits<T>::infinity() * sgn;
   } else {
     r[0] = static_cast<T>(1.0) / v[0];
   }
 
   if (std::fabs(v[1]) < std::numeric_limits<T>::epsilon()) {
-    r[1] = std::numeric_limits<T>::infinity();
+    T sgn = (v[1] < static_cast<T>(0)) ? static_cast<T>(-1) : static_cast<T>(1);
+    r[1] = std::numeric_limits<T>::infinity() * sgn;
   } else {
     r[1] = static_cast<T>(1.0) / v[1];
   }
 
   if (std::fabs(v[2]) < std::numeric_limits<T>::epsilon()) {
-    r[2] = std::numeric_limits<T>::infinity();
+    T sgn = (v[2] < static_cast<T>(0)) ? static_cast<T>(-1) : static_cast<T>(1);
+    r[2] = std::numeric_limits<T>::infinity() * sgn;
   } else {
     r[2] = static_cast<T>(1.0) / v[2];
   }
@@ -913,6 +916,7 @@ class TriangleIntersector {
     const T Bz = ray_coeff_.Sz * B[ray_coeff_.kz];
     const T Cz = ray_coeff_.Sz * C[ray_coeff_.kz];
     const T D = U * Az + V * Bz + W * Cz;
+
 
     const T rcpDet = static_cast<T>(1.0) / det;
     T tt = D * rcpDet;
