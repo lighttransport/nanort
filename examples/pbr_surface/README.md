@@ -4,6 +4,10 @@ Implement in software PBR shading
 
 Code for PBR shading is based on this example from khronos (fragment shader implementation from WebGL glTF reference implementation) https://github.com/KhronosGroup/glTF-WebGL-PBR/blob/master/shaders/pbr-frag.glsl
 
+main() function will load a .glTF file thanks to the glTF library https://github.com/syoyo/tinygltf
+
+![damaged helmet](./helmet.png)
+
 ## Build
 
 Use CMake to configure a project for your favorite toolchain.
@@ -32,6 +36,3 @@ The program will simply render a quad (made of two triangles) in front of the ca
 
 This is a super simple implementation on top of the minial example to get NanoRT up and running.
 
-## TODO
-
-- [ ] Read textures as maps for PBR values
