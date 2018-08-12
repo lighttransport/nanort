@@ -1045,32 +1045,36 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               config.texcoordImage[4 * (y * config.width + x) + 1] = UV[1];
             }
 
-            // Fetch texture
+            float NdotV = fabsf(vdot(N, dir));
+
+            // Fetch material & texture
             unsigned int material_id =
                 gMesh.material_ids[isect.prim_id];
 
-            float diffuse_col[3];
-            int diffuse_texid = gMaterials[material_id].diffuse_texid;
-            if (diffuse_texid >= 0) {
-              FetchTexture(diffuse_texid, UV[0], UV[1], diffuse_col);
-            } else {
-              diffuse_col[0] = gMaterials[material_id].diffuse[0];
-              diffuse_col[1] = gMaterials[material_id].diffuse[1];
-              diffuse_col[2] = gMaterials[material_id].diffuse[2];
-            }
+          
+            float diffuse_col[3] = {0.5f, 0.5f, 0.5f};
+            float specular_col[3] = {0.0f, 0.0f, 0.0f};
 
-            float specular_col[3];
-            int specular_texid = gMaterials[material_id].specular_texid;
-            if (specular_texid >= 0) {
-              FetchTexture(specular_texid, UV[0], UV[1], specular_col);
-            } else {
-              specular_col[0] = gMaterials[material_id].specular[0];
-              specular_col[1] = gMaterials[material_id].specular[1];
-              specular_col[2] = gMaterials[material_id].specular[2];
-            }
+            if (material_id < gMaterials.size()) {
 
-            // Simple shading
-            float NdotV = fabsf(vdot(N, dir));
+              int diffuse_texid = gMaterials[material_id].diffuse_texid;
+              if (diffuse_texid >= 0) {
+                FetchTexture(diffuse_texid, UV[0], UV[1], diffuse_col);
+              } else {
+                diffuse_col[0] = gMaterials[material_id].diffuse[0];
+                diffuse_col[1] = gMaterials[material_id].diffuse[1];
+                diffuse_col[2] = gMaterials[material_id].diffuse[2];
+              }
+
+              int specular_texid = gMaterials[material_id].specular_texid;
+              if (specular_texid >= 0) {
+                FetchTexture(specular_texid, UV[0], UV[1], specular_col);
+              } else {
+                specular_col[0] = gMaterials[material_id].specular[0];
+                specular_col[1] = gMaterials[material_id].specular[1];
+                specular_col[2] = gMaterials[material_id].specular[2];
+              }
+            }
 
             if (config.pass == 0) {
               rgba[4 * (y * config.width + x) + 0] = NdotV * diffuse_col[0];
