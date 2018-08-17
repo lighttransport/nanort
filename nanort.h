@@ -2,10 +2,16 @@
 // NanoRT, single header only modern ray tracing kernel.
 //
 
+//
+// Notes : The number of primitives are up to 2G. If you want to render large
+// data, please split data into chunks(~ 2G prims) and use NanoSG scene graph
+// library(`${nanort}/examples/nanosg`).
+//
+
 /*
 The MIT License (MIT)
 
-Copyright (c) 2015 - 2016 Light Transport Entertainment, Inc.
+Copyright (c) 2015 - 2018 Light Transport Entertainment, Inc.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -41,6 +47,21 @@ THE SOFTWARE.
 #include <queue>
 #include <string>
 #include <vector>
+
+// compiler macros
+//
+// NANORT_USE_CPP11_FEATURE : Enable C++11 feature
+// NANORT_ENABLE_PARALLEL_BUILD : Enable parallel BVH build.
+//
+
+#ifdef NANORT_USE_CPP11_FEATURE
+// Assume C++11 compiler has thread support.
+// In some situation(e.g. embedded system, JIT compilation), thread feature
+// may not be available though...
+#include <atomic>
+#include <mutex>
+#include <thread>
+#endif
 
 namespace nanort {
 
@@ -360,10 +381,10 @@ inline T vdot(const real3<T> a, const real3<T> b) {
 
 template <typename T>
 inline real3<T> vsafe_inverse(const real3<T> v) {
-
   real3<T> r;
 
-  // TODO(LTE): Handle signed zero using std::signbit() or std::copysign() when C++11 compiler is available.
+  // TODO(LTE): Handle signed zero using std::signbit() or std::copysign() when
+  // C++11 compiler is available.
 
   if (std::fabs(v[0]) < std::numeric_limits<T>::epsilon()) {
     T sgn = (v[0] < static_cast<T>(0)) ? static_cast<T>(-1) : static_cast<T>(1);
@@ -883,7 +904,8 @@ class TriangleIntersector {
 #endif
 
     // Fall back to test against edges using double precision.
-    if (U == static_cast<T>(0.0) || V == static_cast<T>(0.0) || W == static_cast<T>(0.0)) {
+    if (U == static_cast<T>(0.0) || V == static_cast<T>(0.0) ||
+        W == static_cast<T>(0.0)) {
       double CxBy = static_cast<double>(Cx) * static_cast<double>(By);
       double CyBx = static_cast<double>(Cy) * static_cast<double>(Bx);
       U = static_cast<T>(CxBy - CyBx);
@@ -898,9 +920,14 @@ class TriangleIntersector {
     }
 
     if (trace_options_.cull_back_face) {
-      if (U < static_cast<T>(0.0) || V < static_cast<T>(0.0) || W < static_cast<T>(0.0)) return false;
+      if (U < static_cast<T>(0.0) || V < static_cast<T>(0.0) ||
+          W < static_cast<T>(0.0))
+        return false;
     } else {
-      if ((U < static_cast<T>(0.0) || V < static_cast<T>(0.0) || W < static_cast<T>(0.0)) && (U > static_cast<T>(0.0) || V > static_cast<T>(0.0) || W > static_cast<T>(0.0))) {
+      if ((U < static_cast<T>(0.0) || V < static_cast<T>(0.0) ||
+           W < static_cast<T>(0.0)) &&
+          (U > static_cast<T>(0.0) || V > static_cast<T>(0.0) ||
+           W > static_cast<T>(0.0))) {
         return false;
       }
     }
@@ -916,7 +943,6 @@ class TriangleIntersector {
     const T Bz = ray_coeff_.Sz * B[ray_coeff_.kz];
     const T Cz = ray_coeff_.Sz * C[ray_coeff_.kz];
     const T D = U * Az + V * Bz + W * Cz;
-
 
     const T rcpDet = static_cast<T>(1.0) / det;
     T tt = D * rcpDet;
@@ -975,7 +1001,8 @@ class TriangleIntersector {
     if (ray_coeff_.ky == 3) ray_coeff_.ky = 0;
 
     // Swap kx and ky dimension to preserve widing direction of triangles.
-    if (ray.dir[ray_coeff_.kz] < static_cast<T>(0.0)) std::swap(ray_coeff_.kx, ray_coeff_.ky);
+    if (ray.dir[ray_coeff_.kz] < static_cast<T>(0.0))
+      std::swap(ray_coeff_.kx, ray_coeff_.ky);
 
     // Calculate shear constants.
     ray_coeff_.Sx = ray.dir[ray_coeff_.kx] / ray.dir[ray_coeff_.kz];
@@ -1287,7 +1314,8 @@ void ComputeBoundingBoxOMP(real3<T> *bmin, real3<T> *bmax,
 #pragma omp parallel firstprivate(local_bmin, local_bmax) if (n > (1024 * 128))
   {
 #pragma omp parallel for
-    for (int i = int(left_index); i < int(right_index); i++) {  // for each faces
+    for (int i = int(left_index); i < int(right_index);
+         i++) {  // for each faces
       unsigned int idx = indices[i];
 
       real3<T> bbox_min, bbox_max;
@@ -1315,6 +1343,77 @@ void ComputeBoundingBoxOMP(real3<T> *bmin, real3<T> *bmax,
       }
     }
   }
+}
+#endif
+
+#ifdef NANORT_USE_CPP11_FEATURE
+template <typename T, class P>
+void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
+                           const unsigned int *indices, unsigned int left_index,
+                           unsigned int right_index, const P &p) {
+
+  unsigned int n = right_index - left_index;
+
+  size_t num_threads = std::min(
+      256UL, std::max(1UL, size_t(std::thread::hardware_concurrency())));
+  if (n < num_threads) {
+    num_threads = n;
+  }
+
+  std::vector<std::thread> workers;
+
+  size_t ndiv = n / num_threads;
+
+  std::vector<T[3]> local_bmins(num_threads);
+  std::vector<T[3]> local_bmaxs(num_threads);
+
+  for (size_t t = 0; t < num_threads; t++) {
+    workers.emplace_back(std::thread([&, t]() {
+      size_t si = left_index + t * ndiv;
+      size_t ei = std::min(left_index + (t + 1) * ndiv, size_t(right_index));
+
+      local_bmins[t][0] = std::numeric_limits<T>::infinity();
+      local_bmins[t][1] = std::numeric_limits<T>::infinity();
+      local_bmins[t][2] = std::numeric_limits<T>::infinity();
+      local_bmaxs[t][0] = -std::numeric_limits<T>::infinity();
+      local_bmaxs[t][1] = -std::numeric_limits<T>::infinity();
+      local_bmaxs[t][2] = -std::numeric_limits<T>::infinity();
+
+      for (size_t i = si; i < ei; i++) {  // for each faces
+        unsigned int idx = indices[i];
+
+        real3<T> bbox_min, bbox_max;
+        p.BoundingBox(&bbox_min, &bbox_max, idx);
+        for (int k = 0; k < 3; k++) {  // xyz
+          if (local_bmins[t][k] > bbox_min[k]) local_bmins[t][k] = bbox_min[k];
+          if (local_bmaxs[t][k] < bbox_max[k]) local_bmaxs[t][k] = bbox_max[k];
+        }
+      }
+    }));
+  }
+
+  for (auto &t : workers) {
+    t.join();
+  }
+
+  // merge bbox
+  for (int k = 0; k < 3; k++) {
+    (*bmin)[k] = local_bmins[0][k];
+    (*bmax)[k] = local_bmaxs[0][k];
+  }
+
+  for (size_t t = 1; t < num_threads; t++) {
+    for (int k = 0; k < 3; k++) {
+      if (local_bmins[t][k] < (*bmin)[k]) {
+        (*bmin)[k] = local_bmins[t][k];
+      }
+
+      if (local_bmaxs[t][k] < (*bmax)[k]) {
+        (*bmax)[k] = local_bmaxs[t][k];
+      }
+    }
+  }
+
 }
 #endif
 
@@ -1687,12 +1786,43 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
   //
   indices_.resize(n);
 
+#ifdef NANORT_USE_CPP11_FEATURE
+  {
+    size_t num_threads = std::min(
+        256UL, std::max(1UL, size_t(std::thread::hardware_concurrency())));
+    if (n < num_threads) {
+      num_threads = n;
+    }
+
+    std::vector<std::thread> workers;
+
+    size_t ndiv = n / num_threads;
+
+    for (size_t t = 0; t < num_threads; t++) {
+      workers.emplace_back(std::thread([&, t]() {
+        size_t si = t * ndiv;
+        size_t ei = std::min((t + 1) * ndiv, size_t(n));
+
+        for (size_t k = si; k < ei; k++) {
+          indices_[k] = static_cast<unsigned int>(k);
+        }
+      }));
+    }
+
+    for (auto &t : workers) {
+      t.join();
+    }
+  }
+
+#else
+
 #ifdef _OPENMP
 #pragma omp parallel for
 #endif
   for (int i = 0; i < static_cast<int>(n); i++) {
     indices_[static_cast<size_t>(i)] = static_cast<unsigned int>(i);
   }
+#endif  // !NANORT_USE_CPP11_FEATURE
 
   //
   // 2. Compute bounding box(optional).
@@ -1721,7 +1851,9 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
     }
 
   } else {
-#ifdef _OPENMP
+#ifdef NANORT_USE_CPP11_FEATURE
+    ComputeBoundingBoxThreaded(&bmin, &bmax, &indices_.at(0), 0, n, p);
+#elif defined(_OPENMP)
     ComputeBoundingBoxOMP(&bmin, &bmax, &indices_.at(0), 0, n, p);
 #else
     ComputeBoundingBox(&bmin, &bmax, &indices_.at(0), 0, n, p);
@@ -1795,6 +1927,8 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
   }
 #endif
 #else  // !_OPENMP
+
+  // Single thread BVH build
   {
     BuildTree(&stats_, &nodes_, 0, n,
               /* root depth */ 0, p, pred);  // [0, n)
@@ -1889,10 +2023,12 @@ inline bool IntersectRayAABB(T *tminOut,  // [out]
                              int ray_dir_sign[3]);
 template <>
 inline bool IntersectRayAABB<float>(float *tminOut,  // [out]
-                             float *tmaxOut,  // [out]
-                             float min_t, float max_t, const float bmin[3], const float bmax[3],
-                             real3<float> ray_org, real3<float> ray_inv_dir,
-                             int ray_dir_sign[3]) {
+                                    float *tmaxOut,  // [out]
+                                    float min_t, float max_t,
+                                    const float bmin[3], const float bmax[3],
+                                    real3<float> ray_org,
+                                    real3<float> ray_inv_dir,
+                                    int ray_dir_sign[3]) {
   float tmin, tmax;
 
   const float min_x = ray_dir_sign[0] ? bmax[0] : bmin[0];
@@ -1930,10 +2066,12 @@ inline bool IntersectRayAABB<float>(float *tminOut,  // [out]
 
 template <>
 inline bool IntersectRayAABB<double>(double *tminOut,  // [out]
-                             double *tmaxOut,  // [out]
-                             double min_t, double max_t, const double bmin[3], const double bmax[3],
-                             real3<double> ray_org, real3<double> ray_inv_dir,
-                             int ray_dir_sign[3]) {
+                                     double *tmaxOut,  // [out]
+                                     double min_t, double max_t,
+                                     const double bmin[3], const double bmax[3],
+                                     real3<double> ray_org,
+                                     real3<double> ray_inv_dir,
+                                     int ray_dir_sign[3]) {
   double tmin, tmax;
 
   const double min_x = ray_dir_sign[0] ? bmax[0] : bmin[0];
@@ -1946,15 +2084,18 @@ inline bool IntersectRayAABB<double>(double *tminOut,  // [out]
   // X
   const double tmin_x = (min_x - ray_org[0]) * ray_inv_dir[0];
   // MaxMult robust BVH traversal(up to 4 ulp).
-  const double tmax_x = (max_x - ray_org[0]) * ray_inv_dir[0] * 1.0000000000000004;
+  const double tmax_x =
+      (max_x - ray_org[0]) * ray_inv_dir[0] * 1.0000000000000004;
 
   // Y
   const double tmin_y = (min_y - ray_org[1]) * ray_inv_dir[1];
-  const double tmax_y = (max_y - ray_org[1]) * ray_inv_dir[1] * 1.0000000000000004;
+  const double tmax_y =
+      (max_y - ray_org[1]) * ray_inv_dir[1] * 1.0000000000000004;
 
   // Z
   const double tmin_z = (min_z - ray_org[2]) * ray_inv_dir[2];
-  const double tmax_z = (max_z - ray_org[2]) * ray_inv_dir[2] * 1.0000000000000004;
+  const double tmax_z =
+      (max_z - ray_org[2]) * ray_inv_dir[2] * 1.0000000000000004;
 
   tmin = safemax(tmin_z, safemax(tmin_y, safemax(tmin_x, min_t)));
   tmax = safemin(tmax_z, safemin(tmax_y, safemin(tmax_x, max_t)));
@@ -2225,12 +2366,9 @@ bool BVHAccel<T>::ListNodeIntersections(
   (*hits)->clear();
 
   int dir_sign[3];
-  dir_sign[0] =
-      ray.dir[0] < static_cast<T>(0.0) ? 1 : 0;
-  dir_sign[1] =
-      ray.dir[1] < static_cast<T>(0.0) ? 1 : 0;
-  dir_sign[2] =
-      ray.dir[2] < static_cast<T>(0.0) ? 1 : 0;
+  dir_sign[0] = ray.dir[0] < static_cast<T>(0.0) ? 1 : 0;
+  dir_sign[1] = ray.dir[1] < static_cast<T>(0.0) ? 1 : 0;
+  dir_sign[2] = ray.dir[2] < static_cast<T>(0.0) ? 1 : 0;
 
   real3<T> ray_inv_dir;
   real3<T> ray_dir;

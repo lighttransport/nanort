@@ -5,7 +5,39 @@
 
 #ifdef __clang__
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Weverything"
+#pragma clang diagnostic ignored "-Wshadow"
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wreserved-id-macro"
+#pragma clang diagnostic ignored "-Wextra-semi"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wdocumentation"
+#pragma clang diagnostic ignored "-Wundefined-reinterpret-cast"
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#pragma clang diagnostic ignored "-Wfloat-conversion"
+#pragma clang diagnostic ignored "-Wfloat-equal"
+#pragma clang diagnostic ignored "-Wunused-variable"
+#pragma clang diagnostic ignored "-Wconversion"
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wswitch-enum"
+#pragma clang diagnostic ignored "-Wunused-macros"
+#pragma clang diagnostic ignored "-Wweak-vtables"
+#pragma clang diagnostic ignored "-Wmissing-variable-declarations"
+#if __has_warning("-Wcomma")
+#pragma clang diagnostic ignored "-Wcomma"
+#endif
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
+#if __has_warning("-Wcast-qual")
+#pragma clang diagnostic ignored "-Wcast-qual"
+#endif
+
 #endif
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -660,6 +692,12 @@ int main(int argc, char **argv) {
 
   t.end();
   printf("Render %f secs\n", t.msec() / 1000.0);
+
+  delete [] mesh.vertices;
+  delete [] mesh.faces;
+  delete [] mesh.material_ids;
+  delete [] mesh.facevarying_normals;
+  delete [] mesh.facevarying_uvs;
 
   // Save image.
   SaveImageEXR("render.exr", &rgb.at(0), width, height);
