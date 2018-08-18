@@ -395,8 +395,26 @@ template <typename T>
 inline real3<T> vsafe_inverse(const real3<T> v) {
   real3<T> r;
 
-  // TODO(LTE): Handle signed zero using std::signbit() or std::copysign() when
-  // C++11 compiler is available.
+#ifdef NANORT_USE_CPP11_FEATURE
+
+  if (std::fabs(v[0]) < std::numeric_limits<T>::epsilon()) {
+    r[0] = std::numeric_limits<T>::infinity() * std::copysign(static_cast<T>(1), v[0]);
+  } else {
+    r[0] = static_cast<T>(1.0) / v[0];
+  }
+
+  if (std::fabs(v[1]) < std::numeric_limits<T>::epsilon()) {
+    r[1] = std::numeric_limits<T>::infinity() * std::copysign(static_cast<T>(1), v[1]);
+  } else {
+    r[1] = static_cast<T>(1.0) / v[1];
+  }
+
+  if (std::fabs(v[2]) < std::numeric_limits<T>::epsilon()) {
+    r[2] = std::numeric_limits<T>::infinity() * std::copysign(static_cast<T>(1), v[2]);
+  } else {
+    r[2] = static_cast<T>(1.0) / v[2];
+  }
+#else
 
   if (std::fabs(v[0]) < std::numeric_limits<T>::epsilon()) {
     T sgn = (v[0] < static_cast<T>(0)) ? static_cast<T>(-1) : static_cast<T>(1);
@@ -418,6 +436,7 @@ inline real3<T> vsafe_inverse(const real3<T> v) {
   } else {
     r[2] = static_cast<T>(1.0) / v[2];
   }
+#endif
 
   return r;
 }
