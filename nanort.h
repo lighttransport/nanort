@@ -53,6 +53,14 @@ THE SOFTWARE.
 // NANORT_USE_CPP11_FEATURE : Enable C++11 feature
 // NANORT_ENABLE_PARALLEL_BUILD : Enable parallel BVH build.
 //
+// Parallelized BVH build is supported on C++11 thread version.
+// OpenMP version is not fully tested.
+// thus turn off if you face a problem when building BVH in parallel.
+// #define NANORT_ENABLE_PARALLEL_BUILD
+
+// Some constants
+#define kNANORT_MIN_PRIMITIVES_FOR_PARALLEL_BUILD (1024 * 8)
+#define kNANORT_SHALLOW_DEPTH (4)  // will create 2**N subtrees
 
 #ifdef NANORT_USE_CPP11_FEATURE
 // Assume C++11 compiler has thread support.
@@ -61,6 +69,14 @@ THE SOFTWARE.
 #include <atomic>
 #include <mutex>
 #include <thread>
+
+#define kNANORT_MAX_THREADS (256)
+
+// Parallel build should work well for C++11 version, thus force enable it.
+#ifndef NANORT_ENABLE_PARALLEL_BUILD
+#define NANORT_ENABLE_PARALLEL_BUILD
+#endif
+
 #endif
 
 namespace nanort {
@@ -71,10 +87,6 @@ namespace nanort {
 #pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 #endif
 #endif
-
-// Parallelized BVH build is not yet fully tested,
-// thus turn off if you face a problem when building BVH.
-#define NANORT_ENABLE_PARALLEL_BUILD (1)
 
 // ----------------------------------------------------------------------------
 // Small vector class useful for multi-threaded environment.
@@ -518,8 +530,9 @@ struct BVHBuildOptions {
         min_leaf_primitives(4),
         max_tree_depth(256),
         bin_size(64),
-        shallow_depth(3),
-        min_primitives_for_parallel_build(1024 * 128),
+        shallow_depth(kNANORT_SHALLOW_DEPTH),
+        min_primitives_for_parallel_build(
+            kNANORT_MIN_PRIMITIVES_FOR_PARALLEL_BUILD),
         cache_bbox(false) {}
 };
 
@@ -685,7 +698,7 @@ class BVHAccel {
   bool IsValid() const { return nodes_.size() > 0; }
 
  private:
-#if NANORT_ENABLE_PARALLEL_BUILD
+#if defined(NANORT_ENABLE_PARALLEL_BUILD)
   typedef struct {
     unsigned int left_idx;
     unsigned int right_idx;
@@ -750,6 +763,23 @@ class TriangleSAHPred {
         vertices_(vertices),
         faces_(faces),
         vertex_stride_bytes_(vertex_stride_bytes) {}
+
+  TriangleSAHPred(const TriangleSAHPred<T> &rhs)
+      : axis_(rhs.axis_),
+        pos_(rhs.pos_),
+        vertices_(rhs.vertices_),
+        faces_(rhs.faces_),
+        vertex_stride_bytes_(rhs.vertex_stride_bytes_) {}
+
+  TriangleSAHPred<T> &operator=(const TriangleSAHPred<T> &rhs) {
+    axis_ = rhs.axis_;
+    pos_ = rhs.pos_;
+    vertices_ = rhs.vertices_;
+    faces_ = rhs.faces_;
+    vertex_stride_bytes_ = rhs.vertex_stride_bytes_;
+
+    return (*this);
+  }
 
   void Set(int axis, T pos) const {
     axis_ = axis;
@@ -1349,13 +1379,14 @@ void ComputeBoundingBoxOMP(real3<T> *bmin, real3<T> *bmax,
 #ifdef NANORT_USE_CPP11_FEATURE
 template <typename T, class P>
 void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
-                           const unsigned int *indices, unsigned int left_index,
-                           unsigned int right_index, const P &p) {
-
+                                const unsigned int *indices,
+                                unsigned int left_index,
+                                unsigned int right_index, const P &p) {
   unsigned int n = right_index - left_index;
 
-  size_t num_threads = std::min(
-      256UL, std::max(1UL, size_t(std::thread::hardware_concurrency())));
+  size_t num_threads =
+      std::min(size_t(kNANORT_MAX_THREADS),
+               std::max(1UL, size_t(std::thread::hardware_concurrency())));
   if (n < num_threads) {
     num_threads = n;
   }
@@ -1408,12 +1439,11 @@ void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
         (*bmin)[k] = local_bmins[t][k];
       }
 
-      if (local_bmaxs[t][k] < (*bmax)[k]) {
+      if (local_bmaxs[t][k] > (*bmax)[k]) {
         (*bmax)[k] = local_bmaxs[t][k];
       }
     }
   }
-
 }
 #endif
 
@@ -1483,7 +1513,7 @@ inline void GetBoundingBox(real3<T> *bmin, real3<T> *bmax,
 // --
 //
 
-#if NANORT_ENABLE_PARALLEL_BUILD
+#if defined(NANORT_ENABLE_PARALLEL_BUILD)
 template <typename T>
 template <class P, class Pred>
 unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
@@ -1501,7 +1531,12 @@ unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
   }
 
   real3<T> bmin, bmax;
+#if defined(NANORT_USE_CPP11_FEATURE) && defined(NANORT_ENABLE_PARALLEL_BUILD)
+  ComputeBoundingBoxThreaded(&bmin, &bmax, &indices_.at(0), left_idx, right_idx,
+                             p);
+#else
   ComputeBoundingBox(&bmin, &bmax, &indices_.at(0), left_idx, right_idx, p);
+#endif
 
   unsigned int n = right_idx - left_idx;
   if ((n <= options_.min_leaf_primitives) ||
@@ -1551,6 +1586,11 @@ unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
 
   } else {
     //
+    // TODO(LTE): multi-threaded SAH computation, or use simple object median or
+    // spacial median for shallow tree to speeding up the parallel build.
+    //
+
+    //
     // Compute SAH and find best split axis and position
     //
     int min_cut_axis = 0;
@@ -1574,7 +1614,7 @@ unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
       // try min_cut_axis first.
       cut_axis = (min_cut_axis + axis_try) % 3;
 
-      // @fixme { We want some thing like: std::partition(begin, end,
+      // @fixme { We want something like: std::partition(begin, end,
       // pred(cut_axis, cut_pos[cut_axis])); }
       pred.Set(cut_axis, cut_pos[cut_axis]);
       //
@@ -1786,10 +1826,11 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
   //
   indices_.resize(n);
 
-#ifdef NANORT_USE_CPP11_FEATURE
+#if defined(NANORT_USE_CPP11_FEATURE)
   {
-    size_t num_threads = std::min(
-        256UL, std::max(1UL, size_t(std::thread::hardware_concurrency())));
+    size_t num_threads =
+        std::min(size_t(kNANORT_MAX_THREADS),
+                 std::max(1UL, size_t(std::thread::hardware_concurrency())));
     if (n < num_threads) {
       num_threads = n;
     }
@@ -1851,7 +1892,7 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
     }
 
   } else {
-#ifdef NANORT_USE_CPP11_FEATURE
+#if defined(NANORT_USE_CPP11_FEATURE)
     ComputeBoundingBoxThreaded(&bmin, &bmax, &indices_.at(0), 0, n, p);
 #elif defined(_OPENMP)
     ComputeBoundingBoxOMP(&bmin, &bmax, &indices_.at(0), 0, n, p);
@@ -1863,8 +1904,8 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
 //
 // 3. Build tree
 //
-#ifdef _OPENMP
-#if NANORT_ENABLE_PARALLEL_BUILD
+#if defined(NANORT_ENABLE_PARALLEL_BUILD)
+#if defined(NANORT_USE_CPP11_FEATURE)
 
   // Do parallel build for enoughly large dataset.
   if (n > options.min_primitives_for_parallel_build) {
@@ -1878,16 +1919,39 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
         shallow_node_infos_.size());
     std::vector<BVHBuildStatistics> local_stats(shallow_node_infos_.size());
 
-#pragma omp parallel for
-    for (int i = 0; i < static_cast<int>(shallow_node_infos_.size()); i++) {
-      unsigned int left_idx = shallow_node_infos_[i].left_idx;
-      unsigned int right_idx = shallow_node_infos_[i].right_idx;
-      BuildTree(&(local_stats[i]), &(local_nodes[i]), left_idx, right_idx,
-                options.shallow_depth, p, pred);
+    size_t num_threads =
+        std::min(size_t(kNANORT_MAX_THREADS),
+                 std::max(1UL, size_t(std::thread::hardware_concurrency())));
+    if (shallow_node_infos_.size() < num_threads) {
+      num_threads = shallow_node_infos_.size();
+    }
+
+    std::vector<std::thread> workers;
+    size_t ndiv = shallow_node_infos_.size() / num_threads;
+
+    for (size_t t = 0; t < num_threads; t++) {
+      workers.emplace_back(std::thread([&, t]() {
+        size_t si = t * ndiv;
+        size_t ei = std::min((t + 1) * ndiv, shallow_node_infos_.size());
+
+        // Create thread-local copy of Pred since some mutable variables are
+        // modified during SAH computation.
+        const Pred local_pred = pred;
+        for (size_t i = si; i < ei; i++) {
+          unsigned int left_idx = shallow_node_infos_[i].left_idx;
+          unsigned int right_idx = shallow_node_infos_[i].right_idx;
+          BuildTree(&(local_stats[i]), &(local_nodes[i]), left_idx, right_idx,
+                    options.shallow_depth, p, local_pred);
+        }
+      }));
+    }
+
+    for (auto &t : workers) {
+      t.join();
     }
 
     // Join local nodes
-    for (int i = 0; i < static_cast<int>(local_nodes.size()); i++) {
+    for (size_t i = 0; i < local_nodes.size(); i++) {
       assert(!local_nodes[i].empty());
       size_t offset = nodes_.size();
 
@@ -1908,7 +1972,7 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
     }
 
     // Join statistics
-    for (int i = 0; i < static_cast<int>(local_nodes.size()); i++) {
+    for (size_t i = 0; i < local_nodes.size(); i++) {
       stats_.max_tree_depth =
           std::max(stats_.max_tree_depth, local_stats[i].max_tree_depth);
       stats_.num_leaf_nodes += local_stats[i].num_leaf_nodes;
@@ -1916,6 +1980,65 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
     }
 
   } else {
+    // Single thread.
+    BuildTree(&stats_, &nodes_, 0, n,
+              /* root depth */ 0, p, pred);  // [0, n)
+  }
+
+#elif defined(_OPENMP)
+
+  // Do parallel build for enoughly large dataset.
+  if (n > options.min_primitives_for_parallel_build) {
+    BuildShallowTree(&nodes_, 0, n, /* root depth */ 0, options.shallow_depth,
+                     p, pred);  // [0, n)
+
+    assert(shallow_node_infos_.size() > 0);
+
+    // Build deeper tree in parallel
+    std::vector<std::vector<BVHNode<T> > > local_nodes(
+        shallow_node_infos_.size());
+    std::vector<BVHBuildStatistics> local_stats(shallow_node_infos_.size());
+
+#pragma omp parallel for
+    for (int i = 0; i < static_cast<int>(shallow_node_infos_.size()); i++) {
+      unsigned int left_idx = shallow_node_infos_[size_t(i)].left_idx;
+      unsigned int right_idx = shallow_node_infos_[size_t(i)].right_idx;
+      const Pred local_pred = pred;
+      BuildTree(&(local_stats[size_t(i)]), &(local_nodes[size_t(i)]), left_idx,
+                right_idx, options.shallow_depth, p, local_pred);
+    }
+
+    // Join local nodes
+    for (size_t i = 0; i < local_nodes.size(); i++) {
+      assert(!local_nodes[size_t(i)].empty());
+      size_t offset = nodes_.size();
+
+      // Add offset to child index(for branch node).
+      for (size_t j = 0; j < local_nodes[i].size(); j++) {
+        if (local_nodes[i][j].flag == 0) {  // branch
+          local_nodes[i][j].data[0] += offset - 1;
+          local_nodes[i][j].data[1] += offset - 1;
+        }
+      }
+
+      // replace
+      nodes_[shallow_node_infos_[i].offset] = local_nodes[i][0];
+
+      // Skip root element of the local node.
+      nodes_.insert(nodes_.end(), local_nodes[i].begin() + 1,
+                    local_nodes[i].end());
+    }
+
+    // Join statistics
+    for (size_t i = 0; i < local_nodes.size(); i++) {
+      stats_.max_tree_depth =
+          std::max(stats_.max_tree_depth, local_stats[i].max_tree_depth);
+      stats_.num_leaf_nodes += local_stats[i].num_leaf_nodes;
+      stats_.num_branch_nodes += local_stats[i].num_branch_nodes;
+    }
+
+  } else {
+    // Single thread
     BuildTree(&stats_, &nodes_, 0, n,
               /* root depth */ 0, p, pred);  // [0, n)
   }
