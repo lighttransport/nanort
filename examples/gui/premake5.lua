@@ -3,6 +3,11 @@ newoption {
    description = "Build with native file dialog support(GTK3 required. Linux only)"
 }
 
+newoption {
+   trigger = "mt",
+   description = "Use multi-threaded .obj parsing and BVH build(Linux only at the moment)."
+}
+
 sources = {
    "main.cc",
    "render.cc",
@@ -62,6 +67,10 @@ solution "GUISolution"
                  "../common/nativefiledialog/src/nfd_win.cpp" }
       end
       if os.is("Linux") then
+         if _OPTIONS["mt"] then
+            defines { "USE_MULTITHREADING" }
+            defines { "NANORT_USE_CPP11_FEATURE" }
+         end
          files {
             "../common/OpenGLWindow/X11OpenGLWindow.cpp",
             "../common/OpenGLWindow/X11OpenGLWindows.h"

@@ -29,9 +29,9 @@ If you want re-generate solution file or generate solution file for Visual Studi
 
     > premake5 vs2015
 
-For Visual Studio 2013,
+For Visual Studio 2017,
 
-    > premake5 vs2013
+    > premake5 vs2017
 
 
 ## Usage

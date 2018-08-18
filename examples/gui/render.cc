@@ -47,8 +47,13 @@ THE SOFTWARE.
 #define ESON_IMPLEMENTATION
 #include "eson.h"
 
+#ifdef USE_MULTITHREADING
+#define TINYOBJ_LOADER_OPT_IMPLEMENTATION
+#include "tinyobj_loader_opt.h"
+#else
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
+#endif
 
 #include "trackball.h"
 
@@ -345,20 +350,268 @@ int LoadTexture(const std::string& filename) {
   return -1;
 }
 
+static const char *mmap_file(size_t *len, const char* filename)
+{
+  (*len) = 0;
+#ifdef _WIN32
+  HANDLE file = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL);
+  assert(file != INVALID_HANDLE_VALUE);
+
+  HANDLE fileMapping = CreateFileMapping(file, NULL, PAGE_READONLY, 0, 0, NULL);
+  assert(fileMapping != INVALID_HANDLE_VALUE);
+ 
+  LPVOID fileMapView = MapViewOfFile(fileMapping, FILE_MAP_READ, 0, 0, 0);
+  auto fileMapViewChar = (const char*)fileMapView;
+  assert(fileMapView != NULL);
+
+  LARGE_INTEGER fileSize;
+  fileSize.QuadPart = 0;
+  GetFileSizeEx(file, &fileSize);
+
+  (*len) = static_cast<size_t>(fileSize.QuadPart);
+  return fileMapViewChar;
+
+#else
+
+  FILE* f = fopen(filename, "rb" );
+  if (!f) {
+    fprintf(stderr, "Failed to open file : %s\n", filename);
+    return nullptr;
+  }
+  fseek(f, 0, SEEK_END);
+  long fileSize = ftell(f);
+  fclose(f);
+
+  if (fileSize < 16) {
+    fprintf(stderr, "Empty or invalid .obj : %s\n", filename);
+    return nullptr;
+  }
+
+  struct stat sb;
+  char *p;
+  int fd;
+
+  fd = open (filename, O_RDONLY);
+  if (fd == -1) {
+    perror ("open");
+    return nullptr;
+  }
+
+  if (fstat (fd, &sb) == -1) {
+    perror ("fstat");
+    return nullptr;
+  }
+
+  if (!S_ISREG (sb.st_mode)) {
+    fprintf (stderr, "%s is not a file\n", "lineitem.tbl");
+    return nullptr;
+  }
+
+  p = (char*)mmap (0, fileSize, PROT_READ, MAP_SHARED, fd, 0);
+
+  if (p == MAP_FAILED) {
+    perror ("mmap");
+    return nullptr;
+  }
+
+  if (close (fd) == -1) {
+    perror ("close");
+    return nullptr;
+  }
+
+  (*len) = fileSize;
+
+  return p;
+  
+#endif
+}
+
+static bool gz_load(std::vector<char>* buf, const char* filename)
+{
+#ifdef ENABLE_ZLIB
+    gzFile file;
+    file = gzopen (filename, "r");
+    if (! file) {
+        fprintf (stderr, "gzopen of '%s' failed: %s.\n", filename,
+                 strerror (errno));
+        exit (EXIT_FAILURE);
+        return false;
+    }
+    while (1) {
+        int err;                    
+        int bytes_read;
+        unsigned char buffer[1024];
+        bytes_read = gzread (file, buffer, 1024);
+        buf->insert(buf->end(), buffer, buffer + 1024); 
+        //printf ("%s", buffer);
+        if (bytes_read < 1024) {
+            if (gzeof (file)) {
+                break;
+            }
+            else {
+                const char * error_string;
+                error_string = gzerror (file, & err);
+                if (err) {
+                    fprintf (stderr, "Error: %s.\n", error_string);
+                    exit (EXIT_FAILURE);
+                    return false;
+                }
+            }
+        }
+    }
+    gzclose (file);
+    return true;
+#else
+  return false;
+#endif
+}
+
+#ifdef ENABLE_ZSTD
+static off_t fsize_X(const char *filename)
+{
+    struct stat st;
+    if (stat(filename, &st) == 0) return st.st_size;
+    /* error */
+    printf("stat: %s : %s \n", filename, strerror(errno));
+    exit(1);
+}
+
+static FILE* fopen_X(const char *filename, const char *instruction)
+{
+    FILE* const inFile = fopen(filename, instruction);
+    if (inFile) return inFile;
+    /* error */
+    printf("fopen: %s : %s \n", filename, strerror(errno));
+    exit(2);
+}
+
+static void* malloc_X(size_t size)
+{
+    void* const buff = malloc(size);
+    if (buff) return buff;
+    /* error */
+    printf("malloc: %s \n", strerror(errno));
+    exit(3);
+}
+#endif
+
+static bool zstd_load(std::vector<char>* buf, const char* filename)
+{
+#ifdef ENABLE_ZSTD
+    off_t const buffSize = fsize_X(filename);
+    FILE* const inFile = fopen_X(filename, "rb");
+    void* const buffer = malloc_X(buffSize);
+    size_t const readSize = fread(buffer, 1, buffSize, inFile);
+    if (readSize != (size_t)buffSize) {
+        printf("fread: %s : %s \n", filename, strerror(errno));
+        exit(4);
+    }
+    fclose(inFile);
+
+    unsigned long long const rSize = ZSTD_getDecompressedSize(buffer, buffSize);
+    if (rSize==0) {
+        printf("%s : original size unknown \n", filename);
+        exit(5);
+    }
+
+    buf->resize(rSize);
+
+    size_t const dSize = ZSTD_decompress(buf->data(), rSize, buffer, buffSize);
+
+    if (dSize != rSize) {
+        printf("error decoding %s : %s \n", filename, ZSTD_getErrorName(dSize));
+        exit(7);
+    }
+
+    free(buffer);
+
+    return true;
+#else
+  return false;
+#endif
+}
+
+static const char* get_file_data(size_t *len, const char* filename)
+{
+
+  const char *ext = strrchr(filename, '.');
+
+  size_t data_len = 0;
+  const char* data = nullptr;
+
+  if (strcmp(ext, ".gz") == 0) {
+    // gzipped data.
+
+    std::vector<char> buf;
+    bool ret = gz_load(&buf, filename);
+
+    if (ret) {
+      char *p = static_cast<char*>(malloc(buf.size() + 1));  // @fixme { implement deleter }
+      memcpy(p, &buf.at(0), buf.size());
+      p[buf.size()] = '\0';
+      data = p;
+      data_len = buf.size();
+    }
+
+  } else if (strcmp(ext, ".zst") == 0) {
+    printf("zstd\n");
+    // Zstandard data.
+
+    std::vector<char> buf;
+    bool ret = zstd_load(&buf, filename);
+
+    if (ret) {
+      char *p = static_cast<char*>(malloc(buf.size() + 1));  // @fixme { implement deleter }
+      memcpy(p, &buf.at(0), buf.size());
+      p[buf.size()] = '\0';
+      data = p;
+      data_len = buf.size();
+    }
+  } else {
+    
+    data = mmap_file(&data_len, filename);
+
+  }
+
+  (*len) = data_len;
+  return data;
+}
+
 bool LoadObj(Mesh& mesh, const char* filename, float scale) {
+
+  std::string err;
+
+#if defined(USE_MULTITHREADING)
+  tinyobj_opt::attrib_t attrib;
+  std::vector<tinyobj_opt::shape_t> shapes;
+  std::vector<tinyobj_opt::material_t> materials;
+#else
   tinyobj::attrib_t attrib;
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
-  std::string err;
+#endif
 
   std::string basedir = GetBaseDir(filename) + "/";
   const char* basepath = (basedir.compare("/") == 0) ? NULL : basedir.c_str();
 
   auto t_start = std::chrono::system_clock::now();
 
+#if defined(USE_MULTITHREADING)
 
+  size_t data_len = 0;
+  const char* data = get_file_data(&data_len, filename);
+  if (data == nullptr) {
+    printf("failed to load file\n");
+    exit(-1);
+    return false;
+  }
+
+  tinyobj_opt::LoadOption option;
+  bool ret = parseObj(&attrib, &shapes, &materials, data, data_len, option);
+#else
   bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename,
                               basepath, /* triangulate */ true);
+#endif
 
   auto t_end = std::chrono::system_clock::now();
   std::chrono::duration<double, std::milli> ms = t_end - t_start;
