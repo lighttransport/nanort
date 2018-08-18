@@ -1427,7 +1427,7 @@ void ComputeBoundingBoxOMP(real3<T> *bmin, real3<T> *bmax,
 
 #ifdef NANORT_USE_CPP11_FEATURE
 template <typename T, class P>
-void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
+inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
                                 const unsigned int *indices,
                                 unsigned int left_index,
                                 unsigned int right_index, const P &p) {
@@ -1444,20 +1444,20 @@ void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
 
   size_t ndiv = n / num_threads;
 
-  std::vector<T[3]> local_bmins(num_threads);
-  std::vector<T[3]> local_bmaxs(num_threads);
+  std::vector<T> local_bmins(3 * num_threads); // 3 = xyz
+  std::vector<T> local_bmaxs(3 * num_threads); // 3 = xyz
 
   for (size_t t = 0; t < num_threads; t++) {
     workers.emplace_back(std::thread([&, t]() {
       size_t si = left_index + t * ndiv;
       size_t ei = std::min(left_index + (t + 1) * ndiv, size_t(right_index));
 
-      local_bmins[t][0] = std::numeric_limits<T>::infinity();
-      local_bmins[t][1] = std::numeric_limits<T>::infinity();
-      local_bmins[t][2] = std::numeric_limits<T>::infinity();
-      local_bmaxs[t][0] = -std::numeric_limits<T>::infinity();
-      local_bmaxs[t][1] = -std::numeric_limits<T>::infinity();
-      local_bmaxs[t][2] = -std::numeric_limits<T>::infinity();
+      local_bmins[3 * t + 0] = std::numeric_limits<T>::infinity();
+      local_bmins[3 * t + 1] = std::numeric_limits<T>::infinity();
+      local_bmins[3 * t + 2] = std::numeric_limits<T>::infinity();
+      local_bmaxs[3 * t + 0] = -std::numeric_limits<T>::infinity();
+      local_bmaxs[3 * t + 1] = -std::numeric_limits<T>::infinity();
+      local_bmaxs[3 * t + 2] = -std::numeric_limits<T>::infinity();
 
       for (size_t i = si; i < ei; i++) {  // for each faces
         unsigned int idx = indices[i];
@@ -1465,8 +1465,8 @@ void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
         real3<T> bbox_min, bbox_max;
         p.BoundingBox(&bbox_min, &bbox_max, idx);
         for (int k = 0; k < 3; k++) {  // xyz
-          if (local_bmins[t][k] > bbox_min[k]) local_bmins[t][k] = bbox_min[k];
-          if (local_bmaxs[t][k] < bbox_max[k]) local_bmaxs[t][k] = bbox_max[k];
+          if (local_bmins[3 * t + k] > bbox_min[k]) local_bmins[3 * t + k] = bbox_min[k];
+          if (local_bmaxs[3 * t + k] < bbox_max[k]) local_bmaxs[3 * t + k] = bbox_max[k];
         }
       }
     }));
@@ -1478,18 +1478,18 @@ void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
 
   // merge bbox
   for (int k = 0; k < 3; k++) {
-    (*bmin)[k] = local_bmins[0][k];
-    (*bmax)[k] = local_bmaxs[0][k];
+    (*bmin)[k] = local_bmins[k];
+    (*bmax)[k] = local_bmaxs[k];
   }
 
   for (size_t t = 1; t < num_threads; t++) {
     for (int k = 0; k < 3; k++) {
-      if (local_bmins[t][k] < (*bmin)[k]) {
-        (*bmin)[k] = local_bmins[t][k];
+      if (local_bmins[3 * t + k] < (*bmin)[k]) {
+        (*bmin)[k] = local_bmins[3 * t + k];
       }
 
-      if (local_bmaxs[t][k] > (*bmax)[k]) {
-        (*bmax)[k] = local_bmaxs[t][k];
+      if (local_bmaxs[3 * t + k] > (*bmax)[k]) {
+        (*bmax)[k] = local_bmaxs[3 * t + k];
       }
     }
   }
@@ -1976,20 +1976,19 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
     }
 
     std::vector<std::thread> workers;
-    size_t ndiv = shallow_node_infos_.size() / num_threads;
+    std::atomic<uint32_t> i(0);
 
     for (size_t t = 0; t < num_threads; t++) {
       workers.emplace_back(std::thread([&, t]() {
-        size_t si = t * ndiv;
-        size_t ei = std::min((t + 1) * ndiv, shallow_node_infos_.size());
+        uint32_t idx = 0;
+        while ((idx = (i++)) < shallow_node_infos_.size()) {
 
-        // Create thread-local copy of Pred since some mutable variables are
-        // modified during SAH computation.
-        const Pred local_pred = pred;
-        for (size_t i = si; i < ei; i++) {
-          unsigned int left_idx = shallow_node_infos_[i].left_idx;
-          unsigned int right_idx = shallow_node_infos_[i].right_idx;
-          BuildTree(&(local_stats[i]), &(local_nodes[i]), left_idx, right_idx,
+          // Create thread-local copy of Pred since some mutable variables are
+          // modified during SAH computation.
+          const Pred local_pred = pred;
+          unsigned int left_idx = shallow_node_infos_[size_t(idx)].left_idx;
+          unsigned int right_idx = shallow_node_infos_[size_t(idx)].right_idx;
+          BuildTree(&(local_stats[size_t(idx)]), &(local_nodes[size_t(idx)]), left_idx, right_idx,
                     options.shallow_depth, p, local_pred);
         }
       }));

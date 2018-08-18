@@ -221,6 +221,8 @@ And plesae see API at wiki: https://github.com/lighttransport/nanort/wiki/API
 
 `NanoRT` examples use some external third party libraries. Licenses for such third party libraries obey their own license.
 
+Lucy statue model is from The Stanford 3D Scanning Repository http://graphics.stanford.edu/data/3Dscanrep/
+
 ## TODO
 
 PR are always welcome!
