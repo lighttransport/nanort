@@ -12,8 +12,8 @@ Path tracing example contributed by https://github.com/daseyb
 ## Features
 
 * Portable C++
-  * Only use C++-03 features.
-  * (Some example applications use C++-11 feature, though)
+  * Only use C++-03 features by default.
+  * C++11 feature(threads) is also available
   * There is experimental C89 port of NanoRT in `c89` branch https://github.com/lighttransport/nanort/tree/c89
 * BVH spatial data structure for efficient ray intersection finding.
   * Should be able to handle ~10M triangles scene efficiently with moderate memory consumption
@@ -45,6 +45,7 @@ Path tracing example contributed by https://github.com/daseyb
 
 * lightmetrica https://github.com/hi2p-perim/lightmetrica-v2
 * OSPRay NanoRT module https://github.com/jeffamstutz/module_nanort/
+* Your project here!
 
 ## API
 
@@ -174,6 +175,13 @@ for (int y = 0; y < height; y++) {
 }
 ```
 
+## Defines
+
+```
+NANORT_USE_CPP11_FEATURE : Enable C++11 feature
+NANORT_ENABLE_PARALLEL_BUILD : Enable parallel BVH build(OpenMP version is not yet fully tested).
+```
+
 ## More example
 
 See `examples` directory for example renderer using `NanoRT`.
@@ -196,7 +204,7 @@ Here is an example of custom geometry.
 * [x] Spheres(particles) `examples/particle_primitive/`
 * Cubic Bezier Curves 
   * [x] Approximate as lines `examples/curves_primitive/`
-  * [ ] Recursive ray-Bezier intersection.
+  * [ ] Recursive Ray-Bezier intersection.
 * [x] Cylinders `examples/cylinder_primitive/`
 
 And plesae see API at wiki: https://github.com/lighttransport/nanort/wiki/API
@@ -237,10 +245,11 @@ PR are always welcome!
   * [x] Custom intersection filter through C++ template.
 * [ ] Fast BVH build
   * [ ] Bonsai: Rapid Bounding Volume Hierarchy Generation using Mini Trees http://jcgt.org/published/0004/03/02/
-* [ ] Efficient BVH
+* [ ] Efficient BVH build
   * [ ] Spatial split BVH
 * [ ] Motion blur
   * [ ] STBVH: A Spatial-Temporal BVH for Efficient Multi-Segment Motion Blur http://www.highperformancegraphics.org/2017/program/
-* [ ] Accurate ray curve intersection
+* [ ] Fast, Accurate ray curve intersection
+  * [ ] Phantom Ray-Hair Intersector 
 * [x] Example bi-directional path tracing renderer by @tatsy.
 
