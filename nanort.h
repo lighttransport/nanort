@@ -52,6 +52,7 @@ THE SOFTWARE.
 //
 // NANORT_USE_CPP11_FEATURE : Enable C++11 feature
 // NANORT_ENABLE_PARALLEL_BUILD : Enable parallel BVH build.
+// NANORT_ENABLE_SERIALIZATION : Enable serialization feature for built BVH.
 //
 // Parallelized BVH build is supported on C++11 thread version.
 // OpenMP version is not fully tested.
@@ -80,6 +81,17 @@ THE SOFTWARE.
 #endif
 
 namespace nanort {
+
+// RayType
+typedef enum {
+  RAY_TYPE_NONE = 0x0,
+  RAY_TYPE_PRIMARY = 0x1,
+  RAY_TYPE_SECONDARY = 0x2,
+  RAY_TYPE_DIFFUSE = 0x4,
+  RAY_TYPE_REFLECTION = 0x8,
+  RAY_TYPE_REFRACTION = 0x10
+} RayType;
+
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -451,7 +463,7 @@ inline const real *get_vertex_addr(const real *p, const size_t idx,
 template <typename T = float>
 class Ray {
  public:
-  Ray() : min_t(static_cast<T>(0.0)), max_t(std::numeric_limits<T>::max()) {
+  Ray() : min_t(static_cast<T>(0.0)), max_t(std::numeric_limits<T>::max()), type(RAY_TYPE_NONE) {
     org[0] = static_cast<T>(0.0);
     org[1] = static_cast<T>(0.0);
     org[2] = static_cast<T>(0.0);
@@ -460,12 +472,15 @@ class Ray {
     dir[2] = static_cast<T>(-1.0);
   }
 
-  T org[3];         // must set
-  T dir[3];         // must set
-  T min_t;          // minimum ray hit distance.
-  T max_t;          // maximum ray hit distance.
-  T inv_dir[3];     // filled internally
-  int dir_sign[3];  // filled internally
+  T org[3];           // must set
+  T dir[3];           // must set
+  T min_t;            // minimum ray hit distance.
+  T max_t;            // maximum ray hit distance.
+  T inv_dir[3];       // filled internally
+  int dir_sign[3];    // filled internally
+  unsigned int type;  // ray type
+
+  // TODO(LTE): Align sizeof(Ray)
 };
 
 template <typename T = float>
@@ -577,12 +592,19 @@ class BVHTraceOptions {
   // Hit only for face IDs in indexRange.
   // This feature is good to mimic something like glDrawArrays()
   unsigned int prim_ids_range[2];
+
+  // Prim ID to skip for avoiding self-intersection
+  // -1 = no skipping
+  unsigned int skip_prim_id;
+
   bool cull_back_face;
   unsigned char pad[3];  ///< Padding(not used)
 
   BVHTraceOptions() {
     prim_ids_range[0] = 0;
     prim_ids_range[1] = 0x7FFFFFFF;  // Up to 2G face IDs.
+
+    skip_prim_id = static_cast<unsigned int>(-1);
     cull_back_face = false;
   }
 };
@@ -654,15 +676,19 @@ class BVHAccel {
   ///
   BVHBuildStatistics GetStatistics() const { return stats_; }
 
+#if defined(NANORT_ENABLE_SERIALIZATION)
   ///
   /// Dump built BVH to the file.
   ///
-  bool Dump(const char *filename);
+  bool Dump(const char *filename) const;
+  bool Dump(FILE *fp) const;
 
   ///
   /// Load BVH binary
   ///
   bool Load(const char *filename);
+  bool Load(FILE *fp);
+#endif
 
   void Debug();
 
@@ -924,6 +950,11 @@ class TriangleIntersector {
       return false;
     }
 
+    // Self-intersection test.
+    if (prim_index == trace_options_.skip_prim_id) {
+      return false;
+    }
+
     const unsigned int f0 = faces_[3 * prim_index + 0];
     const unsigned int f1 = faces_[3 * prim_index + 1];
     const unsigned int f2 = faces_[3 * prim_index + 2];
@@ -1092,7 +1123,6 @@ class TriangleIntersector {
   mutable T u_;
   mutable T v_;
   mutable unsigned int prim_id_;
-  int _pad_;
 };
 
 //
@@ -2093,8 +2123,9 @@ void BVHAccel<T>::Debug() {
   }
 }
 
+#if defined(NANORT_ENABLE_SERIALIZATION)
 template <typename T>
-bool BVHAccel<T>::Dump(const char *filename) {
+bool BVHAccel<T>::Dump(const char *filename) const {
   FILE *fp = fopen(filename, "wb");
   if (!fp) {
     // fprintf(stderr, "[BVHAccel] Cannot write a file: %s\n", filename);
@@ -2120,6 +2151,29 @@ bool BVHAccel<T>::Dump(const char *filename) {
   assert(r == numIndices);
 
   fclose(fp);
+
+  return true;
+}
+
+template <typename T>
+bool BVHAccel<T>::Dump(FILE *fp) const {
+  size_t numNodes = nodes_.size();
+  assert(nodes_.size() > 0);
+
+  size_t numIndices = indices_.size();
+
+  size_t r = 0;
+  r = fwrite(&numNodes, sizeof(size_t), 1, fp);
+  assert(r == 1);
+
+  r = fwrite(&nodes_.at(0), sizeof(BVHNode<T>), numNodes, fp);
+  assert(r == numNodes);
+
+  r = fwrite(&numIndices, sizeof(size_t), 1, fp);
+  assert(r == 1);
+
+  r = fwrite(&indices_.at(0), sizeof(unsigned int), numIndices, fp);
+  assert(r == numIndices);
 
   return true;
 }
@@ -2156,6 +2210,33 @@ bool BVHAccel<T>::Load(const char *filename) {
 
   return true;
 }
+
+template <typename T>
+bool BVHAccel<T>::Load(FILE *fp) {
+  size_t numNodes;
+  size_t numIndices;
+
+  size_t r = 0;
+  r = fread(&numNodes, sizeof(size_t), 1, fp);
+  assert(r == 1);
+  assert(numNodes > 0);
+
+  nodes_.resize(numNodes);
+  r = fread(&nodes_.at(0), sizeof(BVHNode<T>), numNodes, fp);
+  assert(r == numNodes);
+
+  r = fread(&numIndices, sizeof(size_t), 1, fp);
+  assert(r == 1);
+
+  indices_.resize(numIndices);
+
+  r = fread(&indices_.at(0), sizeof(unsigned int), numIndices, fp);
+  assert(r == numIndices);
+
+  return true;
+}
+#endif
+
 
 template <typename T>
 inline bool IntersectRayAABB(T *tminOut,  // [out]

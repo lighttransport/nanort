@@ -241,7 +241,7 @@ PR are always welcome!
   * [x] FaceID range.
   * [x] Double sided on/off.
   * [ ] Ray offset.
-  * [ ] Avoid self-intersection.
+  * [x] Avoid self-intersection(BVHTraceOptions.skip_prim_id).
   * [x] Custom intersection filter through C++ template.
 * [ ] Fast BVH build
   * [ ] Bonsai: Rapid Bounding Volume Hierarchy Generation using Mini Trees http://jcgt.org/published/0004/03/02/
