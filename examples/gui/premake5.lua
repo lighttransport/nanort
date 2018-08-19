@@ -70,6 +70,7 @@ solution "GUISolution"
          if _OPTIONS["mt"] then
             defines { "USE_MULTITHREADING" }
             defines { "NANORT_USE_CPP11_FEATURE" }
+            defines { "NANORT_USE_PREFIX_TREE_BVH_BUILDER" }
          end
          files {
             "../common/OpenGLWindow/X11OpenGLWindow.cpp",

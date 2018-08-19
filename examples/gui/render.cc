@@ -577,26 +577,20 @@ static const char* get_file_data(size_t *len, const char* filename)
   return data;
 }
 
+#if defined(USE_MULTITHREADING)
 bool LoadObj(Mesh& mesh, const char* filename, float scale) {
 
   std::string err;
 
-#if defined(USE_MULTITHREADING)
   tinyobj_opt::attrib_t attrib;
   std::vector<tinyobj_opt::shape_t> shapes;
   std::vector<tinyobj_opt::material_t> materials;
-#else
-  tinyobj::attrib_t attrib;
-  std::vector<tinyobj::shape_t> shapes;
-  std::vector<tinyobj::material_t> materials;
-#endif
 
   std::string basedir = GetBaseDir(filename) + "/";
   const char* basepath = (basedir.compare("/") == 0) ? NULL : basedir.c_str();
 
   auto t_start = std::chrono::system_clock::now();
 
-#if defined(USE_MULTITHREADING)
 
   size_t data_len = 0;
   const char* data = get_file_data(&data_len, filename);
@@ -608,10 +602,274 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
 
   tinyobj_opt::LoadOption option;
   bool ret = parseObj(&attrib, &shapes, &materials, data, data_len, option);
+
+  auto t_end = std::chrono::system_clock::now();
+  std::chrono::duration<double, std::milli> ms = t_end - t_start;
+
+  if (!err.empty()) {
+    std::cerr << err << std::endl;
+    return false;
+  }
+
+  std::cout << "[LoadOBJ] Parse time : " << ms.count() << " [msecs]"
+            << std::endl;
+
+  std::cout << "[LoadOBJ] # of shapes in .obj : " << shapes.size() << std::endl;
+  std::cout << "[LoadOBJ] # of materials in .obj : " << materials.size()
+            << std::endl;
+
+  size_t num_vertices = 0;
+  size_t num_faces = 0;
+
+  num_vertices = attrib.vertices.size() / 3;
+  printf("  vertices: %ld\n", attrib.vertices.size() / 3);
+
+  // Assume every faces are triangle.
+
+  for (size_t i = 0; i < shapes.size(); i++) {
+    std::cout << "  shape[" << i << "].name = " << shapes[i].name << std::endl;
+    std::cout << "  shape[" << i << "].num_faces: " << shapes[i].length << std::endl;
+    assert((shapes[i].length % 3) == 0);
+
+    num_faces += shapes[i].length / 3;
+  }
+  std::cout << "[LoadOBJ] # of faces: " << num_faces << std::endl;
+  std::cout << "[LoadOBJ] # of vertices: " << num_vertices << std::endl;
+
+  // Shape -> Mesh
+  mesh.num_faces = num_faces;
+  mesh.num_vertices = num_vertices;
+  mesh.vertices.resize(num_vertices * 3, 0.0f);
+  mesh.vertex_colors.resize(num_vertices * 3, 1.0f);
+  mesh.faces.resize(num_faces * 3, 0);
+  mesh.material_ids.resize(num_faces, 0);
+  mesh.facevarying_normals.resize(num_faces * 3 * 3, 0.0f);
+  mesh.facevarying_uvs.resize(num_faces * 3 * 2, 0.0f);
+
+  // @todo {}
+  // mesh.facevarying_tangents = NULL;
+  // mesh.facevarying_binormals = NULL;
+
+  //size_t vertexIdxOffset = 0;
+  size_t faceIdxOffset = 0;
+
+  for (size_t i = 0; i < attrib.vertices.size(); i++) {
+    mesh.vertices[i] = scale * attrib.vertices[i];
+  }
+
+  for (size_t i = 0; i < shapes.size(); i++) {
+    for (size_t f = shapes[i].face_offset / 3; f < shapes[i].face_offset + shapes[i].length / 3; f++) {
+      mesh.faces[3 * (faceIdxOffset + f) + 0] =
+          attrib.indices[3 * f + 0].vertex_index;
+      mesh.faces[3 * (faceIdxOffset + f) + 1] =
+          attrib.indices[3 * f + 1].vertex_index;
+      mesh.faces[3 * (faceIdxOffset + f) + 2] =
+          attrib.indices[3 * f + 2].vertex_index;
+
+      mesh.material_ids[faceIdxOffset + f] = attrib.material_ids[f];
+    }
+
+    if (attrib.normals.size() > 0) {
+      for (size_t f = shapes[i].face_offset / 3; f < shapes[i].face_offset + shapes[i].length / 3; f++) {
+        int f0, f1, f2;
+
+        f0 = attrib.indices[3 * f + 0].normal_index;
+        f1 = attrib.indices[3 * f + 1].normal_index;
+        f2 = attrib.indices[3 * f + 2].normal_index;
+
+        if (f0 > 0 && f1 > 0 && f2 > 0) {
+          float3 n0, n1, n2;
+
+          n0[0] = attrib.normals[3 * f0 + 0];
+          n0[1] = attrib.normals[3 * f0 + 1];
+          n0[2] = attrib.normals[3 * f0 + 2];
+
+          n1[0] = attrib.normals[3 * f1 + 0];
+          n1[1] = attrib.normals[3 * f1 + 1];
+          n1[2] = attrib.normals[3 * f1 + 2];
+
+          n2[0] = attrib.normals[3 * f2 + 0];
+          n2[1] = attrib.normals[3 * f2 + 1];
+          n2[2] = attrib.normals[3 * f2 + 2];
+
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] =
+              n0[0];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] =
+              n0[1];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] =
+              n0[2];
+
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] =
+              n1[0];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] =
+              n1[1];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] =
+              n1[2];
+
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] =
+              n2[0];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] =
+              n2[1];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] =
+              n2[2];
+        } else {  // face contains invalid normal index. calc geometric normal.
+          f0 = attrib.indices[3 * f + 0].vertex_index;
+          f1 = attrib.indices[3 * f + 1].vertex_index;
+          f2 = attrib.indices[3 * f + 2].vertex_index;
+
+          float3 v0, v1, v2;
+
+          v0[0] = attrib.vertices[3 * f0 + 0];
+          v0[1] = attrib.vertices[3 * f0 + 1];
+          v0[2] = attrib.vertices[3 * f0 + 2];
+
+          v1[0] = attrib.vertices[3 * f1 + 0];
+          v1[1] = attrib.vertices[3 * f1 + 1];
+          v1[2] = attrib.vertices[3 * f1 + 2];
+
+          v2[0] = attrib.vertices[3 * f2 + 0];
+          v2[1] = attrib.vertices[3 * f2 + 1];
+          v2[2] = attrib.vertices[3 * f2 + 2];
+
+          float3 N;
+          CalcNormal(N, v0, v1, v2);
+
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] =
+              N[0];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] =
+              N[1];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] =
+              N[2];
+
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] =
+              N[0];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] =
+              N[1];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] =
+              N[2];
+
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] =
+              N[0];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] =
+              N[1];
+          mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] =
+              N[2];
+        }
+      }
+    } else {
+      // calc geometric normal
+      for (size_t f = shapes[i].face_offset / 3; f < shapes[i].face_offset + shapes[i].length / 3; f++) {
+        int f0, f1, f2;
+
+        f0 = attrib.indices[3 * f + 0].vertex_index;
+        f1 = attrib.indices[3 * f + 1].vertex_index;
+        f2 = attrib.indices[3 * f + 2].vertex_index;
+
+        float3 v0, v1, v2;
+
+        v0[0] = attrib.vertices[3 * f0 + 0];
+        v0[1] = attrib.vertices[3 * f0 + 1];
+        v0[2] = attrib.vertices[3 * f0 + 2];
+
+        v1[0] = attrib.vertices[3 * f1 + 0];
+        v1[1] = attrib.vertices[3 * f1 + 1];
+        v1[2] = attrib.vertices[3 * f1 + 2];
+
+        v2[0] = attrib.vertices[3 * f2 + 0];
+        v2[1] = attrib.vertices[3 * f2 + 1];
+        v2[2] = attrib.vertices[3 * f2 + 2];
+
+        float3 N;
+        CalcNormal(N, v0, v1, v2);
+
+        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 0] = N[0];
+        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 1] = N[1];
+        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 0) + 2] = N[2];
+
+        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 0] = N[0];
+        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 1] = N[1];
+        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 1) + 2] = N[2];
+
+        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 0] = N[0];
+        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 1] = N[1];
+        mesh.facevarying_normals[3 * (3 * (faceIdxOffset + f) + 2) + 2] = N[2];
+      }
+    }
+
+    if (attrib.texcoords.size() > 0) {
+      for (size_t f = shapes[i].face_offset / 3; f < shapes[i].face_offset + shapes[i].length / 3; f++) {
+        int f0, f1, f2;
+
+        f0 = attrib.indices[3 * f + 0].texcoord_index;
+        f1 = attrib.indices[3 * f + 1].texcoord_index;
+        f2 = attrib.indices[3 * f + 2].texcoord_index;
+
+        if (f0 > 0 && f1 > 0 && f2 > 0) {
+          float3 n0, n1, n2;
+
+          n0[0] = attrib.texcoords[2 * f0 + 0];
+          n0[1] = attrib.texcoords[2 * f0 + 1];
+
+          n1[0] = attrib.texcoords[2 * f1 + 0];
+          n1[1] = attrib.texcoords[2 * f1 + 1];
+
+          n2[0] = attrib.texcoords[2 * f2 + 0];
+          n2[1] = attrib.texcoords[2 * f2 + 1];
+
+          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 0) + 0] = n0[0];
+          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 0) + 1] = n0[1];
+
+          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 1) + 0] = n1[0];
+          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 1) + 1] = n1[1];
+
+          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 2) + 0] = n2[0];
+          mesh.facevarying_uvs[2 * (3 * (faceIdxOffset + f) + 2) + 1] = n2[1];
+        }
+      }
+    }
+
+    faceIdxOffset += shapes[i].length / 3;
+  }
+
+  // material_t -> Material and Texture
+  gMaterials.resize(materials.size());
+  gTextures.resize(0);
+  for (size_t i = 0; i < materials.size(); i++) {
+    gMaterials[i].diffuse[0] = materials[i].diffuse[0];
+    gMaterials[i].diffuse[1] = materials[i].diffuse[1];
+    gMaterials[i].diffuse[2] = materials[i].diffuse[2];
+    gMaterials[i].specular[0] = materials[i].specular[0];
+    gMaterials[i].specular[1] = materials[i].specular[1];
+    gMaterials[i].specular[2] = materials[i].specular[2];
+
+    gMaterials[i].id = i;
+
+    // map_Kd
+    gMaterials[i].diffuse_texid = LoadTexture(materials[i].diffuse_texname);
+    // map_Ks
+    gMaterials[i].specular_texid = LoadTexture(materials[i].specular_texname);
+  }
+
+  return true;
+}
+
 #else
+
+bool LoadObj(Mesh& mesh, const char* filename, float scale) {
+
+  std::string err;
+
+  tinyobj::attrib_t attrib;
+  std::vector<tinyobj::shape_t> shapes;
+  std::vector<tinyobj::material_t> materials;
+
+  std::string basedir = GetBaseDir(filename) + "/";
+  const char* basepath = (basedir.compare("/") == 0) ? NULL : basedir.c_str();
+
+  auto t_start = std::chrono::system_clock::now();
+
   bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename,
                               basepath, /* triangulate */ true);
-#endif
 
   auto t_end = std::chrono::system_clock::now();
   std::chrono::duration<double, std::milli> ms = t_end - t_start;
@@ -648,7 +906,6 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   mesh.num_faces = num_faces;
   mesh.num_vertices = num_vertices;
   mesh.vertices.resize(num_vertices * 3, 0.0f);
-  mesh.vertex_colors.resize(num_vertices * 3, 1.0f);
   mesh.faces.resize(num_faces * 3, 0);
   mesh.material_ids.resize(num_faces, 0);
   mesh.facevarying_normals.resize(num_faces * 3 * 3, 0.0f);
@@ -663,10 +920,6 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
 
   for (size_t i = 0; i < attrib.vertices.size(); i++) {
     mesh.vertices[i] = scale * attrib.vertices[i];
-  }
-
-  for (size_t i = 0; i < attrib.colors.size(); i++) {
-    mesh.vertex_colors[i] = attrib.colors[i];
   }
 
   for (size_t i = 0; i < shapes.size(); i++) {
@@ -864,6 +1117,7 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
 
   return true;
 }
+#endif
 
 bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale) {
   return LoadObj(gMesh, obj_filename, scene_scale);

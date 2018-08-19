@@ -213,11 +213,20 @@ And plesae see API at wiki: https://github.com/lighttransport/nanort/wiki/API
 
 `nanort.h` is licensed under MIT license.
 
-`NanoRT` uses `stack_container.h` which is licensed under:
+`NanoRT` uses `stack_container.h` which is licensed under BSD-style license and copyright is:
 
-    // Copyright (c) 2006-2008 The Chromium Authors. All rights reserved.
-    // Use of this source code is governed by a BSD-style license that can be
-    // found in the LICENSE file.
+```
+    Copyright (c) 2006-2008 The Chromium Authors. All rights reserved.
+    Use of this source code is governed by a BSD-style license that can be
+    found in the LICENSE file.
+```
+
+`NanoRT` uses parallel prefix code which is licensed under MIT license and copyright is:
+
+```
+    Copyright (c) 2014-2015, Advanced Institute for Computational Science, RIKEN
+All rights reserved.
+```
 
 `NanoRT` examples use some external third party libraries. Licenses for such third party libraries obey their own license.
 
