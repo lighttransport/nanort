@@ -51,7 +51,7 @@ THE SOFTWARE.
 // compiler macros
 //
 // NANORT_USE_CPP11_FEATURE : Enable C++11 feature
-// NANORT_USE_PREFIX_TREE_BVH_BUILDER : Enable faster prefix BVH builder.
+// NANORT_USE_PREFIX_TREE_BVH_BUILDER : Enable faster prefix BVH builder(Requires C++11 feature).
 // NANORT_ENABLE_PARALLEL_BUILD : Enable parallel BVH build.
 // NANORT_ENABLE_SERIALIZATION : Enable serialization feature for built BVH.
 //
@@ -64,6 +64,12 @@ THE SOFTWARE.
 #define kNANORT_MIN_PRIMITIVES_FOR_PARALLEL_BUILD (1024 * 8)
 #define kNANORT_SHALLOW_DEPTH (4)  // will create 2**N subtrees
 
+#if defined(NANORT_USE_PREFIX_TREE_BVH_BUILDER)
+#ifndef NANORT_USE_CPP11_FEATURE
+#define NANORT_USE_CPP11_FEATURE
+#endif
+#endif
+
 #ifdef NANORT_USE_CPP11_FEATURE
 // Assume C++11 compiler has thread support.
 // In some situation(e.g. embedded system, JIT compilation), thread feature
@@ -71,6 +77,7 @@ THE SOFTWARE.
 #include <atomic>
 #include <mutex>
 #include <thread>
+#include <chrono>
 
 #define kNANORT_MAX_THREADS (256)
 
@@ -452,6 +459,13 @@ inline real3<T> vsafe_inverse(const real3<T> v) {
 #endif
 
   return r;
+}
+
+template <typename real>
+inline const real *get_vertex_addr(const real *p, const size_t idx,
+                                   const size_t stride_bytes) {
+  return reinterpret_cast<const real *>(
+      reinterpret_cast<const unsigned char *>(p) + idx * stride_bytes);
 }
 
 #if defined(NANORT_USE_PREFIX_TREE_BVH_BUILDER)
@@ -1075,8 +1089,9 @@ void CalculateMortonCodes30(uint32_t *codes, const T *points,
 //                                int64_t startIdx, int64_t endIdx);
 
 template<typename T>
-void CalculateMortonCodesTriangleFloat30(uint32_t *codes, const T *vertices,
+void CalculateMortonCodesTriangle30(uint32_t *codes, const T *vertices,
                                          const uint32_t *faces,
+                                         const size_t vertex_stride_bytes,
                                          const real3<T> &bmin, const real3<T> &bmax,
                                          int64_t startIdx, int64_t endIdx) {
 
@@ -1100,9 +1115,10 @@ void CalculateMortonCodesTriangleFloat30(uint32_t *codes, const T *vertices,
     uint32_t f0 = faces[3 * i + 0];
     uint32_t f1 = faces[3 * i + 1];
     uint32_t f2 = faces[3 * i + 2];
-    real3<T> p0(vertices[3 * f0 + 0], vertices[3 * f0 + 1], vertices[3 * f0 + 2]);
-    real3<T> p1(vertices[3 * f1 + 0], vertices[3 * f1 + 1], vertices[3 * f1 + 2]);
-    real3<T> p2(vertices[3 * f2 + 0], vertices[3 * f2 + 1], vertices[3 * f2 + 2]);
+
+    const real3<T> p0(get_vertex_addr(vertices, f0 + 0, vertex_stride_bytes));
+    const real3<T> p1(get_vertex_addr(vertices, f1 + 0, vertex_stride_bytes));
+    const real3<T> p2(get_vertex_addr(vertices, f2 + 0, vertex_stride_bytes));
     real3<T> p_i;
 
     p_i[0] = one_third * (p0[0] + p1[0] + p2[0]);
@@ -1130,13 +1146,6 @@ NodeInfo64 ConstructBinaryRadixTree60(const IndexKey60 *keys,
 
 // ---------------------------------------------------------------------------
 #endif // NANORT_USE_PREFIX_TREE_BVH_BUILDER
-
-template <typename real>
-inline const real *get_vertex_addr(const real *p, const size_t idx,
-                                   const size_t stride_bytes) {
-  return reinterpret_cast<const real *>(
-      reinterpret_cast<const unsigned char *>(p) + idx * stride_bytes);
-}
 
 template <typename T = float>
 class Ray {
@@ -2128,7 +2137,7 @@ inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
   for (size_t t = 0; t < num_threads; t++) {
     workers.emplace_back(std::thread([&, t]() {
       size_t si = left_index + t * ndiv;
-      size_t ei = std::min(left_index + (t + 1) * ndiv, size_t(right_index));
+      size_t ei = (t == (num_threads-1)) ? size_t(right_index) : std::min(left_index + (t + 1) * ndiv, size_t(right_index));
 
       local_bmins[3 * t + 0] = std::numeric_limits<T>::infinity();
       local_bmins[3 * t + 1] = std::numeric_limits<T>::infinity();
@@ -2555,6 +2564,8 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
 
 #if defined(NANORT_USE_CPP11_FEATURE)
   {
+    auto startT = std::chrono::system_clock::now();
+
     size_t num_threads =
         std::min(size_t(kNANORT_MAX_THREADS),
                  std::max(1UL, size_t(std::thread::hardware_concurrency())));
@@ -2569,7 +2580,7 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
     for (size_t t = 0; t < num_threads; t++) {
       workers.emplace_back(std::thread([&, t]() {
         size_t si = t * ndiv;
-        size_t ei = std::min((t + 1) * ndiv, size_t(n));
+        size_t ei = (t == (num_threads-1)) ? size_t(n) : std::min((t + 1) * ndiv, size_t(n));
 
         for (size_t k = si; k < ei; k++) {
           indices_[k] = static_cast<unsigned int>(k);
@@ -2580,6 +2591,12 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
     for (auto &t : workers) {
       t.join();
     }
+
+    auto endT = std::chrono::system_clock::now();
+
+    // DBG
+    std::chrono::duration<float, std::milli> ms = endT - startT;
+    std::cout << "1. fill indices = " << ms.count() << " [ms]" << std::endl;
   }
 
 #else
@@ -2596,193 +2613,277 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
   // 2. Compute bounding box(optional).
   //
   real3<T> bmin, bmax;
-  if (options.cache_bbox) {
-    bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<T>::max();
-    bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<T>::max();
+  {
+    auto startT = std::chrono::system_clock::now();
 
-    bboxes_.resize(n);
-    for (size_t i = 0; i < n; i++) {  // for each primitived
-      unsigned int idx = indices_[i];
+    if (options.cache_bbox) {
+      bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<T>::max();
+      bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<T>::max();
 
-      BBox<T> bbox;
-      p.BoundingBox(&(bbox.bmin), &(bbox.bmax), static_cast<unsigned int>(i));
-      bboxes_[idx] = bbox;
+      bboxes_.resize(n);
+      // TODO(LTE): multi-threaded computation.
+      for (size_t i = 0; i < n; i++) {  // for each primitived
+        unsigned int idx = indices_[i];
 
-      for (int k = 0; k < 3; k++) {  // xyz
-        if (bmin[k] > bbox.bmin[k]) {
-          bmin[k] = bbox.bmin[k];
-        }
-        if (bmax[k] < bbox.bmax[k]) {
-          bmax[k] = bbox.bmax[k];
+        BBox<T> bbox;
+        p.BoundingBox(&(bbox.bmin), &(bbox.bmax), static_cast<unsigned int>(i));
+        bboxes_[idx] = bbox;
+
+        for (int k = 0; k < 3; k++) {  // xyz
+          if (bmin[k] > bbox.bmin[k]) {
+            bmin[k] = bbox.bmin[k];
+          }
+          if (bmax[k] < bbox.bmax[k]) {
+            bmax[k] = bbox.bmax[k];
+          }
         }
       }
+
+    } else {
+#if defined(NANORT_USE_CPP11_FEATURE)
+      ComputeBoundingBoxThreaded(&bmin, &bmax, &indices_.at(0), 0, n, p);
+#elif defined(_OPENMP)
+      ComputeBoundingBoxOMP(&bmin, &bmax, &indices_.at(0), 0, n, p);
+#else
+      ComputeBoundingBox(&bmin, &bmax, &indices_.at(0), 0, n, p);
+#endif
+
     }
 
-  } else {
-#if defined(NANORT_USE_CPP11_FEATURE)
-    ComputeBoundingBoxThreaded(&bmin, &bmax, &indices_.at(0), 0, n, p);
-#elif defined(_OPENMP)
-    ComputeBoundingBoxOMP(&bmin, &bmax, &indices_.at(0), 0, n, p);
-#else
-    ComputeBoundingBox(&bmin, &bmax, &indices_.at(0), 0, n, p);
-#endif
+    auto endT = std::chrono::system_clock::now();
+
+    // DBG
+    std::chrono::duration<float, std::milli> ms = endT - startT;
+    std::cout << "2. compute bbox = " << ms.count() << " [ms]" << std::endl;
   }
+
+#if defined(NANORT_USE_CPP11_FEATURE) && defined(NANORT_USE_PREFIX_TREE_BVH_BUILDER)
+  // 2.1 Compute mortion codes.
+  std::vector<uint32_t> codes;
+  std::vector<IndexKey30> keys;
+  codes.resize(n);
+  keys.resize(n);
+  {
+    auto startT = std::chrono::system_clock::now();
+
+    // TODO(LTE): Do not access member variables directly.
+    CalculateMortonCodesTriangle30(&codes.at(0), p.vertices_, p.faces_, p.vertex_stride_bytes_, bmin, bmax, 0, n);
+    auto endT = std::chrono::system_clock::now();
+
+    // DBG
+    std::chrono::duration<float, std::milli> ms = endT - startT;
+    std::cout << "2.1. mortion code computation = " << ms.count() << " [ms]" << std::endl;
+  }
+
+  {
+    auto startT = std::chrono::system_clock::now();
+
+    // TODO(LTE): multi threading
+    for (size_t i = 0; i < size_t(n); i++) {
+      keys[i].index = indices_[i];
+      keys[i].code = codes[i];
+    }
+
+    std::vector<IndexKey30> temp(n);
+
+    // TODO(LTE): C++11 threaded version of RadixSort.
+    RadixSort30(&keys.at(0), &keys.at(0) + n);
+
+    auto endT = std::chrono::system_clock::now();
+
+    // DBG
+    std::chrono::duration<float, std::milli> ms = endT - startT;
+    std::cout << "2.2. radix sort = " << ms.count() << " [ms]" << std::endl;
+  }
+
+  std::vector<NodeInfo32> nodeInfos(n - 1);
+  {
+    auto startT = std::chrono::system_clock::now();
+
+    // TODO(LTE): threading
+    for (size_t i = 0; i < size_t(n - 1); i++) {
+      // nodeInfos[i] = ConstructBinaryRadixTree30(&keys.at(0), i, n);
+      // printf("I[%d].index   = %d\n", i, nodeInfos[i].index);
+      // printf("I[%d].leftTy  = %d\n", i, nodeInfos[i].leftType);
+      // printf("I[%d].rightTy = %d\n", i, nodeInfos[i].rightType);
+    }
+
+    auto endT = std::chrono::system_clock::now();
+
+    // DBG
+    std::chrono::duration<float, std::milli> ms = endT - startT;
+    std::cout << "2.3. construction of binary radix tree = " << ms.count() << " [ms]" << std::endl;
+  }
+
+#endif
+    
 
 //
 // 3. Build tree
 //
+  {
 #if defined(NANORT_ENABLE_PARALLEL_BUILD)
 #if defined(NANORT_USE_CPP11_FEATURE)
 
-  // Do parallel build for enoughly large dataset.
-  if (n > options.min_primitives_for_parallel_build) {
-    BuildShallowTree(&nodes_, 0, n, /* root depth */ 0, options.shallow_depth,
-                     p, pred);  // [0, n)
+    auto startT = std::chrono::system_clock::now();
 
-    assert(shallow_node_infos_.size() > 0);
+    // Do parallel build for enoughly large dataset.
+    if (n > options.min_primitives_for_parallel_build) {
+      BuildShallowTree(&nodes_, 0, n, /* root depth */ 0, options.shallow_depth,
+                       p, pred);  // [0, n)
 
-    // Build deeper tree in parallel
-    std::vector<std::vector<BVHNode<T> > > local_nodes(
-        shallow_node_infos_.size());
-    std::vector<BVHBuildStatistics> local_stats(shallow_node_infos_.size());
+      assert(shallow_node_infos_.size() > 0);
 
-    size_t num_threads =
-        std::min(size_t(kNANORT_MAX_THREADS),
-                 std::max(1UL, size_t(std::thread::hardware_concurrency())));
-    if (shallow_node_infos_.size() < num_threads) {
-      num_threads = shallow_node_infos_.size();
-    }
+      // Build deeper tree in parallel
+      std::vector<std::vector<BVHNode<T> > > local_nodes(
+          shallow_node_infos_.size());
+      std::vector<BVHBuildStatistics> local_stats(shallow_node_infos_.size());
 
-    std::vector<std::thread> workers;
-    std::atomic<uint32_t> i(0);
-
-    for (size_t t = 0; t < num_threads; t++) {
-      workers.emplace_back(std::thread([&, t]() {
-        uint32_t idx = 0;
-        while ((idx = (i++)) < shallow_node_infos_.size()) {
-
-          // Create thread-local copy of Pred since some mutable variables are
-          // modified during SAH computation.
-          const Pred local_pred = pred;
-          unsigned int left_idx = shallow_node_infos_[size_t(idx)].left_idx;
-          unsigned int right_idx = shallow_node_infos_[size_t(idx)].right_idx;
-          BuildTree(&(local_stats[size_t(idx)]), &(local_nodes[size_t(idx)]), left_idx, right_idx,
-                    options.shallow_depth, p, local_pred);
-        }
-      }));
-    }
-
-    for (auto &t : workers) {
-      t.join();
-    }
-
-    // Join local nodes
-    for (size_t i = 0; i < local_nodes.size(); i++) {
-      assert(!local_nodes[i].empty());
-      size_t offset = nodes_.size();
-
-      // Add offset to child index(for branch node).
-      for (size_t j = 0; j < local_nodes[i].size(); j++) {
-        if (local_nodes[i][j].flag == 0) {  // branch
-          local_nodes[i][j].data[0] += offset - 1;
-          local_nodes[i][j].data[1] += offset - 1;
-        }
+      size_t num_threads =
+          std::min(size_t(kNANORT_MAX_THREADS),
+                   std::max(1UL, size_t(std::thread::hardware_concurrency())));
+      if (shallow_node_infos_.size() < num_threads) {
+        num_threads = shallow_node_infos_.size();
       }
 
-      // replace
-      nodes_[shallow_node_infos_[i].offset] = local_nodes[i][0];
+      std::vector<std::thread> workers;
+      std::atomic<uint32_t> i(0);
 
-      // Skip root element of the local node.
-      nodes_.insert(nodes_.end(), local_nodes[i].begin() + 1,
-                    local_nodes[i].end());
+      for (size_t t = 0; t < num_threads; t++) {
+        workers.emplace_back(std::thread([&, t]() {
+          uint32_t idx = 0;
+          while ((idx = (i++)) < shallow_node_infos_.size()) {
+
+            // Create thread-local copy of Pred since some mutable variables are
+            // modified during SAH computation.
+            const Pred local_pred = pred;
+            unsigned int left_idx = shallow_node_infos_[size_t(idx)].left_idx;
+            unsigned int right_idx = shallow_node_infos_[size_t(idx)].right_idx;
+            BuildTree(&(local_stats[size_t(idx)]), &(local_nodes[size_t(idx)]), left_idx, right_idx,
+                      options.shallow_depth, p, local_pred);
+          }
+        }));
+      }
+
+      for (auto &t : workers) {
+        t.join();
+      }
+
+      // Join local nodes
+      for (size_t i = 0; i < local_nodes.size(); i++) {
+        assert(!local_nodes[i].empty());
+        size_t offset = nodes_.size();
+
+        // Add offset to child index(for branch node).
+        for (size_t j = 0; j < local_nodes[i].size(); j++) {
+          if (local_nodes[i][j].flag == 0) {  // branch
+            local_nodes[i][j].data[0] += offset - 1;
+            local_nodes[i][j].data[1] += offset - 1;
+          }
+        }
+
+        // replace
+        nodes_[shallow_node_infos_[i].offset] = local_nodes[i][0];
+
+        // Skip root element of the local node.
+        nodes_.insert(nodes_.end(), local_nodes[i].begin() + 1,
+                      local_nodes[i].end());
+      }
+
+      // Join statistics
+      for (size_t i = 0; i < local_nodes.size(); i++) {
+        stats_.max_tree_depth =
+            std::max(stats_.max_tree_depth, local_stats[i].max_tree_depth);
+        stats_.num_leaf_nodes += local_stats[i].num_leaf_nodes;
+        stats_.num_branch_nodes += local_stats[i].num_branch_nodes;
+      }
+
+    } else {
+      // Single thread.
+      BuildTree(&stats_, &nodes_, 0, n,
+                /* root depth */ 0, p, pred);  // [0, n)
     }
 
-    // Join statistics
-    for (size_t i = 0; i < local_nodes.size(); i++) {
-      stats_.max_tree_depth =
-          std::max(stats_.max_tree_depth, local_stats[i].max_tree_depth);
-      stats_.num_leaf_nodes += local_stats[i].num_leaf_nodes;
-      stats_.num_branch_nodes += local_stats[i].num_branch_nodes;
-    }
+    auto endT = std::chrono::system_clock::now();
 
-  } else {
-    // Single thread.
-    BuildTree(&stats_, &nodes_, 0, n,
-              /* root depth */ 0, p, pred);  // [0, n)
-  }
+    // DBG
+    std::chrono::duration<float, std::milli> ms = endT - startT;
+    std::cout << "3. tree build = " << ms.count() << " [ms]" << std::endl;
 
 #elif defined(_OPENMP)
 
-  // Do parallel build for enoughly large dataset.
-  if (n > options.min_primitives_for_parallel_build) {
-    BuildShallowTree(&nodes_, 0, n, /* root depth */ 0, options.shallow_depth,
-                     p, pred);  // [0, n)
+    // Do parallel build for enoughly large dataset.
+    if (n > options.min_primitives_for_parallel_build) {
+      BuildShallowTree(&nodes_, 0, n, /* root depth */ 0, options.shallow_depth,
+                       p, pred);  // [0, n)
 
-    assert(shallow_node_infos_.size() > 0);
+      assert(shallow_node_infos_.size() > 0);
 
-    // Build deeper tree in parallel
-    std::vector<std::vector<BVHNode<T> > > local_nodes(
-        shallow_node_infos_.size());
-    std::vector<BVHBuildStatistics> local_stats(shallow_node_infos_.size());
+      // Build deeper tree in parallel
+      std::vector<std::vector<BVHNode<T> > > local_nodes(
+          shallow_node_infos_.size());
+      std::vector<BVHBuildStatistics> local_stats(shallow_node_infos_.size());
 
 #pragma omp parallel for
-    for (int i = 0; i < static_cast<int>(shallow_node_infos_.size()); i++) {
-      unsigned int left_idx = shallow_node_infos_[size_t(i)].left_idx;
-      unsigned int right_idx = shallow_node_infos_[size_t(i)].right_idx;
-      const Pred local_pred = pred;
-      BuildTree(&(local_stats[size_t(i)]), &(local_nodes[size_t(i)]), left_idx,
-                right_idx, options.shallow_depth, p, local_pred);
-    }
-
-    // Join local nodes
-    for (size_t i = 0; i < local_nodes.size(); i++) {
-      assert(!local_nodes[size_t(i)].empty());
-      size_t offset = nodes_.size();
-
-      // Add offset to child index(for branch node).
-      for (size_t j = 0; j < local_nodes[i].size(); j++) {
-        if (local_nodes[i][j].flag == 0) {  // branch
-          local_nodes[i][j].data[0] += offset - 1;
-          local_nodes[i][j].data[1] += offset - 1;
-        }
+      for (int i = 0; i < static_cast<int>(shallow_node_infos_.size()); i++) {
+        unsigned int left_idx = shallow_node_infos_[size_t(i)].left_idx;
+        unsigned int right_idx = shallow_node_infos_[size_t(i)].right_idx;
+        const Pred local_pred = pred;
+        BuildTree(&(local_stats[size_t(i)]), &(local_nodes[size_t(i)]), left_idx,
+                  right_idx, options.shallow_depth, p, local_pred);
       }
 
-      // replace
-      nodes_[shallow_node_infos_[i].offset] = local_nodes[i][0];
+      // Join local nodes
+      for (size_t i = 0; i < local_nodes.size(); i++) {
+        assert(!local_nodes[size_t(i)].empty());
+        size_t offset = nodes_.size();
 
-      // Skip root element of the local node.
-      nodes_.insert(nodes_.end(), local_nodes[i].begin() + 1,
-                    local_nodes[i].end());
+        // Add offset to child index(for branch node).
+        for (size_t j = 0; j < local_nodes[i].size(); j++) {
+          if (local_nodes[i][j].flag == 0) {  // branch
+            local_nodes[i][j].data[0] += offset - 1;
+            local_nodes[i][j].data[1] += offset - 1;
+          }
+        }
+
+        // replace
+        nodes_[shallow_node_infos_[i].offset] = local_nodes[i][0];
+
+        // Skip root element of the local node.
+        nodes_.insert(nodes_.end(), local_nodes[i].begin() + 1,
+                      local_nodes[i].end());
+      }
+
+      // Join statistics
+      for (size_t i = 0; i < local_nodes.size(); i++) {
+        stats_.max_tree_depth =
+            std::max(stats_.max_tree_depth, local_stats[i].max_tree_depth);
+        stats_.num_leaf_nodes += local_stats[i].num_leaf_nodes;
+        stats_.num_branch_nodes += local_stats[i].num_branch_nodes;
+      }
+
+    } else {
+      // Single thread
+      BuildTree(&stats_, &nodes_, 0, n,
+                /* root depth */ 0, p, pred);  // [0, n)
     }
-
-    // Join statistics
-    for (size_t i = 0; i < local_nodes.size(); i++) {
-      stats_.max_tree_depth =
-          std::max(stats_.max_tree_depth, local_stats[i].max_tree_depth);
-      stats_.num_leaf_nodes += local_stats[i].num_leaf_nodes;
-      stats_.num_branch_nodes += local_stats[i].num_branch_nodes;
-    }
-
-  } else {
-    // Single thread
-    BuildTree(&stats_, &nodes_, 0, n,
-              /* root depth */ 0, p, pred);  // [0, n)
-  }
 
 #else  // !NANORT_ENABLE_PARALLEL_BUILD
-  {
-    BuildTree(&stats_, &nodes_, 0, n,
-              /* root depth */ 0, p, pred);  // [0, n)
-  }
+    {
+      BuildTree(&stats_, &nodes_, 0, n,
+                /* root depth */ 0, p, pred);  // [0, n)
+    }
 #endif
 #else  // !_OPENMP
 
-  // Single thread BVH build
-  {
-    BuildTree(&stats_, &nodes_, 0, n,
-              /* root depth */ 0, p, pred);  // [0, n)
-  }
+    // Single thread BVH build
+    {
+      BuildTree(&stats_, &nodes_, 0, n,
+                /* root depth */ 0, p, pred);  // [0, n)
+    }
 #endif
+
+  }
 
   return true;
 }
