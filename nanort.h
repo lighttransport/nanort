@@ -1128,20 +1128,195 @@ void CalculateMortonCodesTriangle30(uint32_t *codes, const T *vertices,
   }
 }
 
+static inline int CountLeadingZeros32(uint32_t x) {
+  // Note: we can use clz(), count leading zeros instruction, or
+  //       convert integert to float then caculate 31 - floor(log2(x))
+  //       for better performance
+  //
+  // If you have popc instruction, clz() can be computed as,
+  //
+  // function clz(x):
+  //       for each y in {1, 2, 4, 8, 16}: x ← x | (x >> y)
+  //       return 32 − popc(x)
+  //
 
-template<typename T>
-void CalculateMortonCodes60(uint64_t *codes, const T *points,
-                            const real3<T> &bmin, const real3<T> &bmax,
-                            int64_t startIdx, int64_t endIdx);
+  if (x == 0)
+    return 32;
+
+  int n = 0;
+  if ((x & 0xFFFF0000) == 0) {
+    n = n + 16;
+    x = x << 16;
+  }
+  if ((x & 0xFF000000) == 0) {
+    n = n + 8;
+    x = x << 8;
+  }
+  if ((x & 0xF0000000) == 0) {
+    n = n + 4;
+    x = x << 4;
+  }
+  if ((x & 0xC0000000) == 0) {
+    n = n + 2;
+    x = x << 2;
+  }
+  if ((x & 0x80000000) == 0) {
+    n = n + 1;
+  }
+  return n;
+}
+
+static inline int CountLeadingZeros64(uint64_t x) {
+  uint32_t x0 = static_cast<uint32_t>(x);
+  uint32_t y = x >> 32;
+
+  return ((y > 0) ? CountLeadingZeros32(y) : 32) + CountLeadingZeros32(x0);
+}
+
+// TODO(LTE): Implement
+//template<typename T>
+//void CalculateMortonCodes60(uint64_t *codes, const T *points,
+//                            const real3<T> &bmin, const real3<T> &bmax,
+//                            int64_t startIdx, int64_t endIdx);
+
+// The length of logest common prefix between keys k_i and k_j
+// Property: delta(i', j') >= delta(i, j) for any i', j' in range [i, j]
+// Note: j could be negative.
+//
+// The prefix tree algorithm doesn't allow multiple key, so we assign
+// k_i' = k_i |+| i and k_j' = k_j |+| j, when k_i == k_j.
+// |+| is bit concatenation.
+// Thus we simply fall back to compare i and j if k_i == k_j when evaluating
+// delta(i, j)
+static inline int Delta30(const IndexKey30 *keys, int32_t i, int32_t j,
+                          int32_t n) {
+  assert((i >= 0) && (i <= (n - 1)));
+
+  // -1 if j is not in range [0, n-1]
+  if (j < 0 || j >= n)
+    return -1;
+
+  uint32_t k_i = keys[i].code;
+  uint32_t k_j = keys[j].code;
+  int offset = 0;
+
+  if (k_i == k_j) {
+    // fallback
+    k_i = i;
+    k_j = j;
+    offset = 32;
+  }
+
+  // Compututing logical XOR between two keys and counting the leading zero
+  // bits in the resulting value.
+  uint32_t x = k_i ^ k_j;
+  int c = CountLeadingZeros32(x);
+
+  return c + offset;
+}
+
+static inline int Sign(int x) {
+  if (x >= 0)
+    return 1;
+  return -1;
+}
+
 
 // Construct binary radix tree by 30bit Morton code.
-NodeInfo32 ConstructBinaryRadixTree30(const IndexKey30 *keys,
+static NodeInfo32 ConstructBinaryRadixTree30(const IndexKey30 *keys,
                                       int i, // i in range [0, n-2]
-                                      uint32_t n);
+                                      uint32_t n) {
+  assert((i >= 0) && (i <= (n - 2)));
 
-NodeInfo64 ConstructBinaryRadixTree60(const IndexKey60 *keys,
-                                      int i, // i in range [0, n-2]
-                                      uint64_t n);
+  // Determine direction of the randge(+1 or -1)
+  int d = Sign(Delta30(keys, i, i + 1, n) - Delta30(keys, i, i - 1, n));
+
+  // Compute upper bound for the length of the range.
+  int delta_min = Delta30(keys, i, i - d, n);
+  int l_max = 2;
+
+  while (Delta30(keys, i, i + l_max * d, n) > delta_min) {
+    assert(i != (i + l_max * d));
+    l_max = l_max * 2;
+  }
+
+
+  // Find the other end using binary search.
+  int l = 0;
+  int t = l_max / 2;
+
+  for (; t >= 1; t /= 2) {
+    assert(i != (i + (l + t) * d));
+    if (Delta30(keys, i, i + (l + t) * d, n) > delta_min) {
+      l = l + t;
+    }
+  }
+
+  int j = i + l * d;
+
+  // Find the split position using binary search.
+  int delta_node = Delta30(keys, i, j, n);
+
+  int s = 0;
+
+  int k = 2;
+  t = (int)ceil((double)l / (double)k);
+
+  if (t > 0) {
+    // for t <- {ceil(l/2), ceil(l/4), ..., 1} do
+    while (1) {
+      assert(t >= 1);
+      // printf("ceil(%d / %d) = %d\n", l, k, (int)ceil((double)l/(double)k));
+      // printf("t = %d\n", t);
+      // printf("s = %d\n", s);
+      // printf(" d = %d, dnode = %d\n", Delta30(keys, i, i+(s+t)*d,n),
+      // delta_node);
+
+      assert(i != (i + (s + t) * d));
+      if (Delta30(keys, i, i + (s + t) * d, n) > delta_node) {
+        s = s + t;
+      }
+
+      if (t == 1)
+        break;
+
+      k = k * 2;
+      t = (int)ceil((double)l / (double)k);
+    }
+  } 
+
+  // if (i == 14618) {
+  //  printf("s = %d, t = %d\n", l, t);
+  //}
+
+  // printf("s = %d, d = %d\n", s, d);
+  int r = i + s * d + (std::min)(d, 0);
+
+  NodeInfo32 Ii;
+
+  // Output child index
+  Ii.childIndex = r;
+
+  if ((std::min)(i, j) == r) {
+    Ii.leftType = NODE_TYPE_LEAF;
+  } else {
+    Ii.leftType = NODE_TYPE_INTERMEDIATE;
+  }
+
+  if ((std::max)(i, j) == (r + 1)) {
+    Ii.rightType = NODE_TYPE_LEAF;
+  } else {
+    Ii.rightType = NODE_TYPE_INTERMEDIATE;
+  }
+
+  return Ii;
+
+}
+
+// TODO(LTE): Implement
+//NodeInfo64 ConstructBinaryRadixTree60(const IndexKey60 *keys,
+//                                      int i, // i in range [0, n-2]
+//                                      uint64_t n);
 
 
 // ---------------------------------------------------------------------------
@@ -2702,7 +2877,7 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
 
     // TODO(LTE): threading
     for (size_t i = 0; i < size_t(n - 1); i++) {
-      // nodeInfos[i] = ConstructBinaryRadixTree30(&keys.at(0), i, n);
+      nodeInfos[i] = ConstructBinaryRadixTree30(&keys.at(0), i, n);
       // printf("I[%d].index   = %d\n", i, nodeInfos[i].index);
       // printf("I[%d].leftTy  = %d\n", i, nodeInfos[i].leftType);
       // printf("I[%d].rightTy = %d\n", i, nodeInfos[i].rightType);
