@@ -631,7 +631,10 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
     std::cout << "  shape[" << i << "].name = " << shapes[i].name << std::endl;
     std::cout << "  shape[" << i << "].num_faces: " << shapes[i].length << std::endl;
 
-    num_faces += shapes[i].length;
+    // sum up # of faces.
+    for (size_t k = 0; k < shapes[i].length; k++) { 
+      num_faces += attrib.face_num_verts[shapes[i].face_offset + k]; 
+    }
   }
   std::cout << "[LoadOBJ] # of faces: " << num_faces << std::endl;
   std::cout << "[LoadOBJ] # of vertices: " << num_vertices << std::endl;
@@ -643,8 +646,10 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   //mesh.vertex_colors.resize(num_vertices * 3, 1.0f);
   mesh.faces.resize(num_faces * 3, 0);
   mesh.material_ids.resize(num_faces, 0);
-  mesh.facevarying_normals.resize(num_faces * 3 * 3, 0.0f);
-  mesh.facevarying_uvs.resize(num_faces * 3 * 2, 0.0f);
+
+  // TODO(LTE): facevarying_normals, facevaying_uvs
+  //mesh.facevarying_normals.resize(num_faces * 3 * 3, 0.0f);
+  //mesh.facevarying_uvs.resize(num_faces * 3 * 2, 0.0f);
 
   //size_t vertexIdxOffset = 0;
   size_t faceIdxOffset = 0;
@@ -659,11 +664,11 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
       mesh.faces[i] = attrib.indices[i].vertex_index;
     }
 
-    for (size_t i = 0; i < attrib.indices.size(); i++) {
+    // per-face(assume all faces are triangles)
+    for (size_t i = 0; i < attrib.indices.size() / 3; i++) {
       mesh.material_ids[i] = attrib.material_ids[i];
     }
 
-    // TODO(LTE): facevarying_normals, facevaying_uvs
   }
 
   // material_t -> Material and Texture
