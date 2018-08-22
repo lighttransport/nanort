@@ -8,6 +8,6 @@ struct Texture
   };
 
   usage use;
-  size_t width, height, components;
+  int width, height, components;
   unsigned char* image;
 };

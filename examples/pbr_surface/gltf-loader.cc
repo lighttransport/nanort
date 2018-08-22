@@ -200,12 +200,12 @@ bool LoadGLTF(const std::string &filename, float scale,
               std::cout << "found position attribute\n";
 
               // get the position min/max for computing the boundingbox
-              pMin.x = attribAccessor.minValues[0];
-              pMin.y = attribAccessor.minValues[1];
-              pMin.z = attribAccessor.minValues[2];
-              pMax.x = attribAccessor.maxValues[0];
-              pMax.y = attribAccessor.maxValues[1];
-              pMax.z = attribAccessor.maxValues[2];
+              pMin.x = (float) attribAccessor.minValues[0];
+              pMin.y = (float) attribAccessor.minValues[1];
+              pMin.z = (float) attribAccessor.minValues[2];
+              pMax.x = (float) attribAccessor.maxValues[0];
+              pMax.y = (float) attribAccessor.maxValues[1];
+              pMax.z = (float) attribAccessor.maxValues[2];
 
               switch (attribAccessor.type) {
                 case TINYGLTF_TYPE_VEC3: {

@@ -10,9 +10,9 @@
 
 namespace pbr_maths {
 
-constexpr static float const c_MinRoughness = 0.04;
+constexpr static float const c_MinRoughness = 0.04f;
 #ifndef M_PI
-constexpr static float const M_PI = 3.141592653589793;
+constexpr static float const M_PI = 3.141592653589793f;
 #endif
 // GLSL data types
 using glm::mat3;
@@ -75,9 +75,9 @@ struct sampler2D {
           break;
 
         case outOfBounds::wrap:
-          if (a > 1) a = fmod(a, 1.0);
+          if (a > 1) a = fmod(a, 1.0f);
           if (a < 0) {
-            a = 1 - fmod(abs(a), 1.0);
+            a = 1 - fmod(abs(a), 1.0f);
             }
           break;
       }
@@ -263,10 +263,10 @@ struct PBRShaderCPU {
 #ifdef SRGB_FAST_APPROXIMATION
     vec3 linOut = pow(srgbIn.xyz, vec3(2.2));
 #else   // SRGB_FAST_APPROXIMATION
-    vec3 bLess = step(vec3(0.04045), vec3(srgbIn));
+    vec3 bLess = step(vec3(0.04045f), vec3(srgbIn));
     vec3 linOut =
-        mix(vec3(srgbIn) / vec3(12.92),
-            pow((vec3(srgbIn) + vec3(0.055)) / vec3(1.055), vec3(2.4)), bLess);
+        mix(vec3(srgbIn) / vec3(12.92f),
+            pow((vec3(srgbIn) + vec3(0.055f)) / vec3(1.055f), vec3(2.4f)), bLess);
 #endif  // SRGB_FAST_APPROXIMATION
     return vec4(linOut, srgbIn.w);
     ;
@@ -280,12 +280,12 @@ struct PBRShaderCPU {
   // as outlined in [1]. See our README.md on Environment Maps [3] for
   // additional discussion.
   vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection) {
-    float mipCount = 9.0;  // resolution of 512x512
+    float mipCount = 9.0f;  // resolution of 512x512
     float lod = pbrInputs.perceptualRoughness * mipCount;
     // retrieve a scale and bias to F0. See [1], Figure 3
     vec3 brdf = vec3(SRGBtoLINEAR(
         texture2D(u_brdfLUT,
-                  vec2(pbrInputs.NdotV, 1.0 - pbrInputs.perceptualRoughness))));
+                  vec2(pbrInputs.NdotV, 1.0f - pbrInputs.perceptualRoughness))));
 
     vec3 diffuseLight = vec3(SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, n)));
 
@@ -342,8 +342,8 @@ struct PBRShaderCPU {
       baseColor = u_BaseColorFactor;
     }
 
-    vec3 f0 = vec3(0.04);
-    vec3 diffuseColor = vec3(baseColor) * (vec3(1.0) - f0);
+    vec3 f0 = vec3(0.04f);
+    vec3 diffuseColor = vec3(baseColor) * (vec3(1.0f) - f0);
     diffuseColor *= 1.0 - metallic;
     vec3 specularColor = mix(f0, vec3(baseColor), metallic);
 
@@ -355,9 +355,9 @@ struct PBRShaderCPU {
     // grazing reflectance to 100% for typical fresnel effect. For very low
     // reflectance range on highly diffuse objects (below 4%), incrementally
     // reduce grazing reflecance to 0%.
-    float reflectance90 = clamp(reflectance * 25.0, 0.0, 1.0);
+    float reflectance90 = clamp(reflectance * 25.0f, 0.0f, 1.0f);
     vec3 specularEnvironmentR0 = specularColor;
-    vec3 specularEnvironmentR90 = vec3(1.0, 1.0, 1.0) * reflectance90;
+    vec3 specularEnvironmentR90 = vec3(1.0f, 1.0f, 1.0f) * reflectance90;
 
     vec3 n = getNormal();  // normal at surface point
     vec3 v = normalize(u_Camera -
@@ -429,7 +429,7 @@ struct PBRShaderCPU {
     color = mix(color, vec3(metallic), u_ScaleDiffBaseMR.z);
     color = mix(color, vec3(perceptualRoughness), u_ScaleDiffBaseMR.w);
 
-    gl_FragColor = vec4(pow(color, vec3(1.0 / 2.2)), baseColor.a);
+    gl_FragColor = vec4(pow(color, vec3(1.0f / 2.2f)), baseColor.a);
   }
 
   // Find the normal for this fragment, pulling either from a predefined normal
@@ -454,8 +454,8 @@ struct PBRShaderCPU {
     // This is some random hack to calculate "a" tangent vector
     vec3 t;
 
-    vec3 c1 = cross(ng, vec3(0.0, 0.0, 1.0));
-    vec3 c2 = cross(ng, vec3(0.0, 1.0, 0.0));
+    vec3 c1 = cross(ng, vec3(0.0f, 0.0f, 1.0f));
+    vec3 c2 = cross(ng, vec3(0.0f, 1.0f, 0.0f));
 
     if (length(c1) > length(c2)) {
       t = c1;
@@ -507,9 +507,9 @@ struct PBRShaderCPU {
     float r = pbrInputs.alphaRoughness;
 
     float attenuationL =
-        2.0 * NdotL / (NdotL + sqrt(r * r + (1.0 - r * r) * (NdotL * NdotL)));
+        2.0f * NdotL / (NdotL + sqrt(r * r + (1.0f - r * r) * (NdotL * NdotL)));
     float attenuationV =
-        2.0 * NdotV / (NdotV + sqrt(r * r + (1.0 - r * r) * (NdotV * NdotV)));
+        2.0f * NdotV / (NdotV + sqrt(r * r + (1.0f - r * r) * (NdotV * NdotV)));
     return attenuationL * attenuationV;
   }
 
@@ -523,7 +523,7 @@ struct PBRShaderCPU {
     float roughnessSq = pbrInputs.alphaRoughness * pbrInputs.alphaRoughness;
     float f =
         (pbrInputs.NdotH * roughnessSq - pbrInputs.NdotH) * pbrInputs.NdotH +
-        1.0;
+        1.0f;
     return roughnessSq / (M_PI * f * f);
   }
 

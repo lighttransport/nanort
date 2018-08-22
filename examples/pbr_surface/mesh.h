@@ -5,7 +5,7 @@
 template <typename T>
 struct Mesh {
   size_t num_vertices;
-  size_t num_faces;
+  unsigned num_faces;
   std::vector<T> vertices;
   std::vector<T> facevarying_normals;
   std::vector<unsigned int> faces;
