@@ -2,6 +2,8 @@
 
 [![Travis Build Status](https://travis-ci.org/lighttransport/nanort.svg)](https://travis-ci.org/lighttransport/nanort)
 [![AppVeyor Build status](https://ci.appveyor.com/api/projects/status/k7j5d9v81qjm69j6?svg=true)](https://ci.appveyor.com/project/syoyo/nanort)
+[![Code Quality: Python](https://img.shields.io/lgtm/grade/python/g/lighttransport/nanort.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/lighttransport/nanort/context:python)
+[![Total Alerts](https://img.shields.io/lgtm/alerts/g/lighttransport/nanort.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/lighttransport/nanort/alerts)
 
 ![](images/render_path_traced.png)
 
