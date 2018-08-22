@@ -189,6 +189,11 @@ static inline int32_t GetTypeSizeInBytes(uint32_t ty) {
   }
 }
 
+bool IsDataURI(const std::string &in);
+bool DecodeDataURI(std::vector<unsigned char> *out,
+	std::string &mime_type, const std::string &in,
+	size_t reqBytes, bool checkSize);
+
 #ifdef __clang__
 #pragma clang diagnostic push
 // Suppress warning for : static Value null_value
@@ -456,6 +461,8 @@ struct Image {
 };
 
 struct Texture {
+  std::string name;
+
   int sampler;
   int source;  // Required (not specified in the spec ?)
   Value extras;
@@ -597,7 +604,7 @@ struct Primitive {
                  // when rendering.
   int indices;   // The index of the accessor that contains the indices.
   int mode;      // one of TINYGLTF_MODE_***
-  std::vector<std::map<std::string, int> > targets;  // array of morph targets,
+  std::vector<std::map<std::string, int>> targets;  // array of morph targets,
   // where each target is a dict with attribues in ["POSITION, "NORMAL",
   // "TANGENT"] pointing
   // to their corresponding accessors
@@ -613,7 +620,7 @@ struct Mesh {
   std::string name;
   std::vector<Primitive> primitives;
   std::vector<double> weights;  // weights to be applied to the Morph Targets
-  std::vector<std::map<std::string, int> > targets;
+  std::vector<std::map<std::string, int>> targets;
   ExtensionMap extensions;
   Value extras;
 };
@@ -732,8 +739,9 @@ enum SectionCheck {
 ///
 /// LoadImageDataFunction type. Signature for custom image loading callbacks.
 ///
-typedef bool (*LoadImageDataFunction)(Image *, std::string *, int, int,
-                                      const unsigned char *, int, void *);
+typedef bool (*LoadImageDataFunction)(Image *, std::string *, std::string *,
+                                      int, int, const unsigned char *, int,
+                                      void *);
 
 ///
 /// WriteImageDataFunction type. Signature for custom image writing callbacks.
@@ -743,15 +751,66 @@ typedef bool (*WriteImageDataFunction)(const std::string *, const std::string *,
 
 #ifndef TINYGLTF_NO_STB_IMAGE
 // Declaration of default image loader callback
-bool LoadImageData(Image *image, std::string *err, int req_width,
-                   int req_height, const unsigned char *bytes, int size,
-                   void *);
+bool LoadImageData(Image *image, std::string *err, std::string *warn,
+                   int req_width, int req_height, const unsigned char *bytes,
+                   int size, void *);
 #endif
 
 #ifndef TINYGLTF_NO_STB_IMAGE_WRITE
 // Declaration of default image writer callback
 bool WriteImageData(const std::string *basepath, const std::string *filename,
                     Image *image, bool embedImages, void *);
+#endif
+
+///
+/// FilExistsFunction type. Signature for custom filesystem callbacks.
+///
+typedef bool (*FileExistsFunction)(const std::string &abs_filename, void *);
+
+///
+/// ExpandFilePathFunction type. Signature for custom filesystem callbacks.
+///
+typedef std::string (*ExpandFilePathFunction)(const std::string &, void *);
+
+///
+/// ReadWholeFileFunction type. Signature for custom filesystem callbacks.
+///
+typedef bool (*ReadWholeFileFunction)(std::vector<unsigned char> *,
+                                      std::string *, const std::string &,
+                                      void *);
+
+///
+/// WriteWholeFileFunction type. Signature for custom filesystem callbacks.
+///
+typedef bool (*WriteWholeFileFunction)(std::string *, const std::string &,
+                                       const std::vector<unsigned char> &,
+                                       void *);
+
+///
+/// A structure containing all required filesystem callbacks and a pointer to
+/// their user data.
+///
+struct FsCallbacks {
+  FileExistsFunction FileExists;
+  ExpandFilePathFunction ExpandFilePath;
+  ReadWholeFileFunction ReadWholeFile;
+  WriteWholeFileFunction WriteWholeFile;
+
+  void *user_data;  // An argument that is passed to all fs callbacks
+};
+
+#ifndef TINYGLTF_NO_FS
+// Declaration of default filesystem callbacks
+
+bool FileExists(const std::string &abs_filename, void *);
+
+std::string ExpandFilePath(const std::string &filepath, void *);
+
+bool ReadWholeFile(std::vector<unsigned char> *out, std::string *err,
+                   const std::string &filepath, void *);
+
+bool WriteWholeFile(std::string *err, const std::string &filepath,
+                    const std::vector<unsigned char> &contents, void *);
 #endif
 
 class TinyGLTF {
@@ -771,36 +830,40 @@ class TinyGLTF {
 
   ///
   /// Loads glTF ASCII asset from a file.
+  /// Set warning message to `warn` for example it fails to load asserts.
   /// Returns false and set error string to `err` if there's an error.
   ///
-  bool LoadASCIIFromFile(Model *model, std::string *err,
+  bool LoadASCIIFromFile(Model *model, std::string *err, std::string *warn,
                          const std::string &filename,
                          unsigned int check_sections = REQUIRE_ALL);
 
   ///
   /// Loads glTF ASCII asset from string(memory).
   /// `length` = strlen(str);
+  /// Set warning message to `warn` for example it fails to load asserts.
   /// Returns false and set error string to `err` if there's an error.
   ///
-  bool LoadASCIIFromString(Model *model, std::string *err, const char *str,
-                           const unsigned int length,
+  bool LoadASCIIFromString(Model *model, std::string *err, std::string *warn,
+                           const char *str, const unsigned int length,
                            const std::string &base_dir,
                            unsigned int check_sections = REQUIRE_ALL);
 
   ///
   /// Loads glTF binary asset from a file.
+  /// Set warning message to `warn` for example it fails to load asserts.
   /// Returns false and set error string to `err` if there's an error.
   ///
-  bool LoadBinaryFromFile(Model *model, std::string *err,
+  bool LoadBinaryFromFile(Model *model, std::string *err, std::string *warn,
                           const std::string &filename,
                           unsigned int check_sections = REQUIRE_ALL);
 
   ///
   /// Loads glTF binary asset from memory.
   /// `length` = strlen(str);
+  /// Set warning message to `warn` for example it fails to load asserts.
   /// Returns false and set error string to `err` if there's an error.
   ///
-  bool LoadBinaryFromMemory(Model *model, std::string *err,
+  bool LoadBinaryFromMemory(Model *model, std::string *err, std::string *warn,
                             const unsigned char *bytes,
                             const unsigned int length,
                             const std::string &base_dir = "",
@@ -823,19 +886,38 @@ class TinyGLTF {
   ///
   void SetImageWriter(WriteImageDataFunction WriteImageData, void *user_data);
 
+  ///
+  /// Set callbacks to use for filesystem (fs) access and their user data
+  ///
+  void SetFsCallbacks(FsCallbacks callbacks);
+
  private:
   ///
   /// Loads glTF asset from string(memory).
   /// `length` = strlen(str);
+  /// Set warning message to `warn` for example it fails to load asserts
   /// Returns false and set error string to `err` if there's an error.
   ///
-  bool LoadFromString(Model *model, std::string *err, const char *str,
-                      const unsigned int length, const std::string &base_dir,
-                      unsigned int check_sections);
+  bool LoadFromString(Model *model, std::string *err, std::string *warn,
+                      const char *str, const unsigned int length,
+                      const std::string &base_dir, unsigned int check_sections);
 
   const unsigned char *bin_data_;
   size_t bin_size_;
   bool is_binary_;
+
+  FsCallbacks fs = {
+#ifndef TINYGLTF_NO_FS
+      &tinygltf::FileExists, &tinygltf::ExpandFilePath,
+      &tinygltf::ReadWholeFile, &tinygltf::WriteWholeFile,
+
+      nullptr  // Fs callback user data
+#else
+      nullptr, nullptr, nullptr, nullptr,
+
+      nullptr  // Fs callback user data
+#endif
+  };
 
   LoadImageDataFunction LoadImageData =
 #ifndef TINYGLTF_NO_STB_IMAGE
@@ -843,7 +925,7 @@ class TinyGLTF {
 #else
       nullptr;
 #endif
-  void *load_image_user_data_ = nullptr;
+  void *load_image_user_data_ = reinterpret_cast<void *>(&fs);
 
   WriteImageDataFunction WriteImageData =
 #ifndef TINYGLTF_NO_STB_IMAGE_WRITE
@@ -851,7 +933,7 @@ class TinyGLTF {
 #else
       nullptr;
 #endif
-  void *write_image_user_data_ = nullptr;
+  void *write_image_user_data_ = reinterpret_cast<void *>(&fs);
 };
 
 #ifdef __clang__
@@ -865,7 +947,9 @@ class TinyGLTF {
 #ifdef TINYGLTF_IMPLEMENTATION
 #include <algorithm>
 //#include <cassert>
+#ifndef TINYGLTF_NO_FS
 #include <fstream>
+#endif
 #include <sstream>
 
 #ifdef __clang__
@@ -966,74 +1050,6 @@ static void swap4(unsigned int *val) {
 #endif
 }
 
-static bool FileExists(const std::string &abs_filename) {
-  bool ret;
-#ifdef _WIN32
-  FILE *fp;
-  errno_t err = fopen_s(&fp, abs_filename.c_str(), "rb");
-  if (err != 0) {
-    return false;
-  }
-#else
-  FILE *fp = fopen(abs_filename.c_str(), "rb");
-#endif
-  if (fp) {
-    ret = true;
-    fclose(fp);
-  } else {
-    ret = false;
-  }
-
-  return ret;
-}
-
-static std::string ExpandFilePath(const std::string &filepath) {
-#ifdef _WIN32
-  DWORD len = ExpandEnvironmentStringsA(filepath.c_str(), NULL, 0);
-  char *str = new char[len];
-  ExpandEnvironmentStringsA(filepath.c_str(), str, len);
-
-  std::string s(str);
-
-  delete[] str;
-
-  return s;
-#else
-
-#if defined(TARGET_OS_IPHONE) || defined(TARGET_IPHONE_SIMULATOR) || \
-    defined(__ANDROID__)
-  // no expansion
-  std::string s = filepath;
-#else
-  std::string s;
-  wordexp_t p;
-
-  if (filepath.empty()) {
-    return "";
-  }
-
-  // char** w;
-  int ret = wordexp(filepath.c_str(), &p, 0);
-  if (ret) {
-    // err
-    s = filepath;
-    return s;
-  }
-
-  // Use first element only.
-  if (p.we_wordv) {
-    s = std::string(p.we_wordv[0]);
-    wordfree(&p);
-  } else {
-    s = filepath;
-  }
-
-#endif
-
-  return s;
-#endif
-}
-
 static std::string JoinPath(const std::string &path0,
                             const std::string &path1) {
   if (path0.empty()) {
@@ -1050,10 +1066,17 @@ static std::string JoinPath(const std::string &path0,
 }
 
 static std::string FindFile(const std::vector<std::string> &paths,
-                            const std::string &filepath) {
+                            const std::string &filepath, FsCallbacks *fs) {
+  if (fs == nullptr || fs->ExpandFilePath == nullptr ||
+      fs->FileExists == nullptr) {
+    // Error, fs callback[s] missing
+    return std::string();
+  }
+
   for (size_t i = 0; i < paths.size(); i++) {
-    std::string absPath = ExpandFilePath(JoinPath(paths[i], filepath));
-    if (FileExists(absPath)) {
+    std::string absPath =
+        fs->ExpandFilePath(JoinPath(paths[i], filepath), fs->user_data);
+    if (fs->FileExists(absPath, fs->user_data)) {
       return absPath;
     }
   }
@@ -1214,48 +1237,52 @@ std::string base64_decode(std::string const &encoded_string) {
 #endif
 
 static bool LoadExternalFile(std::vector<unsigned char> *out, std::string *err,
-                             const std::string &filename,
-                             const std::string &basedir, size_t reqBytes,
-                             bool checkSize) {
+                             std::string *warn, const std::string &filename,
+                             const std::string &basedir, bool required, size_t reqBytes,
+                             bool checkSize, FsCallbacks *fs) {
+  if (fs == nullptr || fs->FileExists == nullptr ||
+      fs->ExpandFilePath == nullptr || fs->ReadWholeFile == nullptr) {
+    // This is a developer error, assert() ?
+    if (err) {
+      (*err) += "FS callback[s] not set\n";
+    }
+    return false;
+  }
+
+  std::string* failMsgOut = required ? err : warn;
+
   out->clear();
 
   std::vector<std::string> paths;
   paths.push_back(basedir);
   paths.push_back(".");
 
-  std::string filepath = FindFile(paths, filename);
+  std::string filepath = FindFile(paths, filename, fs);
   if (filepath.empty() || filename.empty()) {
-    if (err) {
-      (*err) += "File not found : " + filename + "\n";
+    if (failMsgOut) {
+      (*failMsgOut) += "File not found : " + filename + "\n";
     }
     return false;
   }
 
-  std::ifstream f(filepath.c_str(), std::ifstream::binary);
-  if (!f) {
-    if (err) {
-      (*err) += "File open error : " + filepath + "\n";
+  std::vector<unsigned char> buf;
+  std::string fileReadErr;
+  bool fileRead =
+      fs->ReadWholeFile(&buf, &fileReadErr, filepath, fs->user_data);
+  if (!fileRead) {
+    if (failMsgOut) {
+      (*failMsgOut) += "File read error : " + filepath + " : " + fileReadErr + "\n";
     }
     return false;
   }
 
-  f.seekg(0, f.end);
-  size_t sz = static_cast<size_t>(f.tellg());
-  if (int(sz) < 0) {
-    // Looks reading directory, not a file.
-    return false;
-  }
-
+  size_t sz = buf.size();
   if (sz == 0) {
-    // Invalid file size.
+    if(failMsgOut) {
+      (*failMsgOut) += "File is empty : " + filepath + "\n";
+	}
     return false;
   }
-  std::vector<unsigned char> buf(sz);
-
-  f.seekg(0, f.beg);
-  f.read(reinterpret_cast<char *>(&buf.at(0)),
-         static_cast<std::streamsize>(sz));
-  f.close();
 
   if (checkSize) {
     if (reqBytes == sz) {
@@ -1265,8 +1292,8 @@ static bool LoadExternalFile(std::vector<unsigned char> *out, std::string *err,
       std::stringstream ss;
       ss << "File size mismatch : " << filepath << ", requestedBytes "
          << reqBytes << ", but got " << sz << std::endl;
-      if (err) {
-        (*err) += ss.str();
+      if (failMsgOut) {
+        (*failMsgOut) += ss.str();
       }
       return false;
     }
@@ -1282,9 +1309,11 @@ void TinyGLTF::SetImageLoader(LoadImageDataFunction func, void *user_data) {
 }
 
 #ifndef TINYGLTF_NO_STB_IMAGE
-bool LoadImageData(Image *image, std::string *err, int req_width,
-                   int req_height, const unsigned char *bytes, int size,
-                   void *) {
+bool LoadImageData(Image *image, std::string *err, std::string *warn,
+                   int req_width, int req_height, const unsigned char *bytes,
+                   int size, void *) {
+  (void)warn;
+
   int w, h, comp;
   // if image cannot be decoded, ignore parsing and keep it by its path
   // don't break in this case
@@ -1294,6 +1323,7 @@ bool LoadImageData(Image *image, std::string *err, int req_width,
   // mandatory (to support other formats)
   unsigned char *data = stbi_load_from_memory(bytes, size, &w, &h, &comp, 0);
   if (!data) {
+    // NOTE: you can use `warn` instead of `err`
     if (err) {
       (*err) += "Unknown image format.\n";
     }
@@ -1356,30 +1386,34 @@ static void WriteToMemory_stbi(void *context, void *data, int size) {
 }
 
 bool WriteImageData(const std::string *basepath, const std::string *filename,
-                    Image *image, bool embedImages, void *) {
+                    Image *image, bool embedImages, void *fsPtr) {
   const std::string ext = GetFilePathExtension(*filename);
 
+  // Write image to temporary buffer
+  std::string header;
+  std::vector<unsigned char> data;
+
+  if (ext == "png") {
+    stbi_write_png_to_func(WriteToMemory_stbi, &data, image->width,
+                           image->height, image->component, &image->image[0],
+                           0);
+    header = "data:image/png;base64,";
+  } else if (ext == "jpg") {
+    stbi_write_jpg_to_func(WriteToMemory_stbi, &data, image->width,
+                           image->height, image->component, &image->image[0],
+                           100);
+    header = "data:image/jpeg;base64,";
+  } else if (ext == "bmp") {
+    stbi_write_bmp_to_func(WriteToMemory_stbi, &data, image->width,
+                           image->height, image->component, &image->image[0]);
+    header = "data:image/bmp;base64,";
+  } else if (!embedImages) {
+    // Error: can't output requested format to file
+    return false;
+  }
+
   if (embedImages) {
-    // Write image to memory and embed in output
-    std::string header;
-    std::vector<unsigned char> data;
-
-    if (ext == "png") {
-      stbi_write_png_to_func(WriteToMemory_stbi, &data, image->width,
-                             image->height, image->component, &image->image[0],
-                             0);
-      header = "data:image/png;base64,";
-    } else if (ext == "jpg") {
-      stbi_write_jpg_to_func(WriteToMemory_stbi, &data, image->width,
-                             image->height, image->component, &image->image[0],
-                             100);
-      header = "data:image/jpeg;base64,";
-    } else if (ext == "bmp") {
-      stbi_write_bmp_to_func(WriteToMemory_stbi, &data, image->width,
-                             image->height, image->component, &image->image[0]);
-      header = "data:image/bmp;base64,";
-    }
-
+    // Embed base64-encoded image into URI
     if (data.size()) {
       image->uri =
           header +
@@ -1389,21 +1423,16 @@ bool WriteImageData(const std::string *basepath, const std::string *filename,
     }
   } else {
     // Write image to disc
-
-    const std::string imagefilepath = JoinPath(*basepath, *filename);
-    if (ext == "png") {
-      stbi_write_png(imagefilepath.c_str(), image->width, image->height,
-                     image->component, &image->image[0], 0);
-    } else if (ext == "jpg") {
-      // TODO (Bowald): Give user the option to set output quality?
-      const int quality = 100;
-      stbi_write_jpg(imagefilepath.c_str(), image->width, image->height,
-                     image->component, &image->image[0], quality);
-    } else if (ext == "bmp") {
-      stbi_write_bmp(imagefilepath.c_str(), image->width, image->height,
-                     image->component, &image->image[0]);
+    FsCallbacks *fs = reinterpret_cast<FsCallbacks *>(fsPtr);
+    if (fs != nullptr && fs->WriteWholeFile == nullptr) {
+      const std::string imagefilepath = JoinPath(*basepath, *filename);
+      std::string writeError;
+      if (!fs->WriteWholeFile(&writeError, imagefilepath, data,
+                              fs->user_data)) {
+        // Could not write image file to disc; Throw error ?
+      }
     } else {
-      // Throw error? Cant output requested format.
+      // Throw error?
     }
     image->uri = *filename;
   }
@@ -1411,6 +1440,139 @@ bool WriteImageData(const std::string *basepath, const std::string *filename,
   return true;
 }
 #endif
+
+void TinyGLTF::SetFsCallbacks(FsCallbacks callbacks) { fs = callbacks; }
+
+#ifndef TINYGLTF_NO_FS
+// Default implementations of filesystem functions
+
+bool FileExists(const std::string &abs_filename, void *) {
+  bool ret;
+#ifdef _WIN32
+  FILE *fp;
+  errno_t err = fopen_s(&fp, abs_filename.c_str(), "rb");
+  if (err != 0) {
+    return false;
+  }
+#else
+  FILE *fp = fopen(abs_filename.c_str(), "rb");
+#endif
+  if (fp) {
+    ret = true;
+    fclose(fp);
+  } else {
+    ret = false;
+  }
+
+  return ret;
+}
+
+std::string ExpandFilePath(const std::string &filepath, void *) {
+#ifdef _WIN32
+  DWORD len = ExpandEnvironmentStringsA(filepath.c_str(), NULL, 0);
+  char *str = new char[len];
+  ExpandEnvironmentStringsA(filepath.c_str(), str, len);
+
+  std::string s(str);
+
+  delete[] str;
+
+  return s;
+#else
+
+#if defined(TARGET_OS_IPHONE) || defined(TARGET_IPHONE_SIMULATOR) || \
+    defined(__ANDROID__) || defined(__EMSCRIPTEN__)
+  // no expansion
+  std::string s = filepath;
+#else
+  std::string s;
+  wordexp_t p;
+
+  if (filepath.empty()) {
+    return "";
+  }
+
+  // char** w;
+  int ret = wordexp(filepath.c_str(), &p, 0);
+  if (ret) {
+    // err
+    s = filepath;
+    return s;
+  }
+
+  // Use first element only.
+  if (p.we_wordv) {
+    s = std::string(p.we_wordv[0]);
+    wordfree(&p);
+  } else {
+    s = filepath;
+  }
+
+#endif
+
+  return s;
+#endif
+}
+
+bool ReadWholeFile(std::vector<unsigned char> *out, std::string *err,
+                   const std::string &filepath, void *) {
+  std::ifstream f(filepath.c_str(), std::ifstream::binary);
+  if (!f) {
+    if (err) {
+      (*err) += "File open error : " + filepath + "\n";
+    }
+    return false;
+  }
+
+  f.seekg(0, f.end);
+  size_t sz = static_cast<size_t>(f.tellg());
+  f.seekg(0, f.beg);
+
+  if (int(sz) < 0) {
+    if (err) {
+      (*err) += "Invalid file size : " + filepath +
+                " (does the path point to a directory?)";
+    }
+    return false;
+  } else if (sz == 0) {
+    if (err) {
+      (*err) += "File is empty : " + filepath + "\n";
+    }
+    return false;
+  }
+
+  out->resize(sz);
+  f.read(reinterpret_cast<char *>(&out->at(0)),
+         static_cast<std::streamsize>(sz));
+  f.close();
+
+  return true;
+}
+
+bool WriteWholeFile(std::string *err, const std::string &filepath,
+                    const std::vector<unsigned char> &contents, void *) {
+  std::ofstream f(filepath.c_str(), std::ofstream::binary);
+  if (!f) {
+    if (err) {
+      (*err) += "File open error for writing : " + filepath + "\n";
+    }
+    return false;
+  }
+
+  f.write(reinterpret_cast<const char *>(&contents.at(0)),
+          static_cast<std::streamsize>(contents.size()));
+  if (!f) {
+    if (err) {
+      (*err) += "File write error: " + filepath + "\n";
+    }
+    return false;
+  }
+
+  f.close();
+  return true;
+}
+
+#endif  // TINYGLTF_NO_FS
 
 static std::string MimeToExt(const std::string &mimeType) {
   if (mimeType == "image/jpeg") {
@@ -1455,7 +1617,7 @@ static void UpdateImageObject(Image &image, std::string &baseDir, int index,
   }
 }
 
-static bool IsDataURI(const std::string &in) {
+bool IsDataURI(const std::string &in) {
   std::string header = "data:application/octet-stream;base64,";
   if (in.find(header) == 0) {
     return true;
@@ -1494,7 +1656,7 @@ static bool IsDataURI(const std::string &in) {
   return false;
 }
 
-static bool DecodeDataURI(std::vector<unsigned char> *out,
+bool DecodeDataURI(std::vector<unsigned char> *out,
                           std::string &mime_type, const std::string &in,
                           size_t reqBytes, bool checkSize) {
   std::string header = "data:application/octet-stream;base64,";
@@ -1927,10 +2089,11 @@ static bool ParseAsset(Asset *asset, std::string *err, const json &o) {
   return true;
 }
 
-static bool ParseImage(Image *image, std::string *err, const json &o,
-                       const std::string &basedir,
+static bool ParseImage(Image *image, std::string *err, std::string *warn,
+                       const json &o, const std::string &basedir,
+                       FsCallbacks *fs,
                        LoadImageDataFunction *LoadImageData = nullptr,
-                       void *user_data = nullptr) {
+                       void *load_image_user_data = nullptr) {
   // A glTF image must either reference a bufferView or an image uri
 
   // schema says oneOf [`bufferView`, `uri`]
@@ -2012,17 +2175,17 @@ static bool ParseImage(Image *image, std::string *err, const json &o,
 #ifdef TINYGLTF_NO_EXTERNAL_IMAGE
     return true;
 #endif
-    if (!LoadExternalFile(&img, err, uri, basedir, 0, false)) {
-      if (err) {
-        (*err) += "Failed to load external 'uri' for image parameter\n";
+    if (!LoadExternalFile(&img, err, warn, uri, basedir, false, 0, false, fs)) {
+      if (warn) {
+        (*warn) += "Failed to load external 'uri' for image parameter\n";
       }
       // If the image cannot be loaded, keep uri as image->uri.
       return true;
     }
 
     if (img.empty()) {
-      if (err) {
-        (*err) += "Image is empty.\n";
+      if (warn) {
+        (*warn) += "Image is empty.\n";
       }
       return false;
     }
@@ -2034,8 +2197,8 @@ static bool ParseImage(Image *image, std::string *err, const json &o,
     }
     return false;
   }
-  return (*LoadImageData)(image, err, 0, 0, &img.at(0),
-                          static_cast<int>(img.size()), user_data);
+  return (*LoadImageData)(image, err, warn, 0, 0, &img.at(0),
+                          static_cast<int>(img.size()), load_image_user_data);
 }
 
 static bool ParseTexture(Texture *texture, std::string *err, const json &o,
@@ -2053,11 +2216,14 @@ static bool ParseTexture(Texture *texture, std::string *err, const json &o,
   ParseExtensionsProperty(&texture->extensions, err, o);
   ParseExtrasProperty(&texture->extras, o);
 
+  ParseStringProperty(&texture->name, err, o, "name", false);
+
   return true;
 }
 
 static bool ParseBuffer(Buffer *buffer, std::string *err, const json &o,
-                        const std::string &basedir, bool is_binary = false,
+                        FsCallbacks *fs, const std::string &basedir,
+                        bool is_binary = false,
                         const unsigned char *bin_data = nullptr,
                         size_t bin_size = 0) {
   double byteLength;
@@ -2088,11 +2254,26 @@ static bool ParseBuffer(Buffer *buffer, std::string *err, const json &o,
 
   size_t bytes = static_cast<size_t>(byteLength);
   if (is_binary) {
-    // Still binary glTF accepts external dataURI. First try external resources.
-
+    // Still binary glTF accepts external dataURI.
     if (!buffer->uri.empty()) {
-      // External .bin file.
-      LoadExternalFile(&buffer->data, err, buffer->uri, basedir, bytes, true);
+      // First try embedded data URI.
+      if (IsDataURI(buffer->uri)) {
+        std::string mime_type;
+        if (!DecodeDataURI(&buffer->data, mime_type, buffer->uri, bytes,
+                           true)) {
+          if (err) {
+            (*err) +=
+                "Failed to decode 'uri' : " + buffer->uri + " in Buffer\n";
+          }
+          return false;
+        }
+      } else {
+        // External .bin file.
+        if (!LoadExternalFile(&buffer->data, err, /* warn */ nullptr, buffer->uri,
+                              basedir, true, bytes, true, fs)) {
+          return false;
+        }
+      }
     } else {
       // load data from (embedded) binary data
 
@@ -2130,8 +2311,8 @@ static bool ParseBuffer(Buffer *buffer, std::string *err, const json &o,
       }
     } else {
       // Assume external .bin file.
-      if (!LoadExternalFile(&buffer->data, err, buffer->uri, basedir, bytes,
-                            true)) {
+      if (!LoadExternalFile(&buffer->data, err, /* warn */ nullptr, buffer->uri,
+                            basedir, true, bytes, true, fs)) {
         return false;
       }
     }
@@ -2758,8 +2939,9 @@ static bool ParseCamera(Camera *camera, std::string *err, const json &o) {
   return true;
 }
 
-bool TinyGLTF::LoadFromString(Model *model, std::string *err, const char *str,
-                              unsigned int length, const std::string &base_dir,
+bool TinyGLTF::LoadFromString(Model *model, std::string *err, std::string *warn,
+                              const char *str, unsigned int length,
+                              const std::string &base_dir,
                               unsigned int check_sections) {
   if (length < 4) {
     if (err) {
@@ -2925,8 +3107,8 @@ bool TinyGLTF::LoadFromString(Model *model, std::string *err, const char *str,
           return false;
         }
         Buffer buffer;
-        if (!ParseBuffer(&buffer, err, it->get<json>(), base_dir, is_binary_,
-                         bin_data_, bin_size_)) {
+        if (!ParseBuffer(&buffer, err, it->get<json>(), &fs, base_dir,
+                         is_binary_, bin_data_, bin_size_)) {
           return false;
         }
 
@@ -3127,8 +3309,8 @@ bool TinyGLTF::LoadFromString(Model *model, std::string *err, const char *str,
           return false;
         }
         Image image;
-        if (!ParseImage(&image, err, it.value(), base_dir, &this->LoadImageData,
-                        load_image_user_data_)) {
+        if (!ParseImage(&image, err, warn, it.value(), base_dir, &fs,
+                        &this->LoadImageData, load_image_user_data_)) {
           return false;
         }
 
@@ -3154,7 +3336,7 @@ bool TinyGLTF::LoadFromString(Model *model, std::string *err, const char *str,
             }
             return false;
           }
-          bool ret = LoadImageData(&image, err, image.width, image.height,
+          bool ret = LoadImageData(&image, err, warn, image.width, image.height,
                                    &buffer.data[bufferView.byteOffset],
                                    static_cast<int>(bufferView.byteLength),
                                    load_image_user_data_);
@@ -3341,34 +3523,45 @@ bool TinyGLTF::LoadFromString(Model *model, std::string *err, const char *str,
 }
 
 bool TinyGLTF::LoadASCIIFromString(Model *model, std::string *err,
-                                   const char *str, unsigned int length,
+                                   std::string *warn, const char *str,
+                                   unsigned int length,
                                    const std::string &base_dir,
                                    unsigned int check_sections) {
   is_binary_ = false;
   bin_data_ = nullptr;
   bin_size_ = 0;
 
-  return LoadFromString(model, err, str, length, base_dir, check_sections);
+  return LoadFromString(model, err, warn, str, length, base_dir,
+                        check_sections);
 }
 
 bool TinyGLTF::LoadASCIIFromFile(Model *model, std::string *err,
-                                 const std::string &filename,
+                                 std::string *warn, const std::string &filename,
                                  unsigned int check_sections) {
   std::stringstream ss;
 
-  std::ifstream f(filename.c_str());
-  if (!f) {
-    ss << "Failed to open file: " << filename << std::endl;
+  if (fs.ReadWholeFile == nullptr) {
+    // Programmer error, assert() ?
+    ss << "Failed to read file: " << filename
+       << ": one or more FS callback not set" << std::endl;
     if (err) {
       (*err) = ss.str();
     }
     return false;
   }
 
-  f.seekg(0, f.end);
-  size_t sz = static_cast<size_t>(f.tellg());
-  std::vector<char> buf(sz);
+  std::vector<unsigned char> data;
+  std::string fileerr;
+  bool fileread = fs.ReadWholeFile(&data, &fileerr, filename, fs.user_data);
+  if (!fileread) {
+    ss << "Failed to read file: " << filename << ": " << fileerr << std::endl;
+    if (err) {
+      (*err) = ss.str();
+    }
+    return false;
+  }
 
+  size_t sz = data.size();
   if (sz == 0) {
     if (err) {
       (*err) = "Empty file.";
@@ -3376,20 +3569,17 @@ bool TinyGLTF::LoadASCIIFromFile(Model *model, std::string *err,
     return false;
   }
 
-  f.seekg(0, f.beg);
-  f.read(&buf.at(0), static_cast<std::streamsize>(sz));
-  f.close();
-
   std::string basedir = GetBaseDir(filename);
 
-  bool ret = LoadASCIIFromString(model, err, &buf.at(0),
-                                 static_cast<unsigned int>(buf.size()), basedir,
-                                 check_sections);
+  bool ret = LoadASCIIFromString(
+      model, err, warn, reinterpret_cast<const char *>(&data.at(0)),
+      static_cast<unsigned int>(data.size()), basedir, check_sections);
 
   return ret;
 }
 
 bool TinyGLTF::LoadBinaryFromMemory(Model *model, std::string *err,
+                                    std::string *warn,
                                     const unsigned char *bytes,
                                     unsigned int size,
                                     const std::string &base_dir,
@@ -3447,9 +3637,9 @@ bool TinyGLTF::LoadBinaryFromMemory(Model *model, std::string *err,
   bin_size_ =
       length - (20 + model_length);  // extract header + JSON scene data.
 
-  bool ret =
-      LoadFromString(model, err, reinterpret_cast<const char *>(&bytes[20]),
-                     model_length, base_dir, check_sections);
+  bool ret = LoadFromString(model, err, warn,
+                            reinterpret_cast<const char *>(&bytes[20]),
+                            model_length, base_dir, check_sections);
   if (!ret) {
     return ret;
   }
@@ -3458,32 +3648,37 @@ bool TinyGLTF::LoadBinaryFromMemory(Model *model, std::string *err,
 }
 
 bool TinyGLTF::LoadBinaryFromFile(Model *model, std::string *err,
+                                  std::string *warn,
                                   const std::string &filename,
                                   unsigned int check_sections) {
   std::stringstream ss;
 
-  std::ifstream f(filename.c_str(), std::ios::binary);
-  if (!f) {
-    ss << "Failed to open file: " << filename << std::endl;
+  if (fs.ReadWholeFile == nullptr) {
+    // Programmer error, assert() ?
+    ss << "Failed to read file: " << filename
+       << ": one or more FS callback not set" << std::endl;
     if (err) {
       (*err) = ss.str();
     }
     return false;
   }
 
-  f.seekg(0, f.end);
-  size_t sz = static_cast<size_t>(f.tellg());
-  std::vector<char> buf(sz);
-
-  f.seekg(0, f.beg);
-  f.read(&buf.at(0), static_cast<std::streamsize>(sz));
-  f.close();
+  std::vector<unsigned char> data;
+  std::string fileerr;
+  bool fileread = fs.ReadWholeFile(&data, &fileerr, filename, fs.user_data);
+  if (!fileread) {
+    ss << "Failed to read file: " << filename << ": " << fileerr << std::endl;
+    if (err) {
+      (*err) = ss.str();
+    }
+    return false;
+  }
 
   std::string basedir = GetBaseDir(filename);
 
-  bool ret = LoadBinaryFromMemory(
-      model, err, reinterpret_cast<unsigned char *>(&buf.at(0)),
-      static_cast<unsigned int>(buf.size()), basedir, check_sections);
+  bool ret = LoadBinaryFromMemory(model, err, warn, &data.at(0),
+                                  static_cast<unsigned int>(data.size()),
+                                  basedir, check_sections);
 
   return ret;
 }
