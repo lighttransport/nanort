@@ -412,6 +412,28 @@ inline T vdot(const real3<T> a, const real3<T> b) {
 }
 
 template <typename T>
+inline T safe_div(const T x, const T v) {
+
+#ifdef NANORT_USE_CPP11_FEATURE
+
+  if (std::fabs(v) < std::numeric_limits<T>::epsilon()) {
+    return std::numeric_limits<T>::infinity() * std::copysign(static_cast<T>(1), v);
+  } else {
+    return x / v;
+  }
+#else
+
+  if (std::fabs(v) < std::numeric_limits<T>::epsilon()) {
+    T sgn = (v < static_cast<T>(0)) ? static_cast<T>(-1) : static_cast<T>(1);
+    return std::numeric_limits<T>::infinity() * sgn;
+  } else {
+    return x / v;
+  }
+
+#endif
+}
+
+template <typename T>
 inline real3<T> vsafe_inverse(const real3<T> v) {
   real3<T> r;
 
@@ -1772,9 +1794,9 @@ class TriangleIntersector {
       std::swap(ray_coeff_.kx, ray_coeff_.ky);
 
     // Calculate shear constants.
-    ray_coeff_.Sx = ray.dir[ray_coeff_.kx] / ray.dir[ray_coeff_.kz];
-    ray_coeff_.Sy = ray.dir[ray_coeff_.ky] / ray.dir[ray_coeff_.kz];
-    ray_coeff_.Sz = static_cast<T>(1.0) / ray.dir[ray_coeff_.kz];
+    ray_coeff_.Sx = safe_div(ray.dir[ray_coeff_.kx], ray.dir[ray_coeff_.kz]);
+    ray_coeff_.Sy = safe_div(ray.dir[ray_coeff_.ky], ray.dir[ray_coeff_.kz]);
+    ray_coeff_.Sz = safe_div(static_cast<T>(1.0), ray.dir[ray_coeff_.kz]);
 
     trace_options_ = trace_options;
 
