@@ -8,7 +8,7 @@
 // This is inspired by the sample implementation from khronos found here :
 // https://github.com/KhronosGroup/glTF-WebGL-PBR/blob/master/shaders/pbr-frag.glsl
 
-/// Contains datastructures, free functions and object for PBR shader
+/// Contains data-structures, free functions and object for PBR shader
 /// computation
 namespace pbr_maths {
 
@@ -25,7 +25,7 @@ using glm::vec2;
 using glm::vec3;
 using glm::vec4;
 
-// GLSL funtions
+// GLSL functions
 using glm::clamp;
 using glm::cross;
 using glm::fract;
@@ -42,10 +42,10 @@ struct sampler2D {
 
   /// Represent a single pixel on a texture
   struct pixel {
-    /// Each byte is a componant. Value from 0 to 255
+    /// Each byte is a component. Value from 0 to 255
     uint8_t r, g, b, a;
 
-    /// Return a number between 0 and 1 that correspound to the byte vale
+    /// Return a number between 0 and 1 that correspond to the byte vale
     /// between 0 to 255
     static float to_float(uint8_t v) { return float(v) / 255.f; }
 
@@ -233,7 +233,7 @@ vec4 textureCube(const samplerCube& sampler, vec3 direction) {
   return texture2D(sampler.faces[i], uv);
 }
 
-// This datastructure is used throughough the code here
+// This data-structure is used throughout the code here
 struct PBRInfo {
   float NdotL;  // cos angle between normal and light direction
   float NdotV;  // cos angle between normal and view direction
@@ -260,7 +260,7 @@ struct PBRShaderCPU {
   /// Virtual output : color of the "fragment" (aka: the pixel here)
   vec4 gl_FragColor;
 
-  // TODO This is just a pass-through function. This will de pend on the color
+  // TODO This is just a pass-through function. This will depend on the color
   // space used on the fed textures...
   vec4 SRGBtoLINEAR(vec4 srgbIn) {
 #ifdef MANUAL_SRGB
@@ -358,7 +358,7 @@ struct PBRShaderCPU {
     // For typical incident reflectance range (between 4% to 100%) set the
     // grazing reflectance to 100% for typical fresnel effect. For very low
     // reflectance range on highly diffuse objects (below 4%), incrementally
-    // reduce grazing reflecance to 0%.
+    // reduce grazing reflectance to 0%.
     float reflectance90 = clamp(reflectance * 25.0f, 0.0f, 1.0f);
     vec3 specularEnvironmentR0 = specularColor;
     vec3 specularEnvironmentR90 = vec3(1.0f, 1.0f, 1.0f) * reflectance90;
@@ -376,7 +376,7 @@ struct PBRShaderCPU {
     float LdotH = clamp(dot(l, h), 0.0f, 1.0f);
     float VdotH = clamp(dot(v, h), 0.0f, 1.0f);
 
-    // Hey, modern C++ uniform initialiazation syntax just works!
+    // Hey, modern C++ uniform initialization syntax just works!
     PBRInfo pbrInputs = PBRInfo{NdotL,
                                 NdotV,
                                 NdotH,
@@ -495,7 +495,7 @@ struct PBRShaderCPU {
 
   // use Disney's equation for diffuse
   // https://blog.selfshadow.com/publications/s2012-shading-course/burley/s2012_pbs_disney_brdf_notes_v3.pdf
-  // See section 5.3 (correct for too dark diffuse on the edges in comparaison
+  // See section 5.3 (correct for too dark diffuse on the edges in comparison
   // with the above, commented-out function)
   vec3 diffuse(PBRInfo pbrInputs) {
     float f90 =

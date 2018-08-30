@@ -31,7 +31,7 @@ bool LoadGLTF(const std::string &filename, float scale, Mesh<float> &mesh,
     // assume binary glTF.
     ret = loader.LoadBinaryFromFile(&model, &err, &warn, filename);
   } else {
-    // assume ascii glTF.
+    // assume ASCII glTF.
     ret = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
   }
 
@@ -180,7 +180,7 @@ bool LoadGLTF(const std::string &filename, float scale, Mesh<float> &mesh,
               loadedMesh.faces.push_back(triangleStrip[i]);
             }
           }
-        case TINYGLTF_MODE_TRIANGLES:  // this is the simpliest case to handle
+        case TINYGLTF_MODE_TRIANGLES:  // this is the simplest case to handle
 
         {
           std::cout << "TRIANGLES\n";
@@ -275,7 +275,7 @@ bool LoadGLTF(const std::string &filename, float scale, Mesh<float> &mesh,
                           arrayAdapter<v2f>(dataPtr, count, byte_stride));
 
                       for (size_t i{0}; i < indices.size() / 3; ++i) {
-                        // get the i'th triange's indexes
+                        // get the i'th triangle's indexes
                         auto f0 = indices[3 * i + 0];
                         auto f1 = indices[3 * i + 1];
                         auto f2 = indices[3 * i + 2];
@@ -305,7 +305,7 @@ bool LoadGLTF(const std::string &filename, float scale, Mesh<float> &mesh,
                           arrayAdapter<v2d>(dataPtr, count, byte_stride));
 
                       for (size_t i{0}; i < indices.size() / 3; ++i) {
-                        // get the i'th triange's indexes
+                        // get the i'th triangle's indexes
                         auto f0 = indices[3 * i + 0];
                         auto f1 = indices[3 * i + 1];
                         auto f2 = indices[3 * i + 2];
@@ -330,7 +330,7 @@ bool LoadGLTF(const std::string &filename, float scale, Mesh<float> &mesh,
                   }
                 } break;
                 default:
-                  std::cerr << "unreconized componant type for UV";
+                  std::cerr << "unrecognized component type for UV";
               }
             }
 
@@ -351,7 +351,7 @@ bool LoadGLTF(const std::string &filename, float scale, Mesh<float> &mesh,
 
                       // For each triangle :
                       for (size_t i{0}; i < indices.size() / 3; ++i) {
-                        // get the i'th triange's indexes
+                        // get the i'th triangle's indexes
                         auto f0 = indices[3 * i + 0];
                         auto f1 = indices[3 * i + 1];
                         auto f2 = indices[3 * i + 2];
@@ -387,7 +387,7 @@ bool LoadGLTF(const std::string &filename, float scale, Mesh<float> &mesh,
 
                       // For each triangle :
                       for (size_t i{0}; i < indices.size() / 3; ++i) {
-                        // get the i'th triange's indexes
+                        // get the i'th triangle's indexes
                         auto f0 = indices[3 * i + 0];
                         auto f1 = indices[3 * i + 1];
                         auto f2 = indices[3 * i + 2];
@@ -413,7 +413,7 @@ bool LoadGLTF(const std::string &filename, float scale, Mesh<float> &mesh,
                       }
                     } break;
                     default:
-                      std::cerr << "Unhandeled componant type for normal\n";
+                      std::cerr << "Unhandeled component type for normal\n";
                   }
                 } break;
                 default:

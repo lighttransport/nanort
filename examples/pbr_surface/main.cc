@@ -40,7 +40,7 @@ void loadSampler(pbr_maths::sampler2D& sampler, const stbi_uc* data, int w,
 
 // This permit to load metal and roughness maps from different textures (instead
 // of the standard GREEN/BLUE combined one)  The shader expect theses two maps
-// as a cobined one, so we are building it ourselves
+// as a combined one, so we are building it ourselves
 void loadCombineMetalRoughSampler(pbr_maths::sampler2D& sampler,
                                   const stbi_uc* metalData, int mw, int mh,
                                   int mc, const stbi_uc* roughnessData, int rw,
@@ -279,7 +279,7 @@ int main() {
 
           // 2) if nothing was hit, draw pixel with shader
           if (!accel.Traverse(lightRay, triangle_intersector, &isect)) {
-            // This object represet a fragment shader, and is literally a
+            // This object represent a fragment shader, and is literally a
             // translation in C++ from an official example from khronos
             pbr_maths::PBRShaderCPU shader;
 
