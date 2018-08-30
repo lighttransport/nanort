@@ -391,7 +391,8 @@ struct PBRShaderCPU {
       brdf.y = brdf3.y;
     } else {
       brdf = vec2(IntegrateBRDF(pbrInputs.NdotV,
-                                1.0f - pbrInputs.perceptualRoughness, brdfResolution));
+                                1.0f - pbrInputs.perceptualRoughness,
+                                brdfResolution));
     }
 
     vec3 diffuseLight = vec3(SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, n)));

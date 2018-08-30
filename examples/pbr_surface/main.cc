@@ -92,7 +92,6 @@ int main() {
   describing the BRDF outputs from roughness and angle (see Unreal PBR paper
   section Image-Based Lighting/Environment BRDF */
 
-
   // auto brdfLUTData = stbi_load("./brdfLUT.png", &w, &h, &c, 0);
   // if (brdfLUTData) loadSampler(brdfLUT, brdfLUTData, w, h, c);
 
