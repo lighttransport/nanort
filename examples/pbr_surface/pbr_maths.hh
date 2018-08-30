@@ -545,60 +545,54 @@ struct PBRShaderCPU {
     return roughnessSq / (M_PI * f * f);
   }
 
-  // Global stuff pasted from glsl file
-
-#define uniform
-#define varying
-
-  uniform vec3 u_LightDirection;
-  uniform vec3 u_LightColor;
+  // Global state of the original shader enclosed into member variables
+  vec3 u_LightDirection;
+  vec3 u_LightColor;
 
   bool useILB = false;
-  uniform samplerCube u_DiffuseEnvSampler;
-  uniform samplerCube u_SpecularEnvSampler;
-  uniform sampler2D u_brdfLUT;
+  samplerCube u_DiffuseEnvSampler;
+  samplerCube u_SpecularEnvSampler;
+  sampler2D u_brdfLUT;
 
   bool useBaseColorMap = false;
-  uniform sampler2D u_BaseColorSampler;
+  sampler2D u_BaseColorSampler;
 
   bool useNormalMap = false;
-  uniform sampler2D u_NormalSampler;
-  uniform float u_NormalScale = 1;
+  sampler2D u_NormalSampler;
+  float u_NormalScale = 1;
 
   bool useEmissiveMap = false;
-  uniform sampler2D u_EmissiveSampler;
-  uniform vec3 u_EmissiveFactor;
+  sampler2D u_EmissiveSampler;
+  vec3 u_EmissiveFactor;
 
   bool useMetalRoughMap = false;
-  uniform sampler2D u_MetallicRoughnessSampler;
+  sampler2D u_MetallicRoughnessSampler;
 
   bool useOcclusionMap = false;
-  uniform sampler2D u_OcclusionSampler;
-  uniform float u_OcclusionStrength = 1;
+  sampler2D u_OcclusionSampler;
+  float u_OcclusionStrength = 1;
 
-  uniform vec2 u_MetallicRoughnessValues = {1, 1};
-  uniform vec4 u_BaseColorFactor;
+  vec2 u_MetallicRoughnessValues = {1, 1};
+  vec4 u_BaseColorFactor;
 
-  uniform vec3 u_Camera;
+  vec3 u_Camera;
 
   // debugging flags used for shader output of intermediate PBR variables
-  uniform vec4 u_ScaleDiffBaseMR{0};
-  uniform vec4 u_ScaleFGDSpec{0};
-  uniform vec4 u_ScaleIBLAmbient{0};
+  vec4 u_ScaleDiffBaseMR{0};
+  vec4 u_ScaleFGDSpec{0};
+  vec4 u_ScaleIBLAmbient{0};
 
-  varying vec3 v_Position;
+  vec3 v_Position;
 
-  varying vec2 v_UV;
+  vec2 v_UV;
 
 #ifdef HAS_NORMALS
 #ifdef HAS_TANGENTS
-  varying mat3 v_TBN;
+  mat3 v_TBN;
 #else
-  varying vec3 v_Normal;
+  vec3 v_Normal;
 #endif
 #endif
-#undef uniform
-#undef varying
 };
 
 }  // namespace pbr_maths
