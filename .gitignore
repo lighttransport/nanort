@@ -9,6 +9,9 @@ install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
 
+# Visual Studio's TMP files
+*.TMP
+
 # Other generated files and config files
 imgui.ini
 viwewer.make
