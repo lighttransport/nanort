@@ -8,12 +8,16 @@
 // This is inspired by the sample implementation from khronos found here :
 // https://github.com/KhronosGroup/glTF-WebGL-PBR/blob/master/shaders/pbr-frag.glsl
 
+/// Contains datastructures, free functions and object for PBR shader
+/// computation
 namespace pbr_maths {
 
+// Compile time constants
 constexpr static float const c_MinRoughness = 0.04f;
 #ifndef M_PI
 constexpr static float const M_PI = 3.141592653589793f;
 #endif
+
 // GLSL data types
 using glm::mat3;
 using glm::mat4;
@@ -78,7 +82,7 @@ struct sampler2D {
           if (a > 1) a = fmod(a, 1.0f);
           if (a < 0) {
             a = 1 - fmod(abs(a), 1.0f);
-            }
+          }
           break;
       }
       return a;
@@ -264,9 +268,9 @@ struct PBRShaderCPU {
     vec3 linOut = pow(srgbIn.xyz, vec3(2.2));
 #else   // SRGB_FAST_APPROXIMATION
     vec3 bLess = step(vec3(0.04045f), vec3(srgbIn));
-    vec3 linOut =
-        mix(vec3(srgbIn) / vec3(12.92f),
-            pow((vec3(srgbIn) + vec3(0.055f)) / vec3(1.055f), vec3(2.4f)), bLess);
+    vec3 linOut = mix(
+        vec3(srgbIn) / vec3(12.92f),
+        pow((vec3(srgbIn) + vec3(0.055f)) / vec3(1.055f), vec3(2.4f)), bLess);
 #endif  // SRGB_FAST_APPROXIMATION
     return vec4(linOut, srgbIn.w);
     ;
@@ -283,9 +287,9 @@ struct PBRShaderCPU {
     float mipCount = 9.0f;  // resolution of 512x512
     float lod = pbrInputs.perceptualRoughness * mipCount;
     // retrieve a scale and bias to F0. See [1], Figure 3
-    vec3 brdf = vec3(SRGBtoLINEAR(
-        texture2D(u_brdfLUT,
-                  vec2(pbrInputs.NdotV, 1.0f - pbrInputs.perceptualRoughness))));
+    vec3 brdf = vec3(SRGBtoLINEAR(texture2D(
+        u_brdfLUT,
+        vec2(pbrInputs.NdotV, 1.0f - pbrInputs.perceptualRoughness))));
 
     vec3 diffuseLight = vec3(SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, n)));
 
@@ -436,7 +440,7 @@ struct PBRShaderCPU {
   // map
   // or from the interpolated mesh normal and tangent attributes.
   vec3 getNormal() {
-  // Retrieve the tangent space matrix
+    // Retrieve the tangent space matrix
 #ifndef HAS_TANGENTS
     /*    vec3 pos_dx = dFdx(v_Position);
     vec3 pos_dy = dFdy(v_Position);
@@ -485,8 +489,22 @@ struct PBRShaderCPU {
   // Implementation from Lambert's Photometria
   // https://archive.org/details/lambertsphotome00lambgoog See also [1],
   // Equation 1
+  // vec3 diffuse(PBRInfo pbrInputs) {
+  //  return {pbrInputs.diffuseColor / float(M_PI)};
+  //}
+
+  // use Disney's equation for diffuse
+  // https://blog.selfshadow.com/publications/s2012-shading-course/burley/s2012_pbs_disney_brdf_notes_v3.pdf
+  // See section 5.3 (correct for too dark diffuse on the edges in comparaison
+  // with the above, commented-out function)
   vec3 diffuse(PBRInfo pbrInputs) {
-    return {pbrInputs.diffuseColor / float(M_PI)};
+    float f90 =
+        2.0f * pbrInputs.LdotH * pbrInputs.LdotH * pbrInputs.alphaRoughness -
+        0.5f;
+
+    return (pbrInputs.diffuseColor / M_PI) *
+           (1.0f + f90 * pow((1.0f - pbrInputs.NdotL), 5.0f)) *
+           (1.0f + f90 * pow((1.0f - pbrInputs.NdotV), 5.0f));
   }
 
   // The following equation models the Fresnel reflectance term of the spec
@@ -527,7 +545,7 @@ struct PBRShaderCPU {
     return roughnessSq / (M_PI * f * f);
   }
 
-    // Global stuff pasted from glsl file
+  // Global stuff pasted from glsl file
 
 #define uniform
 #define varying
