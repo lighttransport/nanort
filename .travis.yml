@@ -31,4 +31,4 @@ matrix:
 
 script:
   - export CXX="${CXX}-${COMPILER_VERSION}"
-  - ${CXX} -c nanort.cc
+  - ${CXX} -std=c++11 -c nanort.cc
