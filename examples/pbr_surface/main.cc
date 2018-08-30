@@ -87,9 +87,16 @@ int main() {
   // auto colData = stbi_load("./MetalPlates02_col.jpg", &w, &h, &c, 0);
   // if (colData) loadSampler(baseColorMap, colData, w, h, c);
 
-  auto brdfLUTData = stbi_load("./brdfLUT.png", &w, &h, &c, 0);
-  if (brdfLUTData) loadSampler(brdfLUT, brdfLUTData, w, h, c);
-  brdfLUT.boundsOperation = pbr_maths::sampler2D::outOfBounds::clamp;
+  /* We can compute the BRDF ourselves. Will not load Look up table texture
+  If depending on an external texture for ILB BRDF, you can supply a LUT texture
+  describing the BRDF outputs from roughness and angle (see Unreal PBR paper
+  section Image-Based Lighting/Environment BRDF */
+
+
+  // auto brdfLUTData = stbi_load("./brdfLUT.png", &w, &h, &c, 0);
+  // if (brdfLUTData) loadSampler(brdfLUT, brdfLUTData, w, h, c);
+
+  // brdfLUT.boundsOperation = pbr_maths::sampler2D::outOfBounds::clamp;
 
   pbr_maths::sampler2D metalRoughMap;
   // int rw, rh, rc, mw, mh, mc;
@@ -114,7 +121,9 @@ int main() {
   // stbi_image_free(colData);
   // stbi_image_free(roughData);
   // stbi_image_free(metalData);
-  stbi_image_free(brdfLUTData);
+
+  // No LUT
+  // stbi_image_free(brdfLUTData);
 
   PbrMaterial<float> material;
   material.metalness = 1;
@@ -206,8 +215,8 @@ int main() {
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
 
-  const size_t width = 4096;
-  const size_t height = 4096;
+  const size_t width = 2048;
+  const size_t height = 2048;
 
   std::vector<pixel> img(width * height);
   // memset(img.data(), 255, img.size() * sizeof(pixel));
@@ -346,8 +355,14 @@ int main() {
             }
 
             if (brdfLUT.pixels) {
-              shader.useILB = true;
+              shader.use_ILB_BRDF_LUT = !shader.forceBRDFCompute;
               shader.u_brdfLUT = brdfLUT;
+            } else {
+              shader.use_ILB_BRDF_LUT = false;
+            }
+            if (diffuseEnvMap.faces[0].pixels &&
+                specularEnvMap.faces[0].pixels) {
+              shader.useILB = true;
               shader.u_DiffuseEnvSampler = diffuseEnvMap;
               shader.u_SpecularEnvSampler = specularEnvMap;
               shader.u_ScaleIBLAmbient = {
@@ -383,7 +398,7 @@ int main() {
   metalRoughMap.releasePixels();
   specularEnvMap.releasePixels();
   diffuseEnvMap.releasePixels();
-  brdfLUT.releasePixels();
+  // brdfLUT.releasePixels();
 
   return 0;
 }
