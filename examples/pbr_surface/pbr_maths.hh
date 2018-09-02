@@ -606,9 +606,9 @@ struct PBRShaderCPU {
         2.0f * pbrInputs.LdotH * pbrInputs.LdotH * pbrInputs.alphaRoughness -
         0.5f;
 
-    return (pbrInputs.diffuseColor / M_PI) *
-           (1.0f + f90 * pow((1.0f - pbrInputs.NdotL), 5.0f)) *
-           (1.0f + f90 * pow((1.0f - pbrInputs.NdotV), 5.0f));
+    return (pbrInputs.diffuseColor / float(M_PI)) *
+           (1.0f + f90 * float(pow((1.0f - pbrInputs.NdotL), 5.0f))) *
+           (1.0f + f90 * float(pow((1.0f - pbrInputs.NdotV), 5.0f)));
   }
 
   // The following equation models the Fresnel reflectance term of the spec
