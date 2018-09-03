@@ -12,13 +12,21 @@ main() function will load a .glTF file thanks to the glTF library https://github
 
 Use CMake to configure a project for your favorite toolchain.
 
+Here is an example procedure of CMake build.
+
+```
+$ mkdir build
+$ cmake ..
+$ make
+```
+
 ## Third party libraries
 
 This project uses STB Image and STB Image Write for image file manipulation, and glm for reimplementing GLSL maths.
 
 ## Outline
 
-This program contains a simple implementation of a PBR shader rendered thanks to NanoRT.
+This program contains a simple implementation of a PBR shader rendered with raytracing feature.
 
 This is a simple demonstration program to work on PBR implementation in isolation.
 
