@@ -8,12 +8,16 @@
 // This is inspired by the sample implementation from khronos found here :
 // https://github.com/KhronosGroup/glTF-WebGL-PBR/blob/master/shaders/pbr-frag.glsl
 
+/// Contains data-structures, free functions and object for PBR shader
+/// computation
 namespace pbr_maths {
 
-constexpr static float const c_MinRoughness = 0.04;
+// Compile time constants
+constexpr static float const c_MinRoughness = 0.04f;
 #ifndef M_PI
-constexpr static float const M_PI = 3.141592653589793;
+constexpr static float const M_PI = 3.141592653589793f;
 #endif
+
 // GLSL data types
 using glm::mat3;
 using glm::mat4;
@@ -21,7 +25,7 @@ using glm::vec2;
 using glm::vec3;
 using glm::vec4;
 
-// GLSL funtions
+// GLSL functions
 using glm::clamp;
 using glm::cross;
 using glm::fract;
@@ -38,15 +42,15 @@ struct sampler2D {
 
   /// Represent a single pixel on a texture
   struct pixel {
-    /// Each byte is a componant. Value from 0 to 255
+    /// Each byte is a component. Value from 0 to 255
     uint8_t r, g, b, a;
 
-    /// Return a number between 0 and 1 that correspound to the byte vale
+    /// Return a number between 0 and 1 that correspond to the byte vale
     /// between 0 to 255
     static float to_float(uint8_t v) { return float(v) / 255.f; }
 
     /// Convert this object to a glm::vec4 (like a color in GLSL) implicitly
-    operator glm::vec4() const {
+    operator vec4() const {
       return {to_float(r), to_float(g), to_float(b), to_float(a)};
     }
   };
@@ -75,10 +79,10 @@ struct sampler2D {
           break;
 
         case outOfBounds::wrap:
-          if (a > 1) a = fmod(a, 1.0);
+          if (a > 1) a = fmod(a, 1.0f);
           if (a < 0) {
-            a = 1 - fmod(abs(a), 1.0);
-            }
+            a = 1 - fmod(abs(a), 1.0f);
+          }
           break;
       }
       return a;
@@ -229,7 +233,7 @@ vec4 textureCube(const samplerCube& sampler, vec3 direction) {
   return texture2D(sampler.faces[i], uv);
 }
 
-// This datastructure is used throughough the code here
+// This data-structure is used throughout the code here
 struct PBRInfo {
   float NdotL;  // cos angle between normal and light direction
   float NdotV;  // cos angle between normal and view direction
@@ -256,17 +260,17 @@ struct PBRShaderCPU {
   /// Virtual output : color of the "fragment" (aka: the pixel here)
   vec4 gl_FragColor;
 
-  // TODO This is just a pass-through function. This will de pend on the color
+  // TODO This is just a pass-through function. This will depend on the color
   // space used on the fed textures...
   vec4 SRGBtoLINEAR(vec4 srgbIn) {
 #ifdef MANUAL_SRGB
 #ifdef SRGB_FAST_APPROXIMATION
     vec3 linOut = pow(srgbIn.xyz, vec3(2.2));
 #else   // SRGB_FAST_APPROXIMATION
-    vec3 bLess = step(vec3(0.04045), vec3(srgbIn));
-    vec3 linOut =
-        mix(vec3(srgbIn) / vec3(12.92),
-            pow((vec3(srgbIn) + vec3(0.055)) / vec3(1.055), vec3(2.4)), bLess);
+    vec3 bLess = step(vec3(0.04045f), vec3(srgbIn));
+    vec3 linOut = mix(
+        vec3(srgbIn) / vec3(12.92f),
+        pow((vec3(srgbIn) + vec3(0.055f)) / vec3(1.055f), vec3(2.4f)), bLess);
 #endif  // SRGB_FAST_APPROXIMATION
     return vec4(linOut, srgbIn.w);
     ;
@@ -274,18 +278,122 @@ struct PBRShaderCPU {
     return srgbIn;
 #endif  // MANUAL_SRGB
   }
+
+  // Code from "Image Based Lighting" section of the Unreal PBR article. Based
+  // on the C++ re-implementation of the integration code from
+  // https://github.com/HectorMF/BRDFGenerator (MIT)
+
+  float RadicalInverse_VdC(unsigned int bits) {
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10;
+  }
+
+  vec2 Hammersley(unsigned int i, unsigned int N) {
+    return vec2(float(i) / float(N), RadicalInverse_VdC(i));
+  }
+
+  vec3 ImportanceSampleGGX(vec2 Xi, float roughness, vec3 N) {
+    float a = roughness * roughness;
+
+    float phi = 2.0 * M_PI * Xi.x;
+    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+    // from spherical coordinates to cartesian coordinates
+    vec3 H;
+    H.x = cos(phi) * sinTheta;
+    H.y = sin(phi) * sinTheta;
+    H.z = cosTheta;
+
+    // from tangent-space vector to world-space sample vector
+    vec3 up = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangent = normalize(cross(up, N));
+    vec3 bitangent = cross(N, tangent);
+
+    vec3 sampleVec = tangent * H.x + bitangent * H.y + N * H.z;
+    return normalize(sampleVec);
+  }
+
+  float GeometrySchlickGGX(float NdotV, float roughness) {
+    float a = roughness;
+    float k = (a * a) / 2.0;
+
+    float nom = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+
+    return nom / denom;
+  }
+
+  float GeometrySmith(float roughness, float NoV, float NoL) {
+    float ggx2 = GeometrySchlickGGX(NoV, roughness);
+    float ggx1 = GeometrySchlickGGX(NoL, roughness);
+
+    return ggx1 * ggx2;
+  }
+
+  vec2 IntegrateBRDF(float NdotV, float roughness, unsigned int samples) {
+    vec3 V;
+    V.x = sqrt(1.0 - NdotV * NdotV);
+    V.y = 0.0;
+    V.z = NdotV;
+
+    float A = 0.0;
+    float B = 0.0;
+
+    vec3 N = vec3(0.0, 0.0, 1.0);
+
+    for (unsigned int i = 0u; i < samples; ++i) {
+      vec2 Xi = Hammersley(i, samples);
+      vec3 H = ImportanceSampleGGX(Xi, roughness, N);
+      vec3 L = normalize(2.0f * dot(V, H) * H - V);
+
+      float NoL = max(L.z, 0.0f);
+      float NoH = max(H.z, 0.0f);
+      float VoH = max(dot(V, H), 0.0f);
+      float NoV = max(dot(N, V), 0.0f);
+
+      if (NoL > 0.0) {
+        float G = GeometrySmith(roughness, NoV, NoL);
+
+        float G_Vis = (G * VoH) / (NoH * NoV);
+        float Fc = pow(1.0 - VoH, 5.0);
+
+        A += (1.0 - Fc) * G_Vis;
+        B += Fc * G_Vis;
+      }
+    }
+
+    return vec2(A / float(samples), B / float(samples));
+  }
+
   // Calculation of the lighting contribution from an optional Image Based Light
   // source.
   // Precomputed Environment Maps are required uniform inputs and are computed
   // as outlined in [1]. See our README.md on Environment Maps [3] for
   // additional discussion.
   vec3 getIBLContribution(PBRInfo pbrInputs, vec3 n, vec3 reflection) {
-    float mipCount = 9.0;  // resolution of 512x512
+    float mipCount = 9.0f;  // resolution of 512x512
     float lod = pbrInputs.perceptualRoughness * mipCount;
     // retrieve a scale and bias to F0. See [1], Figure 3
-    vec3 brdf = vec3(SRGBtoLINEAR(
-        texture2D(u_brdfLUT,
-                  vec2(pbrInputs.NdotV, 1.0 - pbrInputs.perceptualRoughness))));
+    vec2 brdf;
+
+    if (use_ILB_BRDF_LUT) {
+      auto brdf3 = vec3(SRGBtoLINEAR(texture2D(
+          u_brdfLUT,
+          vec2(pbrInputs.NdotV, 1.0f - pbrInputs.perceptualRoughness))));
+
+      // Only use RG channel
+      brdf.x = brdf3.x;
+      brdf.y = brdf3.y;
+    } else {
+      brdf = vec2(IntegrateBRDF(pbrInputs.NdotV,
+                                1.0f - pbrInputs.perceptualRoughness,
+                                brdfResolution));
+    }
 
     vec3 diffuseLight = vec3(SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, n)));
 
@@ -342,8 +450,8 @@ struct PBRShaderCPU {
       baseColor = u_BaseColorFactor;
     }
 
-    vec3 f0 = vec3(0.04);
-    vec3 diffuseColor = vec3(baseColor) * (vec3(1.0) - f0);
+    vec3 f0 = vec3(0.04f);
+    vec3 diffuseColor = vec3(baseColor) * (vec3(1.0f) - f0);
     diffuseColor *= 1.0 - metallic;
     vec3 specularColor = mix(f0, vec3(baseColor), metallic);
 
@@ -354,10 +462,10 @@ struct PBRShaderCPU {
     // For typical incident reflectance range (between 4% to 100%) set the
     // grazing reflectance to 100% for typical fresnel effect. For very low
     // reflectance range on highly diffuse objects (below 4%), incrementally
-    // reduce grazing reflecance to 0%.
-    float reflectance90 = clamp(reflectance * 25.0, 0.0, 1.0);
+    // reduce grazing reflectance to 0%.
+    float reflectance90 = clamp(reflectance * 25.0f, 0.0f, 1.0f);
     vec3 specularEnvironmentR0 = specularColor;
-    vec3 specularEnvironmentR90 = vec3(1.0, 1.0, 1.0) * reflectance90;
+    vec3 specularEnvironmentR90 = vec3(1.0f, 1.0f, 1.0f) * reflectance90;
 
     vec3 n = getNormal();  // normal at surface point
     vec3 v = normalize(u_Camera -
@@ -372,7 +480,7 @@ struct PBRShaderCPU {
     float LdotH = clamp(dot(l, h), 0.0f, 1.0f);
     float VdotH = clamp(dot(v, h), 0.0f, 1.0f);
 
-    // Hey, modern C++ uniform initialiazation syntax just works!
+    // Hey, modern C++ uniform initialization syntax just works!
     PBRInfo pbrInputs = PBRInfo{NdotL,
                                 NdotV,
                                 NdotH,
@@ -429,14 +537,14 @@ struct PBRShaderCPU {
     color = mix(color, vec3(metallic), u_ScaleDiffBaseMR.z);
     color = mix(color, vec3(perceptualRoughness), u_ScaleDiffBaseMR.w);
 
-    gl_FragColor = vec4(pow(color, vec3(1.0 / 2.2)), baseColor.a);
+    gl_FragColor = vec4(pow(color, vec3(1.0f / 2.2f)), baseColor.a);
   }
 
   // Find the normal for this fragment, pulling either from a predefined normal
   // map
   // or from the interpolated mesh normal and tangent attributes.
   vec3 getNormal() {
-  // Retrieve the tangent space matrix
+    // Retrieve the tangent space matrix
 #ifndef HAS_TANGENTS
     /*    vec3 pos_dx = dFdx(v_Position);
     vec3 pos_dy = dFdy(v_Position);
@@ -454,8 +562,8 @@ struct PBRShaderCPU {
     // This is some random hack to calculate "a" tangent vector
     vec3 t;
 
-    vec3 c1 = cross(ng, vec3(0.0, 0.0, 1.0));
-    vec3 c2 = cross(ng, vec3(0.0, 1.0, 0.0));
+    vec3 c1 = cross(ng, vec3(0.0f, 0.0f, 1.0f));
+    vec3 c2 = cross(ng, vec3(0.0f, 1.0f, 0.0f));
 
     if (length(c1) > length(c2)) {
       t = c1;
@@ -485,8 +593,22 @@ struct PBRShaderCPU {
   // Implementation from Lambert's Photometria
   // https://archive.org/details/lambertsphotome00lambgoog See also [1],
   // Equation 1
+  // vec3 diffuse(PBRInfo pbrInputs) {
+  //  return {pbrInputs.diffuseColor / float(M_PI)};
+  //}
+
+  // use Disney's equation for diffuse
+  // https://blog.selfshadow.com/publications/s2012-shading-course/burley/s2012_pbs_disney_brdf_notes_v3.pdf
+  // See section 5.3 (correct for too dark diffuse on the edges in comparison
+  // with the above, commented-out function)
   vec3 diffuse(PBRInfo pbrInputs) {
-    return {pbrInputs.diffuseColor / float(M_PI)};
+    float f90 =
+        2.0f * pbrInputs.LdotH * pbrInputs.LdotH * pbrInputs.alphaRoughness -
+        0.5f;
+
+    return (pbrInputs.diffuseColor / float(M_PI)) *
+           (1.0f + f90 * float(pow((1.0f - pbrInputs.NdotL), 5.0f))) *
+           (1.0f + f90 * float(pow((1.0f - pbrInputs.NdotV), 5.0f)));
   }
 
   // The following equation models the Fresnel reflectance term of the spec
@@ -507,9 +629,9 @@ struct PBRShaderCPU {
     float r = pbrInputs.alphaRoughness;
 
     float attenuationL =
-        2.0 * NdotL / (NdotL + sqrt(r * r + (1.0 - r * r) * (NdotL * NdotL)));
+        2.0f * NdotL / (NdotL + sqrt(r * r + (1.0f - r * r) * (NdotL * NdotL)));
     float attenuationV =
-        2.0 * NdotV / (NdotV + sqrt(r * r + (1.0 - r * r) * (NdotV * NdotV)));
+        2.0f * NdotV / (NdotV + sqrt(r * r + (1.0f - r * r) * (NdotV * NdotV)));
     return attenuationL * attenuationV;
   }
 
@@ -523,64 +645,61 @@ struct PBRShaderCPU {
     float roughnessSq = pbrInputs.alphaRoughness * pbrInputs.alphaRoughness;
     float f =
         (pbrInputs.NdotH * roughnessSq - pbrInputs.NdotH) * pbrInputs.NdotH +
-        1.0;
+        1.0f;
     return roughnessSq / (M_PI * f * f);
   }
 
-    // Global stuff pasted from glsl file
-
-#define uniform
-#define varying
-
-  uniform vec3 u_LightDirection;
-  uniform vec3 u_LightColor;
+  // Global state of the original shader enclosed into member variables
+  vec3 u_LightDirection;
+  vec3 u_LightColor;
 
   bool useILB = false;
-  uniform samplerCube u_DiffuseEnvSampler;
-  uniform samplerCube u_SpecularEnvSampler;
-  uniform sampler2D u_brdfLUT;
+  bool use_ILB_BRDF_LUT = false;
+  bool forceBRDFCompute = true;
+  int brdfResolution = 256;
+  samplerCube u_DiffuseEnvSampler;
+  samplerCube u_SpecularEnvSampler;
+  sampler2D u_brdfLUT;
 
   bool useBaseColorMap = false;
-  uniform sampler2D u_BaseColorSampler;
+  sampler2D u_BaseColorSampler;
 
   bool useNormalMap = false;
-  uniform sampler2D u_NormalSampler;
-  uniform float u_NormalScale = 1;
+  sampler2D u_NormalSampler;
+  float u_NormalScale = 1;
 
   bool useEmissiveMap = false;
-  uniform sampler2D u_EmissiveSampler;
-  uniform vec3 u_EmissiveFactor;
+  sampler2D u_EmissiveSampler;
+  vec3 u_EmissiveFactor;
 
   bool useMetalRoughMap = false;
-  uniform sampler2D u_MetallicRoughnessSampler;
+  sampler2D u_MetallicRoughnessSampler;
 
   bool useOcclusionMap = false;
-  uniform sampler2D u_OcclusionSampler;
-  uniform float u_OcclusionStrength = 1;
+  sampler2D u_OcclusionSampler;
+  float u_OcclusionStrength = 1;
 
-  uniform vec2 u_MetallicRoughnessValues = {1, 1};
-  uniform vec4 u_BaseColorFactor;
+  vec2 u_MetallicRoughnessValues = {1, 1};
+  vec4 u_BaseColorFactor;
 
-  uniform vec3 u_Camera;
+  vec3 u_Camera;
 
   // debugging flags used for shader output of intermediate PBR variables
-  uniform vec4 u_ScaleDiffBaseMR{0};
-  uniform vec4 u_ScaleFGDSpec{0};
-  uniform vec4 u_ScaleIBLAmbient{0};
+  vec4 u_ScaleDiffBaseMR{0};
+  vec4 u_ScaleFGDSpec{0};
+  vec4 u_ScaleIBLAmbient{0};
 
-  varying vec3 v_Position;
+  vec3 v_Position;
 
-  varying vec2 v_UV;
+  vec2 v_UV;
 
 #ifdef HAS_NORMALS
 #ifdef HAS_TANGENTS
-  varying mat3 v_TBN;
+  mat3 v_TBN;
 #else
-  varying vec3 v_Normal;
+  vec3 v_Normal;
 #endif
 #endif
-#undef uniform
-#undef varying
 };
 
 }  // namespace pbr_maths

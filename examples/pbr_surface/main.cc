@@ -40,7 +40,7 @@ void loadSampler(pbr_maths::sampler2D& sampler, const stbi_uc* data, int w,
 
 // This permit to load metal and roughness maps from different textures (instead
 // of the standard GREEN/BLUE combined one)  The shader expect theses two maps
-// as a cobined one, so we are building it ourselves
+// as a combined one, so we are building it ourselves
 void loadCombineMetalRoughSampler(pbr_maths::sampler2D& sampler,
                                   const stbi_uc* metalData, int mw, int mh,
                                   int mc, const stbi_uc* roughnessData, int rw,
@@ -81,21 +81,27 @@ void loadSamplerCube(pbr_maths::samplerCube& cubemap,
 int main() {
   pbr_maths::sampler2D normalMap, baseColorMap, emissiveMap, brdfLUT;
   int w, h, c;
-  //auto normdata = stbi_load("./MetalPlates02_nrm.jpg", &w, &h, &c, 0);
-  //if (normdata) loadSampler(normalMap, normdata, w, h, c);
+  // auto normdata = stbi_load("./MetalPlates02_nrm.jpg", &w, &h, &c, 0);
+  // if (normdata) loadSampler(normalMap, normdata, w, h, c);
 
-  //auto colData = stbi_load("./MetalPlates02_col.jpg", &w, &h, &c, 0);
-  //if (colData) loadSampler(baseColorMap, colData, w, h, c);
+  // auto colData = stbi_load("./MetalPlates02_col.jpg", &w, &h, &c, 0);
+  // if (colData) loadSampler(baseColorMap, colData, w, h, c);
 
-  auto brdfLUTData = stbi_load("./brdfLUT.png", &w, &h, &c, 0);
-  if (brdfLUTData) loadSampler(brdfLUT, brdfLUTData, w, h, c);
-  brdfLUT.boundsOperation = pbr_maths::sampler2D::outOfBounds::clamp;
+  /* We can compute the BRDF ourselves. Will not load Look up table texture
+  If depending on an external texture for ILB BRDF, you can supply a LUT texture
+  describing the BRDF outputs from roughness and angle (see Unreal PBR paper
+  section Image-Based Lighting/Environment BRDF */
+
+  // auto brdfLUTData = stbi_load("./brdfLUT.png", &w, &h, &c, 0);
+  // if (brdfLUTData) loadSampler(brdfLUT, brdfLUTData, w, h, c);
+
+  // brdfLUT.boundsOperation = pbr_maths::sampler2D::outOfBounds::clamp;
 
   pbr_maths::sampler2D metalRoughMap;
-  //int rw, rh, rc, mw, mh, mc;
-  //auto roughData = stbi_load("./MetalPlates02_rgh.jpg", &rw, &rh, &rc, 0);
-  //auto metalData = stbi_load("./MetalPlates02_met.jpg", &mw, &mh, &mc, 0);
-  //if (roughData && metalData)
+  // int rw, rh, rc, mw, mh, mc;
+  // auto roughData = stbi_load("./MetalPlates02_rgh.jpg", &rw, &rh, &rc, 0);
+  // auto metalData = stbi_load("./MetalPlates02_met.jpg", &mw, &mh, &mc, 0);
+  // if (roughData && metalData)
   //  loadCombineMetalRoughSampler(metalRoughMap, metalData, mw, mh, mc,
   //                               roughData, rw, rh, rc);
 
@@ -110,11 +116,13 @@ int main() {
                    "environment_front_0.jpg", "environment_back_0.jpg"});
 
   // Data was copied into the sampler objects, free the images
-  //stbi_image_free(normdata);
-  //stbi_image_free(colData);
-  //stbi_image_free(roughData);
-  //stbi_image_free(metalData);
-  stbi_image_free(brdfLUTData);
+  // stbi_image_free(normdata);
+  // stbi_image_free(colData);
+  // stbi_image_free(roughData);
+  // stbi_image_free(metalData);
+
+  // No LUT
+  // stbi_image_free(brdfLUTData);
 
   PbrMaterial<float> material;
   material.metalness = 1;
@@ -123,18 +131,18 @@ int main() {
   material.albedo.g = 1;
   material.albedo.b = 1;
   material.emissiveness = 1;
-  material.ILBContrib = 0.075;
+  material.ILBContrib = 0.25f;
 
   std::vector<PointLight> lights;
 
-  lights.emplace_back(glm::vec3{0, 3, 0.25}, Color<float>{2, 2, 2});
+  lights.emplace_back(glm::vec3{0.f, 3.f, 0.25f}, Color<float>{2, 2, 2});
 
   Mesh<float> mesh;
   std::vector<Texture> textures;
 
   example::LoadGLTF("./DamagedHelmet.glb", 0.25, mesh, textures);
   mesh.num_vertices = mesh.vertices.size();
-  mesh.num_faces = mesh.faces.size() / 3;
+  mesh.num_faces = (unsigned)mesh.faces.size() / 3;
 
   auto baseColorIt =
       std::find_if(textures.begin(), textures.end(), [](const Texture& text) {
@@ -154,34 +162,32 @@ int main() {
       textures.begin(), textures.end(),
       [](const Texture& text) { return text.use == Texture::usage::emit; });
 
-  if (baseColorIt != textures.end())
-  {
+  if (baseColorIt != textures.end()) {
     loadSampler(baseColorMap, baseColorIt->image, baseColorIt->width,
                 baseColorIt->height, baseColorIt->components);
     baseColorMap.boundsOperation = pbr_maths::sampler2D::outOfBounds::wrap;
   }
 
-    if (normalIt != textures.end()) {
-    loadSampler(normalMap, normalIt->image, normalIt->width,
-                normalIt->height, normalIt->components);
+  if (normalIt != textures.end()) {
+    loadSampler(normalMap, normalIt->image, normalIt->width, normalIt->height,
+                normalIt->components);
     normalMap.boundsOperation = pbr_maths::sampler2D::outOfBounds::wrap;
   }
 
-    if (metalRoughIt != textures.end()) {
+  if (metalRoughIt != textures.end()) {
     loadSampler(metalRoughMap, metalRoughIt->image, metalRoughIt->width,
                 metalRoughIt->height, metalRoughIt->components);
     metalRoughMap.boundsOperation = pbr_maths::sampler2D::outOfBounds::wrap;
   }
 
-    if (emitIt != textures.end()) {
-    loadSampler(emissiveMap, emitIt->image, emitIt->width,
-                emitIt->height, emitIt->components);
+  if (emitIt != textures.end()) {
+    loadSampler(emissiveMap, emitIt->image, emitIt->width, emitIt->height,
+                emitIt->components);
     emissiveMap.boundsOperation = pbr_maths::sampler2D::outOfBounds::wrap;
   }
 
-    for (auto texture : textures) delete[] texture.image;
-    textures.clear();
-
+  for (auto texture : textures) delete[] texture.image;
+  textures.clear();
 
   nanort::BVHBuildOptions<float> build_options;
   build_options.cache_bbox = false;
@@ -190,13 +196,13 @@ int main() {
   printf("    # of leaf primitives: %d\n", build_options.min_leaf_primitives);
   printf("    SAH binsize         : %d\n", build_options.bin_size);
 
-  nanort::TriangleMesh<float> plane(mesh.vertices.data(), mesh.faces.data(),
-                                    3 * sizeof(float));
-  nanort::TriangleSAHPred<float> plane_pred(
+  nanort::TriangleMesh<float> object(mesh.vertices.data(), mesh.faces.data(),
+                                     3 * sizeof(float));
+  nanort::TriangleSAHPred<float> object_pred(
       mesh.vertices.data(), mesh.faces.data(), 3 * sizeof(float));
 
   nanort::BVHAccel<float> accel;
-  accel.Build(mesh.num_faces, plane, plane_pred, build_options);
+  accel.Build(mesh.num_faces, object, object_pred, build_options);
 
   nanort::BVHBuildStatistics stats = accel.GetStatistics();
   printf("  BVH statistics:\n");
@@ -208,18 +214,18 @@ int main() {
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
 
-  const size_t width = 4096;
-  const size_t height = 4096;
+  const size_t width = 2048;
+  const size_t height = 2048;
 
   std::vector<pixel> img(width * height);
   // memset(img.data(), 255, img.size() * sizeof(pixel));
 
   glm::mat4 viewRotate(1.0f);
 
-  viewRotate = glm::rotate(viewRotate, glm::radians(-90.0f),
-                           glm::vec3(1.0f, 0.f, 0.f));
+  viewRotate =
+      glm::rotate(viewRotate, glm::radians(-90.0f), glm::vec3(1.0f, 0.f, 0.f));
   glm::vec3 org{0, 1, 0};
- // lights[0].position = org;
+  // lights[0].position = org;
 
 #ifdef _OPENMP
   printf("This program was buit with OpenMP support\n");
@@ -242,7 +248,6 @@ int main() {
       dir.x = (x / (float)width) - 0.5f;
       dir.y = (y / (float)height) - 0.5f;
       dir.z = -1;
-
 
       dir = viewRotate * glm::vec4(dir, 1);
 
@@ -269,23 +274,20 @@ int main() {
         if (mesh.has_uvs())
           uv = mesh.getTextureCoord(isect.prim_id, isect.u, isect.v);
 
-        // std::cout << "hit at " << hit.x << ',' << hit.y << ',' << hit.z <<
-        // '\n';
         // 1) shoot ray to point light
         for (const auto& light : lights) {
           nanort::Ray<float> lightRay;
 
-          // glm::vec3 org(isect.u, isect.v, isect.t);
           glm::vec3 dir = light.position - hit;
           glm::normalize(dir);
-          hit += 0.00001f * dir;  // bias
+          hit += 0.00001f * dir;  // some bias
 
           memcpy(lightRay.org, toArr<float>(hit).data(), 3 * sizeof(float));
           memcpy(lightRay.dir, toArr<float>(dir).data(), 3 * sizeof(float));
 
           // 2) if nothing was hit, draw pixel with shader
           if (!accel.Traverse(lightRay, triangle_intersector, &isect)) {
-            // This object represet a fragment shader, and is literally a
+            // This object represent a fragment shader, and is literally a
             // translation in C++ from an official example from khronos
             pbr_maths::PBRShaderCPU shader;
 
@@ -299,13 +301,15 @@ int main() {
             shader.u_BaseColorFactor = glm::vec4{
                 material.albedo.r, material.albedo.g, material.albedo.b, 1};
             shader.v_Position = hit;
-            shader.u_EmissiveFactor = glm::vec3{material.emissiveness, material.emissiveness, material.emissiveness};
+            shader.u_EmissiveFactor =
+                glm::vec3{material.emissiveness, material.emissiveness,
+                          material.emissiveness};
 
             shader.u_LightDirection = dir;
             shader.u_LightColor =
                 glm::vec3(light.color.r, light.color.g, light.color.b);
 
-            // shader.v_Normal =
+            // Interpolate the normals
             glm::vec3 n0{mesh.facevarying_normals[3 * 3 * isect.prim_id + 0],
                          mesh.facevarying_normals[3 * 3 * isect.prim_id + 1],
                          mesh.facevarying_normals[3 * 3 * isect.prim_id + 2]};
@@ -315,8 +319,8 @@ int main() {
             glm::vec3 n2{mesh.facevarying_normals[3 * 3 * isect.prim_id + 6],
                          mesh.facevarying_normals[3 * 3 * isect.prim_id + 7],
                          mesh.facevarying_normals[3 * 3 * isect.prim_id + 8]};
-            auto computedNormal = glm::normalize
-                ((1.0f - isect.u - isect.v) * n0 + isect.u * n1 + isect.v * n2);
+            auto computedNormal = glm::normalize(
+                (1.0f - isect.u - isect.v) * n0 + isect.u * n1 + isect.v * n2);
 
             shader.v_Normal = computedNormal;
             shader.v_UV = uv;
@@ -350,8 +354,14 @@ int main() {
             }
 
             if (brdfLUT.pixels) {
-              shader.useILB = true;
+              shader.use_ILB_BRDF_LUT = !shader.forceBRDFCompute;
               shader.u_brdfLUT = brdfLUT;
+            } else {
+              shader.use_ILB_BRDF_LUT = false;
+            }
+            if (diffuseEnvMap.faces[0].pixels &&
+                specularEnvMap.faces[0].pixels) {
+              shader.useILB = true;
               shader.u_DiffuseEnvSampler = diffuseEnvMap;
               shader.u_SpecularEnvSampler = specularEnvMap;
               shader.u_ScaleIBLAmbient = {
@@ -366,9 +376,12 @@ int main() {
             shader.main();
 
             // Accumulate the color
-            pixel.r += std::min<int>(255, 255 * shader.gl_FragColor.r);
-            pixel.g += std::min<int>(255, 255 * shader.gl_FragColor.g);
-            pixel.b += std::min<int>(255, 255 * shader.gl_FragColor.b);
+            pixel.r =
+                std::min<int>(255, pixel.r + int(255 * shader.gl_FragColor.r));
+            pixel.g =
+                std::min<int>(255, pixel.g + int(255 * shader.gl_FragColor.g));
+            pixel.b =
+                std::min<int>(255, pixel.b + int(255 * shader.gl_FragColor.b));
           }
         }
       }
@@ -384,9 +397,7 @@ int main() {
   metalRoughMap.releasePixels();
   specularEnvMap.releasePixels();
   diffuseEnvMap.releasePixels();
-  brdfLUT.releasePixels();
-
-
+  // brdfLUT.releasePixels();
 
   return 0;
 }

@@ -30,5 +30,4 @@ struct PbrMaterial {
   T ILBContrib;
 };
 
-
 using Material = PbrMaterial<float>;

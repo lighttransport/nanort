@@ -16,30 +16,33 @@ static std::string GetFilePathExtension(const std::string &FileName) {
 ///
 /// Loads glTF 2.0 mesh
 ///
-bool LoadGLTF(const std::string &filename, float scale,
-              Mesh<float>& mesh,/*
-              std::vector<Material> *materials,
-              */std::vector<Texture>& textures) {
-  // TODO(syoyo): Texture
-  // TODO(syoyo): Material
+bool LoadGLTF(const std::string &filename, float scale, Mesh<float> &mesh,
+ std::vector<Texture> &textures) {
+
+  std::cout << "Loading " << filename << '\n';
 
   tinygltf::Model model;
   tinygltf::TinyGLTF loader;
-  std::string err;
+  std::string err, warn;
   const std::string ext = GetFilePathExtension(filename);
 
   bool ret = false;
-  if (ext.compare("glb") == 0) {
+  if (ext == "glb") {
     // assume binary glTF.
-    ret = loader.LoadBinaryFromFile(&model, &err, filename.c_str());
+    ret = loader.LoadBinaryFromFile(&model, &err, &warn, filename);
   } else {
-    // assume ascii glTF.
-    ret = loader.LoadASCIIFromFile(&model, &err, filename.c_str());
+    // assume ASCII glTF.
+    ret = loader.LoadASCIIFromFile(&model, &err, &warn, filename);
+  }
+
+  if (!warn.empty()) {
+    std::cerr << "glTF parse warning: " << warn << std::endl;
   }
 
   if (!err.empty()) {
     std::cerr << "glTF parse error: " << err << std::endl;
   }
+
   if (!ret) {
     std::cerr << "Failed to load glTF: " << filename << std::endl;
     return false;
@@ -134,12 +137,12 @@ bool LoadGLTF(const std::string &filename, float scale,
       const auto &indices = *indicesArrayPtr;
 
       if (indicesArrayPtr) {
-        //std::cout << "indices: ";
+        // std::cout << "indices: ";
         for (size_t i(0); i < indicesArrayPtr->size(); ++i) {
-          //std::cout << indices[i] << " ";
+          // std::cout << indices[i] << " ";
           loadedMesh.faces.push_back(indices[i]);
         }
-        //std::cout << '\n';
+        // std::cout << '\n';
       }
 
       switch (meshPrimitive.mode) {
@@ -177,7 +180,7 @@ bool LoadGLTF(const std::string &filename, float scale,
               loadedMesh.faces.push_back(triangleStrip[i]);
             }
           }
-        case TINYGLTF_MODE_TRIANGLES:  // this is the simpliest case to handle
+        case TINYGLTF_MODE_TRIANGLES:  // this is the simplest case to handle
 
         {
           std::cout << "TRIANGLES\n";
@@ -200,12 +203,12 @@ bool LoadGLTF(const std::string &filename, float scale,
               std::cout << "found position attribute\n";
 
               // get the position min/max for computing the boundingbox
-              pMin.x = attribAccessor.minValues[0];
-              pMin.y = attribAccessor.minValues[1];
-              pMin.z = attribAccessor.minValues[2];
-              pMax.x = attribAccessor.maxValues[0];
-              pMax.y = attribAccessor.maxValues[1];
-              pMax.z = attribAccessor.maxValues[2];
+              pMin.x = (float)attribAccessor.minValues[0];
+              pMin.y = (float)attribAccessor.minValues[1];
+              pMin.z = (float)attribAccessor.minValues[2];
+              pMax.x = (float)attribAccessor.maxValues[0];
+              pMax.y = (float)attribAccessor.maxValues[1];
+              pMax.z = (float)attribAccessor.maxValues[2];
 
               switch (attribAccessor.type) {
                 case TINYGLTF_TYPE_VEC3: {
@@ -272,7 +275,7 @@ bool LoadGLTF(const std::string &filename, float scale,
                           arrayAdapter<v2f>(dataPtr, count, byte_stride));
 
                       for (size_t i{0}; i < indices.size() / 3; ++i) {
-                        // get the i'th triange's indexes
+                        // get the i'th triangle's indexes
                         auto f0 = indices[3 * i + 0];
                         auto f1 = indices[3 * i + 1];
                         auto f2 = indices[3 * i + 2];
@@ -302,7 +305,7 @@ bool LoadGLTF(const std::string &filename, float scale,
                           arrayAdapter<v2d>(dataPtr, count, byte_stride));
 
                       for (size_t i{0}; i < indices.size() / 3; ++i) {
-                        // get the i'th triange's indexes
+                        // get the i'th triangle's indexes
                         auto f0 = indices[3 * i + 0];
                         auto f1 = indices[3 * i + 1];
                         auto f2 = indices[3 * i + 2];
@@ -327,7 +330,7 @@ bool LoadGLTF(const std::string &filename, float scale,
                   }
                 } break;
                 default:
-                  std::cerr << "unreconized componant type for UV";
+                  std::cerr << "unrecognized component type for UV";
               }
             }
 
@@ -348,7 +351,7 @@ bool LoadGLTF(const std::string &filename, float scale,
 
                       // For each triangle :
                       for (size_t i{0}; i < indices.size() / 3; ++i) {
-                        // get the i'th triange's indexes
+                        // get the i'th triangle's indexes
                         auto f0 = indices[3 * i + 0];
                         auto f1 = indices[3 * i + 1];
                         auto f2 = indices[3 * i + 2];
@@ -366,7 +369,7 @@ bool LoadGLTF(const std::string &filename, float scale,
 
                         loadedMesh.facevarying_normals.push_back(n1.x);
                         loadedMesh.facevarying_normals.push_back(n1.y);
-                        loadedMesh.facevarying_normals.push_back(n2.z);
+                        loadedMesh.facevarying_normals.push_back(n1.z);
 
                         loadedMesh.facevarying_normals.push_back(n2.x);
                         loadedMesh.facevarying_normals.push_back(n2.y);
@@ -384,7 +387,7 @@ bool LoadGLTF(const std::string &filename, float scale,
 
                       // For each triangle :
                       for (size_t i{0}; i < indices.size() / 3; ++i) {
-                        // get the i'th triange's indexes
+                        // get the i'th triangle's indexes
                         auto f0 = indices[3 * i + 0];
                         auto f1 = indices[3 * i + 1];
                         auto f2 = indices[3 * i + 2];
@@ -402,7 +405,7 @@ bool LoadGLTF(const std::string &filename, float scale,
 
                         loadedMesh.facevarying_normals.push_back(n1.x);
                         loadedMesh.facevarying_normals.push_back(n1.y);
-                        loadedMesh.facevarying_normals.push_back(n2.z);
+                        loadedMesh.facevarying_normals.push_back(n1.z);
 
                         loadedMesh.facevarying_normals.push_back(n2.x);
                         loadedMesh.facevarying_normals.push_back(n2.y);
@@ -410,7 +413,7 @@ bool LoadGLTF(const std::string &filename, float scale,
                       }
                     } break;
                     default:
-                      std::cerr << "Unhandeled componant type for normal\n";
+                      std::cerr << "Unhandeled component type for normal\n";
                   }
                 } break;
                 default:
@@ -446,41 +449,20 @@ bool LoadGLTF(const std::string &filename, float scale,
         loadedMesh.vertices[3 * v + 2] -= bCenter.z;
       }
 
-      //loadedMesh.pivot_xform[0][0] = 1.0f;
-      //loadedMesh.pivot_xform[0][1] = 0.0f;
-      //loadedMesh.pivot_xform[0][2] = 0.0f;
-      //loadedMesh.pivot_xform[0][3] = 0.0f;
 
-      //loadedMesh.pivot_xform[1][0] = 0.0f;
-      //loadedMesh.pivot_xform[1][1] = 1.0f;
-      //loadedMesh.pivot_xform[1][2] = 0.0f;
-      //loadedMesh.pivot_xform[1][3] = 0.0f;
-
-      //loadedMesh.pivot_xform[2][0] = 0.0f;
-      //loadedMesh.pivot_xform[2][1] = 0.0f;
-      //loadedMesh.pivot_xform[2][2] = 1.0f;
-      //loadedMesh.pivot_xform[2][3] = 0.0f;
-
-      //loadedMesh.pivot_xform[3][0] = bCenter.x;
-      //loadedMesh.pivot_xform[3][1] = bCenter.y;
-      //loadedMesh.pivot_xform[3][2] = bCenter.z;
-      //loadedMesh.pivot_xform[3][3] = 1.0f;
-
-      //// TODO handle materials
-      //for (size_t i{0}; i < loadedMesh.faces.size(); ++i)
-      //  loadedMesh.material_ids.push_back(materials->at(0).id);
-
-      //meshes->push_back(loadedMesh);
       mesh = std::move(loadedMesh);
       ret = true;
     }
   }
+
+
   std::map<int, Texture::usage> textureUsedFor;
+
   // Iterate through all texture declaration in glTF file
-  for (const auto &gltfMaterial : model.materials)
-  {
-    for (const auto &content : gltfMaterial.values)
-    {
+  for (const auto &gltfMaterial : model.materials) {
+
+    //Iterate through material definitions to get PBR texture usages, and record them
+    for (const auto &content : gltfMaterial.values) {
       if (content.first == "baseColorTexture") {
         textureUsedFor[content.second.TextureIndex()] =
             Texture::usage::baseColor;
@@ -490,11 +472,9 @@ bool LoadGLTF(const std::string &filename, float scale,
         textureUsedFor[content.second.TextureIndex()] =
             Texture::usage::metal_rough;
       }
-
     }
 
-    for (const auto &content : gltfMaterial.additionalValues)
-    {
+    for (const auto &content : gltfMaterial.additionalValues) {
       if (content.first == "normalTexture") {
         textureUsedFor[content.second.TextureIndex()] = Texture::usage::normal;
       }
@@ -502,30 +482,33 @@ bool LoadGLTF(const std::string &filename, float scale,
       if (content.first == "emissiveTexture") {
         textureUsedFor[content.second.TextureIndex()] = Texture::usage::emit;
       }
-
     }
-
-
   }
-  for (const auto &gltfTexture : model.textures) {
-    std::cout << "Found texture!";
-    Texture loadedTexture;
 
+  //Load texture data
+  for (const auto &gltfTexture : model.textures) {
+
+    Texture loadedTexture{};
+
+    //Get texture data layout information
     const auto &image = model.images[gltfTexture.source];
     loadedTexture.components = image.component;
     loadedTexture.width = image.width;
     loadedTexture.height = image.height;
 
-    auto usageIt = textureUsedFor.find(gltfTexture.source);
-    if (usageIt != textureUsedFor.end())
-    {
+    //Check if texture is used as part of material, if so, tag the texture with the usage enum
+    const auto usageIt = textureUsedFor.find(gltfTexture.source);
+    if (usageIt != textureUsedFor.end()) {
       loadedTexture.use = (*usageIt).second;
     }
 
+    //Load bytes into texture array
     const auto size =
         image.component * image.width * image.height * sizeof(unsigned char);
     loadedTexture.image = new unsigned char[size];
     memcpy(loadedTexture.image, image.image.data(), size);
+
+    //Add texture to usable textures
     textures.push_back(loadedTexture);
   }
   return ret;

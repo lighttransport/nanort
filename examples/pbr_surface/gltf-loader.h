@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "material.h"
-#include "texture.h"
 #include "mesh.h"
+#include "texture.h"
 
 namespace example {
 
@@ -158,9 +158,9 @@ struct v4dArray {
 ///
 /// Loads glTF 2.0 mesh
 ///
-bool LoadGLTF(const std::string &filename, float scale,
-              Mesh<float>& mesh,
-              /*,std::vector<Material> *materials,*/ std::vector<Texture>& textures);
+bool LoadGLTF(
+    const std::string &filename, float scale, Mesh<float> &mesh,
+    /*,std::vector<Material> *materials,*/ std::vector<Texture> &textures);
 
 }  // namespace example
 

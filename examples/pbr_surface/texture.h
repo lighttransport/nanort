@@ -1,13 +1,9 @@
 #pragma once
 
-struct Texture
-{
-  enum class usage : unsigned char
-  {
-    baseColor, normal, emit, metal_rough
-  };
+struct Texture {
+  enum class usage : unsigned char { baseColor, normal, emit, metal_rough };
 
   usage use;
-  size_t width, height, components;
+  int width, height, components;
   unsigned char* image;
 };
