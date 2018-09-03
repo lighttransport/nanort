@@ -20,22 +20,22 @@ Path tracing example contributed by https://github.com/daseyb
 * Custom geometry & intersection
   * Built-in triangle mesh gemetry & intersector is provided.
 * Cross platform
-  * MacOSX, Linux, Windows, iOS, Android, ARM, x86, SPARC, (maybe)MIPS, (will be)RISC-V, etc.
-  * For example, NanoRT works finely on Raspberry Pi 2(arm 32bit) and Raspberrry Pi 3!(AARCH64 kernel)
+  * MacOSX, Linux, Windows, iOS, Android, ARM, x86, SPARC, (maybe) MIPS, (will be) RISC-V, etc.
+  * For example, NanoRT works finely on Raspberry Pi 2 (arm 32bit) and Raspberrry Pi 3!(AARCH64 kernel)
 * GPU efficient data structure
-  * Built BVH tree from `NanoRT` is a linear array and does not have pointers, thus it is suited for GPU raytracing(GPU ray traversal).
+  * Built BVH tree from `NanoRT` is a linear array and does not have pointers, thus it is suited for GPU raytracing (GPU ray traversal).
 * OpenMP multithreaded BVH build.
 * Robust intersection calculation.
-  * Robust BVH Ray Traversal(using up to 4 ulp version): http://jcgt.org/published/0002/02/02/
+  * Robust BVH Ray Traversal (using up to 4 ulp version): http://jcgt.org/published/0002/02/02/
   * Watertight Ray/Triangle Intesection: http://jcgt.org/published/0002/01/05/
 * Double precision support
-  * Benefitical for HPC and scientific visualization.
+  * Beneficial for HPC and scientific visualization.
 
 ## Applications
 
 * Test renderer for your light transport algorithm development.
 * Test renderer for your shader language development.
-* Collision detection(ray casting).
+* Collision detection (ray casting).
 * BVH builder for GPU/Accelerator ray traversal.
 * Add 2D/3D rendering feature for non-GPU system.
   * [ ] ImGui backend? https://github.com/syoyo/imgui/tree/nanort
@@ -49,7 +49,7 @@ Path tracing example contributed by https://github.com/daseyb
 
 ## API
 
-`nanort::Ray` represents ray. The origin `org`, the direction `dir`(not necessarily normalized), the minimum hit distance `min_t`(usually 0.0) and the maximum hit distance `max_t`(usually too far, e.g. 1.0e+30) must be filled before shooting ray.
+`nanort::Ray` represents ray. The origin `org`, the direction `dir` (not necessarily normalized), the minimum hit distance `min_t`(usually 0.0) and the maximum hit distance `max_t` (usually too far, e.g. 1.0e+30) must be filled before shooting ray.
 
 `nanort::BVHAccel` builds BVH data structure from geometry, and provides the function to find intersection point for a given ray.
 
@@ -106,8 +106,8 @@ Application must prepare geometric information and store it in linear array.
 
 For a builtin Triangle intersector,
 
-* `vertices` : The array of triangle vertices(e.g. xyz * numVertices)
-* `faces` : The array of triangle face indices(3 * numFaces)
+* `vertices` : The array of triangle vertices (e.g. xyz * numVertices)
+* `faces` : The array of triangle face indices (3 * numFaces)
 * `stride` : Byte stride of each vertex data
 
 are required attributes.
