@@ -4,11 +4,10 @@
 
 #define HAS_NORMALS
 
-#define ADD_TEMPLATED_TYPES(fp_type) \
-    using t_vec2 = glm::vec<2, fp_type, glm::precision::highp>;\
-    using t_vec3 = glm::vec<3, fp_type, glm::precision::highp>;\
-    using t_vec4 = glm::vec<4, fp_type, glm::precision::highp>;\
-
+#define ADD_TEMPLATED_TYPES(fp_type)                          \
+  using t_vec2 = glm::vec<2, fp_type, glm::precision::highp>; \
+  using t_vec3 = glm::vec<3, fp_type, glm::precision::highp>; \
+  using t_vec4 = glm::vec<4, fp_type, glm::precision::highp>;
 
 // This is inspired by the sample implementation from khronos found here :
 // https://github.com/KhronosGroup/glTF-WebGL-PBR/blob/master/shaders/pbr-frag.glsl
@@ -26,9 +25,9 @@ constexpr static double const M_PI = 3.141592653589793;
 // GLSL data types
 using glm::mat3;
 using glm::mat4;
-//using glm::t_vec2;
-//using glm::vec3;
-//using glm::t_vec4;
+// using glm::t_vec2;
+// using glm::vec3;
+// using glm::t_vec4;
 
 // GLSL functions
 using glm::clamp;
@@ -40,11 +39,9 @@ using glm::mix;
 using glm::normalize;
 using glm::step;
 
-
 /// GLSL sampler2D object
 template <typename fp_type>
 struct sampler2D {
-
   ADD_TEMPLATED_TYPES(fp_type);
 
   enum class outOfBounds { clamp, wrap };
@@ -128,7 +125,8 @@ fp_type lerp(fp_type a, fp_type b, fp_type f) {
 
 /// Replicate the texture2D function from GLSL
 template <typename fp_type, typename uv_vec>
-auto texture2D(const sampler2D<fp_type>& sampler, const uv_vec& uv) {
+    glm::vec < 4,
+    fp_type, glm::precision::highp> texture2D(const sampler2D<fp_type>& sampler, const uv_vec& uv) {
   ADD_TEMPLATED_TYPES(fp_type)
   auto pixelUV = sampler.getPixelUV(uv);
   auto px_x = std::get<0>(pixelUV);
@@ -243,7 +241,9 @@ void convert_xyz_to_cube_uv(fp_type x, fp_type y, fp_type z, int* index,
 }
 
 template <typename fp_type>
-auto textureCube(const samplerCube<fp_type>& sampler, glm::vec<3, fp_type, glm::precision::highp> direction) {
+glm::vec<4, fp_type, glm::precision::highp> textureCube(const samplerCube<fp_type>& sampler,
+                 glm::vec<3, fp_type, glm::precision::highp> direction) {
+  ADD_TEMPLATED_TYPES(fp_type);
   int i;
   t_vec2 uv;
   normalize(direction);
@@ -265,12 +265,12 @@ struct PBRInfo {
   fp_type perceptualRoughness;  // roughness value, as authored by the model
                                 // creator (input to shader)
   fp_type metalness;            // metallic value at the surface
-  t_vec3 reflectance0;       // full reflectance color (normal incidence angle)
-  t_vec3 reflectance90;      // reflectance color at grazing angle
+  t_vec3 reflectance0;     // full reflectance color (normal incidence angle)
+  t_vec3 reflectance90;    // reflectance color at grazing angle
   fp_type alphaRoughness;  // roughness mapped to a more linear change in the
                            // roughness (proposed by [2])
-  t_vec3 diffuseColor;       // color contribution from diffuse lighting
-  t_vec3 specularColor;      // color contribution from specular lighting
+  t_vec3 diffuseColor;     // color contribution from diffuse lighting
+  t_vec3 specularColor;    // color contribution from specular lighting
 };
 
 #define MANUAL_SRGB ;
@@ -280,7 +280,6 @@ struct PBRInfo {
 /// global for the shader and set by OpenGL call when using the program
 template <typename fp_type>
 struct PBRShaderCPU {
-
   ADD_TEMPLATED_TYPES(fp_type);
 
   /// Virtual output : color of the "fragment" (aka: the pixel here)
@@ -294,9 +293,10 @@ struct PBRShaderCPU {
     t_vec3 linOut = pow(srgbIn.xyz, t_vec3(2.2));
 #else   // SRGB_FAST_APPROXIMATION
     t_vec3 bLess = step(t_vec3(0.04045), t_vec3(srgbIn));
-    t_vec3 linOut = mix(
-        t_vec3(srgbIn) / t_vec3(12.92),
-        pow((t_vec3(srgbIn) + t_vec3(0.055)) / t_vec3(1.055), t_vec3(2.4)), bLess);
+    t_vec3 linOut =
+        mix(t_vec3(srgbIn) / t_vec3(12.92),
+            pow((t_vec3(srgbIn) + t_vec3(0.055)) / t_vec3(1.055), t_vec3(2.4)),
+            bLess);
 #endif  // SRGB_FAST_APPROXIMATION
     return t_vec4(linOut, srgbIn.w);
     ;
@@ -335,7 +335,8 @@ struct PBRShaderCPU {
     H.z = cosTheta;
 
     // from tangent-space vector to world-space sample vector
-    t_vec3 up = abs(N.z) < 0.999 ? t_vec3(0.0, 0.0, 1.0) : t_vec3(1.0, 0.0, 0.0);
+    t_vec3 up =
+        abs(N.z) < 0.999 ? t_vec3(0.0, 0.0, 1.0) : t_vec3(1.0, 0.0, 0.0);
     t_vec3 tangent = normalize(cross(up, N));
     t_vec3 bitangent = cross(N, tangent);
 
@@ -401,7 +402,8 @@ struct PBRShaderCPU {
   // as outlined in [1]. See our README.md on Environment Maps [3] for
   // additional discussion.
 
-  t_vec3 getIBLContribution(PBRInfo<fp_type> pbrInputs, t_vec3 n, t_vec3 reflection) {
+  t_vec3 getIBLContribution(PBRInfo<fp_type> pbrInputs, t_vec3 n,
+                            t_vec3 reflection) {
     float mipCount = 9.0f;  // resolution of 512x512
     float lod = pbrInputs.perceptualRoughness * mipCount;
     // retrieve a scale and bias to F0. See [1], Figure 3
@@ -417,11 +419,12 @@ struct PBRShaderCPU {
       brdf.y = brdf3.y;
     } else {
       brdf = t_vec2(IntegrateBRDF(pbrInputs.NdotV,
-                                1.0 - pbrInputs.perceptualRoughness,
-                                brdfResolution));
+                                  1.0 - pbrInputs.perceptualRoughness,
+                                  brdfResolution));
     }
 
-    t_vec3 diffuseLight = t_vec3(SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, n)));
+    t_vec3 diffuseLight =
+        t_vec3(SRGBtoLINEAR(textureCube(u_DiffuseEnvSampler, n)));
 
 #ifdef USE_TEX_LOD
     t_vec3 specularLight =
@@ -433,7 +436,8 @@ struct PBRShaderCPU {
 #endif
 
     t_vec3 diffuse = diffuseLight * pbrInputs.diffuseColor;
-    t_vec3 specular = specularLight * (pbrInputs.specularColor * brdf.x + brdf.y);
+    t_vec3 specular =
+        specularLight * (pbrInputs.specularColor * brdf.x + brdf.y);
 
     // For presentation, this allows us to disable IBL terms
     diffuse *= u_ScaleIBLAmbient.x;
@@ -461,7 +465,8 @@ struct PBRShaderCPU {
       metallic = mrSample.b * metallic;
     }
 
-    perceptualRoughness = clamp(perceptualRoughness, fp_type(c_MinRoughness), fp_type(1.0));
+    perceptualRoughness =
+        clamp(perceptualRoughness, fp_type(c_MinRoughness), fp_type(1.0));
     metallic = clamp(metallic, fp_type(0.0), fp_type(1.0));
     // Roughness is authored as perceptual roughness; as is convention,
     // convert to material roughness by squaring the perceptual roughness [2].
@@ -489,15 +494,18 @@ struct PBRShaderCPU {
     // grazing reflectance to 100% for typical fresnel effect. For very low
     // reflectance range on highly diffuse objects (below 4%), incrementally
     // reduce grazing reflectance to 0%.
-    fp_type reflectance90 = clamp(reflectance * fp_type(25.0), fp_type(0.0), fp_type(1.0));
+    fp_type reflectance90 =
+        clamp(reflectance * fp_type(25.0), fp_type(0.0), fp_type(1.0));
     t_vec3 specularEnvironmentR0 = specularColor;
-    t_vec3 specularEnvironmentR90 = t_vec3(fp_type(1), fp_type(1), fp_type(1)) * reflectance90;
+    t_vec3 specularEnvironmentR90 =
+        t_vec3(fp_type(1), fp_type(1), fp_type(1)) * reflectance90;
 
     t_vec3 n = getNormal();  // normal at surface point
     t_vec3 v = normalize(u_Camera -
-                       v_Position);  // Vector from surface point to camera
-    t_vec3 l = normalize(u_LightDirection);  // Vector from surface point to light
-    t_vec3 h = normalize(l + v);             // Half vector between both l and v
+                         v_Position);  // Vector from surface point to camera
+    t_vec3 l =
+        normalize(u_LightDirection);  // Vector from surface point to light
+    t_vec3 h = normalize(l + v);      // Half vector between both l and v
     t_vec3 reflection = -normalize(reflect(v, n));
 
     fp_type NdotL = clamp(dot(n, l), 0.001f, 1.0f);
@@ -546,8 +554,8 @@ struct PBRShaderCPU {
     }
 
     if (useEmissiveMap) {
-      t_vec3 emissive = SRGBtoLINEAR(
-          t_vec4(t_vec3(texture2D(u_EmissiveSampler, v_UV)) * u_EmissiveFactor, 1));
+      t_vec3 emissive = SRGBtoLINEAR(t_vec4(
+          t_vec3(texture2D(u_EmissiveSampler, v_UV)) * u_EmissiveFactor, 1));
       color += emissive;
     }
 
@@ -606,8 +614,8 @@ struct PBRShaderCPU {
     t_vec3 n;
     if (useNormalMap) {
       n = t_vec3(texture2D(u_NormalSampler, v_UV));
-      n = normalize(
-          tbn * ((2.0f * n - 1.0f) * t_vec3(u_NormalScale, u_NormalScale, 1.0)));
+      n = normalize(tbn * ((2.0f * n - 1.0f) *
+                           t_vec3(u_NormalScale, u_NormalScale, 1.0)));
     } else {
       // The tbn matrix is linearly interpolated, so we need to re-normalize
       n = normalize(tbn[2]);
@@ -729,6 +737,5 @@ struct PBRShaderCPU {
 };
 
 }  // namespace pbr_maths
-
 
 #undef ADD_TEMPLATED_TYPES
