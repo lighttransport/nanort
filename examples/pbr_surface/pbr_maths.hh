@@ -7,7 +7,9 @@
 #define ADD_TEMPLATED_TYPES(fp_type)                          \
   using t_vec2 = glm::vec<2, fp_type, glm::precision::highp>; \
   using t_vec3 = glm::vec<3, fp_type, glm::precision::highp>; \
-  using t_vec4 = glm::vec<4, fp_type, glm::precision::highp>;
+  using t_vec4 = glm::vec<4, fp_type, glm::precision::highp>; \
+  using t_mat3 = glm::mat<3, 3, fp_type, glm::precision::highp>;
+
 
 // This is inspired by the sample implementation from khronos found here :
 // https://github.com/KhronosGroup/glTF-WebGL-PBR/blob/master/shaders/pbr-frag.glsl
@@ -22,12 +24,6 @@ constexpr static double const c_MinRoughness = 0.04;
 constexpr static double const M_PI = 3.141592653589793;
 #endif
 
-// GLSL data types
-using glm::mat3;
-using glm::mat4;
-// using glm::t_vec2;
-// using glm::vec3;
-// using glm::t_vec4;
 
 // GLSL functions
 using glm::clamp;
@@ -509,11 +505,11 @@ struct PBRShaderCPU {
     t_vec3 h = normalize(l + v);      // Half vector between both l and v
     t_vec3 reflection = -normalize(reflect(v, n));
 
-    fp_type NdotL = clamp(dot(n, l), 0.001f, 1.0f);
-    fp_type NdotV = clamp(std::abs(dot(n, v)), 0.001f, 1.0f);
-    fp_type NdotH = clamp(dot(n, h), 0.0f, 1.0f);
-    fp_type LdotH = clamp(dot(l, h), 0.0f, 1.0f);
-    fp_type VdotH = clamp(dot(v, h), 0.0f, 1.0f);
+    fp_type NdotL = clamp(dot(n, l), fp_type(0.001), fp_type(1.0));
+    fp_type NdotV = clamp(std::abs(dot(n, v)), fp_type(0.001), fp_type(1.0));
+    fp_type NdotH = clamp(dot(n, h), fp_type(0.0), fp_type(1.0));
+    fp_type LdotH = clamp(dot(l, h), fp_type(0.0), fp_type(1.0));
+    fp_type VdotH = clamp(dot(v, h), fp_type(0.0), fp_type(1.0));
 
     // Hey, modern C++ uniform initialization syntax just works!
     PBRInfo<fp_type> pbrInputs = PBRInfo<fp_type>{NdotL,
@@ -608,15 +604,15 @@ struct PBRShaderCPU {
 
     t = normalize(t - ng * dot(ng, t));
     t_vec3 b = normalize(cross(ng, t));
-    mat3 tbn = mat3(t, b, ng);
+    t_mat3 tbn = t_mat3(t, b, ng);
 #else  // HAS_TANGENTS
-    mat3 tbn = v_TBN;
+    t_mat3 tbn = v_TBN;
 #endif
     t_vec3 n;
     if (useNormalMap) {
       n = t_vec3(texture2D(u_NormalSampler, v_UV));
-      n = normalize(tbn * ((2.0f * n - 1.0f) *
-                           t_vec3(u_NormalScale, u_NormalScale, 1.0)));
+      n = normalize(tbn * ((fp_type(2.0) * n - fp_type(1.0f)) *
+                           t_vec3(u_NormalScale, u_NormalScale, fp_type(1.0))));
     } else {
       // The tbn matrix is linearly interpolated, so we need to re-normalize
       n = normalize(tbn[2]);
@@ -651,7 +647,9 @@ struct PBRShaderCPU {
   t_vec3 specularReflection(PBRInfo<fp_type> pbrInputs) {
     return pbrInputs.reflectance0 +
            (pbrInputs.reflectance90 - pbrInputs.reflectance0) *
-               std::pow(clamp(1.0f - pbrInputs.VdotH, 0.0f, 1.0f), 5.0f);
+               std::pow(clamp(fp_type(1.0) - pbrInputs.VdotH, fp_type(0.0),
+                              fp_type(1.0)),
+                        fp_type(5.0));
   }
 
   // This calculates the specular geometric attenuation (aka G()),
@@ -664,9 +662,11 @@ struct PBRShaderCPU {
     fp_type r = pbrInputs.alphaRoughness;
 
     fp_type attenuationL =
-        2.0f * NdotL / (NdotL + sqrt(r * r + (1.0f - r * r) * (NdotL * NdotL)));
+        2.0f * NdotL /
+        (NdotL + sqrt(r * r + (fp_type(1.0) - r * r) * (NdotL * NdotL)));
     fp_type attenuationV =
-        2.0f * NdotV / (NdotV + sqrt(r * r + (1.0f - r * r) * (NdotV * NdotV)));
+        2.0f * NdotV /
+        (NdotV + sqrt(r * r + (fp_type(1.0) - r * r) * (NdotV * NdotV)));
     return attenuationL * attenuationV;
   }
 
@@ -681,7 +681,7 @@ struct PBRShaderCPU {
     fp_type f =
         (pbrInputs.NdotH * roughnessSq - pbrInputs.NdotH) * pbrInputs.NdotH +
         1.0f;
-    return roughnessSq / (M_PI * f * f);
+    return roughnessSq / (fp_type(M_PI) * f * f);
   }
 
   // Global state of the original shader enclosed into member variables
@@ -730,7 +730,7 @@ struct PBRShaderCPU {
 
 #ifdef HAS_NORMALS
 #ifdef HAS_TANGENTS
-  mat3 v_TBN;
+  t_mat3 v_TBN;
 #else
   t_vec3 v_Normal;
 #endif
