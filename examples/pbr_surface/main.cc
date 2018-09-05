@@ -24,7 +24,7 @@
 #include "mesh.h"
 #include "utility.h"
 
-using float_precision = double;
+using float_precision = long double;
 
 void loadSampler(pbr_maths::sampler2D < float_precision >& sampler,
                  const stbi_uc* data, int w,
@@ -85,7 +85,7 @@ void loadSamplerCube(pbr_maths::samplerCube < float_precision  >& cubemap,
 int main() {
   pbr_maths::sampler2D < float_precision > normalMap, baseColorMap, emissiveMap,
       brdfLUT;
-  int w, h, c;
+//  int w, h, c;
   // auto normdata = stbi_load("./MetalPlates02_nrm.jpg", &w, &h, &c, 0);
   // if (normdata) loadSampler(normalMap, normdata, w, h, c);
 

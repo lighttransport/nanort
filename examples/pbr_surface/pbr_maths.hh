@@ -75,16 +75,16 @@ struct sampler2D {
     // wrap uvs
     t_vec2 buv;
 
-    auto in_bound = [=](float a) {
+    auto in_bound = [=](fp_type a) {
       switch (boundsOperation) {
         case outOfBounds::clamp:
-          clamp(a, 0.f, 0.99999f);
+          clamp(a, fp_type(0), fp_type(0.99999));
           break;
 
         case outOfBounds::wrap:
-          if (a > 1) a = fmod(a, 1.0f);
+          if (a > 1) a = fmod(a, fp_type(1.0));
           if (a < 0) {
-            a = 1 - fmod(abs(a), 1.0f);
+            a = 1 - fmod(abs(a), fp_type(1.0));
           }
           break;
       }
@@ -161,20 +161,20 @@ struct samplerCube {
   }
 };
 
-/// Get the cooresponding UV and face index of a cubemap from a ray/normal
+/// Get the corresponding UV and face index of a cubemap from a ray/normal
 /// vector
 template <typename fp_type>
 void convert_xyz_to_cube_uv(fp_type x, fp_type y, fp_type z, int* index,
                             fp_type* u, fp_type* v) {
-  float absX = fabs(x);
-  float absY = fabs(y);
-  float absZ = fabs(z);
+  const fp_type absX = fabs(x);
+  const fp_type absY = fabs(y);
+  const fp_type absZ = fabs(z);
 
-  int isXPositive = x > 0 ? 1 : 0;
-  int isYPositive = y > 0 ? 1 : 0;
-  int isZPositive = z > 0 ? 1 : 0;
-
-  float maxAxis, uc, vc;
+  const int isXPositive = x > 0 ? 1 : 0;
+  const int isYPositive = y > 0 ? 1 : 0;
+  const int isZPositive = z > 0 ? 1 : 0;
+ 
+  fp_type maxAxis{}, uc{}, vc{};
 
   // POSITIVE X
   if (isXPositive && absX >= absY && absX >= absZ) {
@@ -318,7 +318,7 @@ struct PBRShaderCPU {
     return t_vec2(fp_type(i) / fp_type(N), RadicalInverse_VdC(i));
   }
 
-  t_vec3 ImportanceSampleGGX(t_vec2 Xi, float roughness, t_vec3 N) {
+  t_vec3 ImportanceSampleGGX(t_vec2 Xi, fp_type roughness, t_vec3 N) {
     fp_type a = roughness * roughness;
 
     fp_type phi = 2.0 * M_PI * Xi.x;
@@ -341,7 +341,7 @@ struct PBRShaderCPU {
     return normalize(sampleVec);
   }
 
-  float GeometrySchlickGGX(fp_type NdotV, fp_type roughness) {
+  fp_type GeometrySchlickGGX(fp_type NdotV, fp_type roughness) {
     fp_type a = roughness;
     fp_type k = (a * a) / 2.0;
 
@@ -351,7 +351,7 @@ struct PBRShaderCPU {
     return nom / denom;
   }
 
-  float GeometrySmith(fp_type roughness, fp_type NoV, fp_type NoL) {
+  fp_type GeometrySmith(fp_type roughness, fp_type NoV, fp_type NoL) {
     fp_type ggx2 = GeometrySchlickGGX(NoV, roughness);
     fp_type ggx1 = GeometrySchlickGGX(NoL, roughness);
 
@@ -401,8 +401,8 @@ struct PBRShaderCPU {
 
   t_vec3 getIBLContribution(PBRInfo<fp_type> pbrInputs, t_vec3 n,
                             t_vec3 reflection) {
-    float mipCount = 9.0f;  // resolution of 512x512
-    float lod = pbrInputs.perceptualRoughness * mipCount;
+    fp_type mipCount = 9.0f;  // resolution of 512x512
+    fp_type lod = pbrInputs.perceptualRoughness * mipCount;
     // retrieve a scale and bias to F0. See [1], Figure 3
     t_vec2 brdf;
 
@@ -625,7 +625,7 @@ struct PBRShaderCPU {
   // https://archive.org/details/lambertsphotome00lambgoog See also [1],
   // Equation 1
   // t_vec3 diffuse(PBRInfo pbrInputs) {
-  //  return {pbrInputs.diffuseColor / float(M_PI)};
+  //  return {pbrInputs.diffuseColor / fp_type(M_PI)};
   //}
 
   // use Disney's equation for diffuse
@@ -701,7 +701,7 @@ struct PBRShaderCPU {
 
   bool useNormalMap = false;
   sampler2D<fp_type> u_NormalSampler;
-  float u_NormalScale = 1;
+  fp_type u_NormalScale = 1;
 
   bool useEmissiveMap = false;
   sampler2D<fp_type> u_EmissiveSampler;
@@ -712,7 +712,7 @@ struct PBRShaderCPU {
 
   bool useOcclusionMap = false;
   sampler2D<fp_type> u_OcclusionSampler;
-  float u_OcclusionStrength = 1;
+  fp_type u_OcclusionStrength = 1;
 
   t_vec2 u_MetallicRoughnessValues = {1, 1};
   t_vec4 u_BaseColorFactor;
