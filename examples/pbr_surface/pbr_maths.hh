@@ -125,8 +125,8 @@ fp_type lerp(fp_type a, fp_type b, fp_type f) {
 
 /// Replicate the texture2D function from GLSL
 template <typename fp_type, typename uv_vec>
-    glm::vec < 4,
-    fp_type, glm::precision::highp> texture2D(const sampler2D<fp_type>& sampler, const uv_vec& uv) {
+glm::vec<4, fp_type, glm::precision::highp> texture2D(
+    const sampler2D<fp_type>& sampler, const uv_vec& uv) {
   ADD_TEMPLATED_TYPES(fp_type)
   auto pixelUV = sampler.getPixelUV(uv);
   auto px_x = std::get<0>(pixelUV);
@@ -241,8 +241,9 @@ void convert_xyz_to_cube_uv(fp_type x, fp_type y, fp_type z, int* index,
 }
 
 template <typename fp_type>
-glm::vec<4, fp_type, glm::precision::highp> textureCube(const samplerCube<fp_type>& sampler,
-                 glm::vec<3, fp_type, glm::precision::highp> direction) {
+glm::vec<4, fp_type, glm::precision::highp> textureCube(
+    const samplerCube<fp_type>& sampler,
+    glm::vec<3, fp_type, glm::precision::highp> direction) {
   ADD_TEMPLATED_TYPES(fp_type);
   int i;
   t_vec2 uv;
