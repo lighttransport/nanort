@@ -26,12 +26,11 @@
 
 using float_precision = float;
 
-void loadSampler(pbr_maths::sampler2D < float_precision >& sampler,
-                 const stbi_uc* data, int w,
-                 int h, int c) {
+void loadSampler(pbr_maths::sampler2D<float_precision>& sampler,
+                 const stbi_uc* data, int w, int h, int c) {
   sampler.width = w;
   sampler.height = h;
-  sampler.pixels = new pbr_maths::sampler2D < float_precision >::pixel[w * h];
+  sampler.pixels = new pbr_maths::sampler2D<float_precision>::pixel[w * h];
   sampler.linearFiltering = true;
   for (size_t i = 0; i < w * h; ++i) {
     sampler.pixels[i].r = data[i * c + 0];
@@ -44,15 +43,14 @@ void loadSampler(pbr_maths::sampler2D < float_precision >& sampler,
 // This permit to load metal and roughness maps from different textures (instead
 // of the standard GREEN/BLUE combined one)  The shader expect theses two maps
 // as a combined one, so we are building it ourselves
-void loadCombineMetalRoughSampler(pbr_maths::sampler2D < float_precision  >&
-                                      sampler,
-                                  const stbi_uc* metalData, int mw, int mh,
-                                  int mc, const stbi_uc* roughnessData, int rw,
-                                  int rh, int rc) {
+void loadCombineMetalRoughSampler(
+    pbr_maths::sampler2D<float_precision>& sampler, const stbi_uc* metalData,
+    int mw, int mh, int mc, const stbi_uc* roughnessData, int rw, int rh,
+    int rc) {
   assert(mw == rw);
   assert(mh == rh);
 
-  sampler.pixels = new pbr_maths::sampler2D < float_precision >::pixel[mw * mh];
+  sampler.pixels = new pbr_maths::sampler2D<float_precision>::pixel[mw * mh];
 
   for (size_t i = 0; i < mw * mh; ++i) {
     // We don't really care about these ones
@@ -65,7 +63,7 @@ void loadCombineMetalRoughSampler(pbr_maths::sampler2D < float_precision  >&
 }
 
 // PLEASE RESPECT ORDER LEFT, RIGHT, UP, DOWN, FRONT, BACK
-void loadSamplerCube(pbr_maths::samplerCube < float_precision  >& cubemap,
+void loadSamplerCube(pbr_maths::samplerCube<float_precision>& cubemap,
                      const std::array<std::string, 6>& files) {
   for (size_t i{0}; i < 6; ++i) {
     cubemap.faces[i].linearFiltering = true;
@@ -83,9 +81,9 @@ void loadSamplerCube(pbr_maths::samplerCube < float_precision  >& cubemap,
 }
 
 int main() {
-  pbr_maths::sampler2D < float_precision > normalMap, baseColorMap, emissiveMap,
+  pbr_maths::sampler2D<float_precision> normalMap, baseColorMap, emissiveMap,
       brdfLUT;
-//  int w, h, c;
+  //  int w, h, c;
   // auto normdata = stbi_load("./MetalPlates02_nrm.jpg", &w, &h, &c, 0);
   // if (normdata) loadSampler(normalMap, normdata, w, h, c);
 
@@ -102,7 +100,7 @@ int main() {
 
   // brdfLUT.boundsOperation = pbr_maths::sampler2D::outOfBounds::clamp;
 
-  pbr_maths::sampler2D < float_precision > metalRoughMap;
+  pbr_maths::sampler2D<float_precision> metalRoughMap;
   // int rw, rh, rc, mw, mh, mc;
   // auto roughData = stbi_load("./MetalPlates02_rgh.jpg", &rw, &rh, &rc, 0);
   // auto metalData = stbi_load("./MetalPlates02_met.jpg", &mw, &mh, &mc, 0);
@@ -110,7 +108,7 @@ int main() {
   //  loadCombineMetalRoughSampler(metalRoughMap, metalData, mw, mh, mc,
   //                               roughData, rw, rh, rc);
 
-  pbr_maths::samplerCube < float_precision >  specularEnvMap, diffuseEnvMap;
+  pbr_maths::samplerCube<float_precision> specularEnvMap, diffuseEnvMap;
 
   loadSamplerCube(diffuseEnvMap, {"diffuse_left_0.jpg", "diffuse_right_0.jpg",
                                   "diffuse_top_0.jpg", "diffuse_bottom_0.jpg",
@@ -171,28 +169,28 @@ int main() {
     loadSampler(baseColorMap, baseColorIt->image, baseColorIt->width,
                 baseColorIt->height, baseColorIt->components);
     baseColorMap.boundsOperation =
-        pbr_maths::sampler2D < float_precision >::outOfBounds::wrap;
+        pbr_maths::sampler2D<float_precision>::outOfBounds::wrap;
   }
 
   if (normalIt != textures.end()) {
     loadSampler(normalMap, normalIt->image, normalIt->width, normalIt->height,
                 normalIt->components);
     normalMap.boundsOperation =
-        pbr_maths::sampler2D < float_precision>::outOfBounds::wrap;
+        pbr_maths::sampler2D<float_precision>::outOfBounds::wrap;
   }
 
   if (metalRoughIt != textures.end()) {
     loadSampler(metalRoughMap, metalRoughIt->image, metalRoughIt->width,
                 metalRoughIt->height, metalRoughIt->components);
     metalRoughMap.boundsOperation =
-        pbr_maths::sampler2D < float_precision>::outOfBounds::wrap;
+        pbr_maths::sampler2D<float_precision>::outOfBounds::wrap;
   }
 
   if (emitIt != textures.end()) {
     loadSampler(emissiveMap, emitIt->image, emitIt->width, emitIt->height,
                 emitIt->components);
     emissiveMap.boundsOperation =
-        pbr_maths::sampler2D < float_precision>::outOfBounds::wrap;
+        pbr_maths::sampler2D<float_precision>::outOfBounds::wrap;
   }
 
   for (auto texture : textures) delete[] texture.image;
@@ -298,7 +296,7 @@ int main() {
           if (!accel.Traverse(lightRay, triangle_intersector, &isect)) {
             // This object represent a fragment shader, and is literally a
             // translation in C++ from an official example from khronos
-            pbr_maths::PBRShaderCPU < float_precision> shader;
+            pbr_maths::PBRShaderCPU<float_precision> shader;
 
             // Fill in the uniform/varying variables
             shader.u_Camera.x = camRay.org[0];
