@@ -24,7 +24,7 @@
 #include "mesh.h"
 #include "utility.h"
 
-using float_precision = long double;
+using float_precision = float;
 
 void loadSampler(pbr_maths::sampler2D < float_precision >& sampler,
                  const stbi_uc* data, int w,

@@ -289,10 +289,10 @@ struct PBRShaderCPU {
 #ifdef SRGB_FAST_APPROXIMATION
     t_vec3 linOut = pow(srgbIn.xyz, t_vec3(2.2));
 #else   // SRGB_FAST_APPROXIMATION
-    t_vec3 bLess = step(t_vec3(0.04045), t_vec3(srgbIn));
+    t_vec3 bLess = step(t_vec3(fp_type(0.04045)), t_vec3(srgbIn));
     t_vec3 linOut =
-        mix(t_vec3(srgbIn) / t_vec3(12.92),
-            pow((t_vec3(srgbIn) + t_vec3(0.055)) / t_vec3(1.055), t_vec3(2.4)),
+        mix(t_vec3(srgbIn) / t_vec3(fp_type(12.92)),
+            pow((t_vec3(srgbIn) + t_vec3(fp_type(0.055))) / t_vec3(fp_type(1.055)), t_vec3(fp_type(2.4))),
             bLess);
 #endif  // SRGB_FAST_APPROXIMATION
     return t_vec4(linOut, srgbIn.w);
@@ -311,7 +311,7 @@ struct PBRShaderCPU {
     bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
     bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
     bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-    return fp_type(bits) * 2.3283064365386963e-10;
+    return fp_type(fp_type(bits) * 2.3283064365386963e-10);
   }
 
   t_vec2 Hammersley(unsigned int i, unsigned int N) {
@@ -321,9 +321,9 @@ struct PBRShaderCPU {
   t_vec3 ImportanceSampleGGX(t_vec2 Xi, fp_type roughness, t_vec3 N) {
     fp_type a = roughness * roughness;
 
-    fp_type phi = 2.0 * M_PI * Xi.x;
-    fp_type cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
-    fp_type sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    fp_type phi = fp_type(2.0) * fp_type(M_PI) * Xi.x;
+    fp_type cosTheta = sqrt((fp_type(1.0) - Xi.y) / (fp_type(1.0) + (a * a - fp_type(1.0)) * Xi.y));
+    fp_type sinTheta = sqrt(fp_type(1.0) - cosTheta * cosTheta);
 
     // from spherical coordinates to cartesian coordinates
     t_vec3 H;
@@ -343,10 +343,10 @@ struct PBRShaderCPU {
 
   fp_type GeometrySchlickGGX(fp_type NdotV, fp_type roughness) {
     fp_type a = roughness;
-    fp_type k = (a * a) / 2.0;
+    fp_type k = (a * a) / fp_type(2.0);
 
     fp_type nom = NdotV;
-    fp_type denom = NdotV * (1.0 - k) + k;
+    fp_type denom = NdotV * (fp_type(1.0) - k) + k;
 
     return nom / denom;
   }
@@ -360,7 +360,7 @@ struct PBRShaderCPU {
 
   t_vec2 IntegrateBRDF(fp_type NdotV, fp_type roughness, unsigned int samples) {
     t_vec3 V;
-    V.x = sqrt(1.0 - NdotV * NdotV);
+    V.x = sqrt(fp_type(1.0) - NdotV * NdotV);
     V.y = 0.0;
     V.z = NdotV;
 
@@ -383,9 +383,9 @@ struct PBRShaderCPU {
         fp_type G = GeometrySmith(roughness, NoV, NoL);
 
         fp_type G_Vis = (G * VoH) / (NoH * NoV);
-        fp_type Fc = pow(1.0 - VoH, 5.0);
+        fp_type Fc = pow(fp_type(1.0) - VoH, fp_type(5.0));
 
-        A += (1.0 - Fc) * G_Vis;
+        A += (fp_type(1.0) - Fc) * G_Vis;
         B += Fc * G_Vis;
       }
     }
@@ -416,7 +416,7 @@ struct PBRShaderCPU {
       brdf.y = brdf3.y;
     } else {
       brdf = t_vec2(IntegrateBRDF(pbrInputs.NdotV,
-                                  1.0 - pbrInputs.perceptualRoughness,
+                                  fp_type(1.0) - pbrInputs.perceptualRoughness,
                                   brdfResolution));
     }
 
