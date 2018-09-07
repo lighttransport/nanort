@@ -16,6 +16,7 @@ Here is an example procedure of CMake build.
 
 ```
 $ mkdir build
+$ cd build
 $ cmake ..
 $ make
 ```
