@@ -26,6 +26,7 @@
 #pragma clang diagnostic ignored "-Wunused-function"        // for stb_textedit.h
 #pragma clang diagnostic ignored "-Wmissing-prototypes"     // for stb_textedit.h
 #pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Weverything"
 #endif
 
 //-----------------------------------------------------------------------------

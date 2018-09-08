@@ -1,6 +1,13 @@
 #ifndef B3G_WINDOW_INTERFACE_H
 #define B3G_WINDOW_INTERFACE_H
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wpadded"
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
+#endif
 
 typedef void (*b3WheelCallback)(float deltax, float deltay);
 typedef void (*b3ResizeCallback)( float width, float height);
@@ -126,5 +133,9 @@ class CommonWindowInterface
         virtual int fileOpenDialog(char* fileName, int maxFileNameLength) = 0;
     
 };
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #endif //B3G_WINDOW_INTERFACE_H
