@@ -17,6 +17,8 @@ set (CMAKE_CXX_STANDARD 11)
 # Threads
 find_package(Threads)
 
+find_package(OpenGL REQUIRED) 
+
 set (PTEXRENDER_SOURCE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main.cc
     ${CMAKE_CURRENT_SOURCE_DIR}/src/render.cc
@@ -37,12 +39,12 @@ if (WIN32)
        )
    set(GL_LIBS opengl32 glu32)
 elseif (APPLE)
-   find_library(OpenGL REQUIED) 
    list(APPEND PTEXRENDER_SOURCE
         ${CMAKE_CURRENT_SOURCE_DIR}/../common/OpenGLWindow/MacOpenGLWindow.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../common/OpenGLWindow/MacOpenGLWindow.mm
        )
-   set(GL_LIBS ${OPENGL_gl_LIBRARY})
+   find_library(cocoa_library Cocoa)
+   set(GL_LIBS ${OPENGL_LIBRARIES} ${cocoa_library})
 else()
   # Assume Linux
    list(APPEND PTEXRENDER_SOURCE 
