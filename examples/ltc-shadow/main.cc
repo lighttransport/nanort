@@ -54,16 +54,19 @@ THE SOFTWARE.
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <fstream>
 #include <limits>
 #include <map>
 #include <sstream>
 #include <string>
 #include <vector>
+#include <array>
 
-#include <atomic>  // C++11
-#include <chrono>  // C++11
-#include <mutex>   // C++11
-#include <thread>  // C++11
+#include <atomic>  
+#include <chrono>  
+#include <mutex>   
+#include <thread> 
+#include <regex> 
 
 #include "imgui.h"
 #include "imgui_impl_btgui.h"
@@ -121,7 +124,6 @@ float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 static nanosg::Scene<float, example::Mesh<float> > gScene;
 static example::Asset gAsset;
 static std::vector<nanosg::Node<float, example::Mesh<float> > > gNodes;
-static std::vector<std::array<example::Image, 6>> gCubemapLOD;
 
 std::atomic<bool> gRenderQuit;
 std::atomic<bool> gRenderRefresh;
@@ -142,6 +144,52 @@ struct ManipConfig {
   glm::vec3 snapRotation;
   glm::vec3 snapScale;
 };
+
+// Simple Filament cmgen's sh.ext parser.
+bool LoadSH(const std::string &filename, float coeff[9][3]) {
+
+  std::ifstream ifs(filename);
+
+  if (!ifs) {
+    std::cerr << "Failed to open a file : " << filename << std::endl;
+    return false;
+  }
+
+  std::regex e("\\((.*),\\s+(.*),\\s+(.*)\\)");
+
+  for (size_t i = 0; i < 9; i++) {
+    coeff[i][0] = coeff[i][1] = coeff[i][2] = 0.0f;
+
+    std::string line;
+    std::getline(ifs, line);
+
+    if (!ifs) {
+      return false;
+    }
+
+    std::smatch match;
+    if(std::regex_search(line, match, e) && (match.size() == 4)) {   
+      // [0] is entirely matched string, thus skip it.
+      for (size_t m = 0; m < 3; m++) {
+        double d = std::stod(match[m+1]);
+        coeff[i][m] = float(d);
+      }
+    } else {
+      return false;
+    }
+  }
+
+  for (size_t i = 0; i < 9; i++) {
+    std::cout << "sh[" << i << "] = " <<
+      coeff[i][0] << ", " <<
+      coeff[i][1] << ", " <<
+      coeff[i][2] << ", " << std::endl;
+  }
+  
+
+  return true;
+}
+
 
 void RequestRender() {
   {
@@ -708,9 +756,22 @@ int main(int argc, char **argv) {
     }
   }
 
+  // Load sh
+  {
+    if (gRenderConfig.sh_filename.empty()) {
+      std::cerr << "SH filename not found in config.json" << std::endl;
+      return EXIT_FAILURE;
+    }
+
+    if (!LoadSH(gRenderConfig.sh_filename, gAsset.sh)) {
+      std::cerr << "Failed to load SH coefficient" << std::endl;
+      return EXIT_FAILURE;
+    }
+  }
+
   // Load ibl
   {
-    int level = LoadCubemaps(gRenderConfig.ibl_dirname, &gCubemapLOD);
+    int level = LoadCubemaps(gRenderConfig.ibl_dirname, &gAsset.cubemap_ibl);
     if (level < 1) {
       std::cerr << "Failed to load ibl" << std::endl;
       return EXIT_FAILURE;
@@ -873,23 +934,15 @@ int main(int argc, char **argv) {
     // ImGuiIO &io = ImGui::GetIO();
     ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
 
-    ImGui::Begin("UI");
+    bool rerender = false;
+
+    ImGui::Begin("Render");
     {
-      static float col[3] = {0, 0, 0};
-      static float f = 0.0f;
-      // if (ImGui::ColorEdit3("color", col)) {
-      //  RequestRender();
-      //}
-      // ImGui::InputFloat("intensity", &f);
-      if (ImGui::InputFloat3("eye", gRenderConfig.eye)) {
-        RequestRender();
-      }
-      if (ImGui::InputFloat3("up", gRenderConfig.up)) {
-        RequestRender();
-      }
-      if (ImGui::InputFloat3("look_at", gRenderConfig.look_at)) {
-        RequestRender();
-      }
+      rerender |= ImGui::InputFloat3("eye", gRenderConfig.eye);
+      rerender |= ImGui::InputFloat3("up", gRenderConfig.up);
+      rerender |= ImGui::InputFloat3("look_at", gRenderConfig.look_at);
+
+      rerender |= ImGui::DragFloat("intensity", &gRenderConfig.intensity, 0.01f, 0.0f, 10.0f);
 
       ImGui::RadioButton("color", &gShowBufferMode, SHOW_BUFFER_COLOR);
       ImGui::SameLine();
@@ -907,6 +960,12 @@ int main(int argc, char **argv) {
 
       ImGui::InputFloat2("show depth range", gShowDepthRange);
       ImGui::Checkbox("show depth pseudo color", &gShowDepthPeseudoColor);
+
+      rerender |= ImGui::DragFloat("BG intensity", &gAsset.bg_intensity, 0.01f, 0.0f, 10.0f);
+
+      if (rerender) {
+        RequestRender();
+      }
     }
 
     ImGui::End();

@@ -14,7 +14,7 @@ make
 ### Windows
 
 ```bash
-premake5 vs2015
+premake5 vs2017
 ```
 
 ## How to generate IBL cubemaps

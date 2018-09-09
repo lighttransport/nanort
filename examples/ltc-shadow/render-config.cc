@@ -41,6 +41,12 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
+  if (o.find("sh_filename") != o.end()) {
+    if (o["sh_filename"].is<std::string>()) {
+      config->sh_filename = o["sh_filename"].get<std::string>();
+    }
+  }
+
   config->scene_scale = 1.0f;
   if (o.find("scene_scale") != o.end()) {
     if (o["scene_scale"].is<double>()) {

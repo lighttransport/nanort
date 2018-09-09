@@ -16,6 +16,9 @@ typedef struct {
   float look_at[3];
   float fov;  // vertical fov in degree.
 
+  // intensity
+  float intensity = 1.0f;
+
   // render pass
   int pass;
   int max_passes;
@@ -25,6 +28,7 @@ typedef struct {
   float scene_scale;
 
   std::string ibl_dirname;
+  std::string sh_filename;
 
 } RenderConfig;
 

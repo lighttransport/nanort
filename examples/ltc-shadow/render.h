@@ -24,9 +24,13 @@ struct Asset {
   std::vector<Mesh<float> > meshes;
   std::vector<Material> materials;
   
-  //tigra: add default material
   Material default_material;
   std::vector<Texture> textures;
+
+  std::vector<std::array<Image, 6>> cubemap_ibl;
+  float sh[9][3];
+
+  float bg_intensity = 1.0f;
 };
 
 class Renderer {

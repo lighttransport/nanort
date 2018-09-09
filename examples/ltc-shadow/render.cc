@@ -22,7 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-
 #ifdef _MSC_VER
 #pragma warning(disable : 4018)
 #pragma warning(disable : 4244)
@@ -38,16 +37,16 @@ THE SOFTWARE.
 #include <sstream>
 #include <thread>  // C++11
 #include <vector>
+#include <array>
 
 #include <iostream>
 
 #include "../../nanort.h"
-#include "matrix.h"
 #include "material.h"
+#include "matrix.h"
 #include "mesh.h"
 #include "render-layer.h"
 #include "trackball.h"
-
 
 #ifdef WIN32
 #undef min
@@ -72,7 +71,8 @@ float pcg32_random(pcg32_state_t* rng) {
   rng->state = oldstate * 6364136223846793005ULL + rng->inc;
   unsigned int xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
   unsigned int rot = oldstate >> 59u;
-  unsigned int ret = (xorshifted >> rot) | (xorshifted << ((-static_cast<int>(rot)) & 31));
+  unsigned int ret =
+      (xorshifted >> rot) | (xorshifted << ((-static_cast<int>(rot)) & 31));
 
   return (float)((double)ret / (double)4294967296.0);
 }
@@ -199,7 +199,8 @@ void BuildCameraFrame(float3* origin, float3* corner, float3* u, float3* v,
   }
 }
 
-#if 0 // TODO(LTE): Not used method. Delete.
+
+#if 0  // TODO(LTE): Not used method. Delete.
 nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
                                const float3& du, const float3& dv, float u,
                                float v) {
@@ -224,24 +225,249 @@ nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
 }
 #endif
 
-void FetchTexture(const Texture &texture, float u, float v, float* col) {
-  int tx = u * texture.width;
-  int ty = (1.0f - v) * texture.height;
-  int idx_offset = (ty * texture.width + tx) * texture.components;
-  col[0] = texture.image[idx_offset + 0] / 255.f;
-  col[1] = texture.image[idx_offset + 1] / 255.f;
-  col[2] = texture.image[idx_offset + 2] / 255.f;
+void irradianceSH(const float sh[9][3], const float3 n, float rgb[3]) {
+
+  for (int i = 0; i < 3; i++) {
+    rgb[i] = 
+          sh[0][i]
+        + sh[1][i] * (n[1])
+        + sh[2][i] * (n[2])
+        + sh[3][i] * (n[0])
+        + sh[4][i] * (n[1] * n[0])
+        + sh[5][i] * (n[1] * n[2])
+        + sh[6][i] * (3.0f  * n[2] * n[2] - 1.0f)
+        + sh[7][i] * (n[2] * n[0])
+        + sh[8][i] * (n[0] * n[0] - n[1] * n[1]);
+  }
 }
 
-bool Renderer::Render(RenderLayer *layer,
-                      float quat[4], 
-                      const nanosg::Scene<float, example::Mesh<float>> &scene,
-                      const example::Asset &asset,
-                      const RenderConfig& config,
-                      std::atomic<bool>& cancelFlag,
-                      int &_showBufferMode
-                      ) {
+void convert_xyz_to_cube_uv(float x, float y, float z, int* index, float* u,
+                            float* v) {
+  float absX = fabs(x);
+  float absY = fabs(y);
+  float absZ = fabs(z);
 
+  int isXPositive = x > 0.0f ? 1 : 0;
+  int isYPositive = y > 0.0f ? 1 : 0;
+  int isZPositive = z > 0.0f ? 1 : 0;
+
+  float maxAxis, uc, vc;
+
+  // POSITIVE X
+  if (isXPositive && absX >= absY && absX >= absZ) {
+    // u (0 to 1) goes from +z to -z
+    // v (0 to 1) goes from -y to +y
+    maxAxis = absX;
+    uc = -z;
+    vc = y;
+    *index = 0;
+  }
+  // NEGATIVE X
+  if (!isXPositive && absX >= absY && absX >= absZ) {
+    // u (0 to 1) goes from -z to +z
+    // v (0 to 1) goes from -y to +y
+    maxAxis = absX;
+    uc = z;
+    vc = y;
+    *index = 1;
+  }
+  // POSITIVE Y
+  if (isYPositive && absY >= absX && absY >= absZ) {
+    // u (0 to 1) goes from -x to +x
+    // v (0 to 1) goes from +z to -z
+    maxAxis = absY;
+    uc = x;
+    vc = -z;
+    *index = 2;
+  }
+  // NEGATIVE Y
+  if (!isYPositive && absY >= absX && absY >= absZ) {
+    // u (0 to 1) goes from -x to +x
+    // v (0 to 1) goes from -z to +z
+    maxAxis = absY;
+    uc = x;
+    vc = z;
+    *index = 3;
+  }
+  // POSITIVE Z
+  if (isZPositive && (absZ >= absX) && (absZ >= absY)) {
+    // u (0 to 1) goes from -x to +x
+    // v (0 to 1) goes from -y to +y
+    maxAxis = absZ;
+    uc = x;
+    vc = y;
+    *index = 4;
+  }
+  // NEGATIVE Z
+  if (!isZPositive && (absZ >= absX) && (absZ >= absY)) {
+    // u (0 to 1) goes from +x to -x
+    // v (0 to 1) goes from -y to +y
+    maxAxis = absZ;
+    uc = -x;
+    vc = y;
+    *index = 5;
+  }
+
+  // Convert range from -1 to 1 to 0 to 1
+  *u = 0.5f * (uc / maxAxis + 1.0f);
+  *v = 0.5f * (vc / maxAxis + 1.0f);
+}
+
+//
+// Simple bilinear texture filtering.
+//
+static void SampleTexture(float* rgba, float u, float v, int width, int height,
+                          int channels, const float* texels) {
+  float sx = std::floor(u);
+  float sy = std::floor(v);
+
+  // Wrap mode = repeat
+  float uu = u - sx;
+  float vv = v - sy;
+
+  // clamp
+  uu = std::max(uu, 0.0f);
+  uu = std::min(uu, 1.0f);
+  vv = std::max(vv, 0.0f);
+  vv = std::min(vv, 1.0f);
+
+  float px = (width - 1) * uu;
+  float py = (height - 1) * vv;
+
+  int x0 = std::max(0, std::min((int)px, (width - 1)));
+  int y0 = std::max(0, std::min((int)py, (height - 1)));
+  int x1 = std::max(0, std::min((x0 + 1), (width - 1)));
+  int y1 = std::max(0, std::min((y0 + 1), (height - 1)));
+
+  float dx = px - (float)x0;
+  float dy = py - (float)y0;
+
+  float w[4];
+
+  w[0] = (1.0f - dx) * (1.0 - dy);
+  w[1] = (1.0f - dx) * (dy);
+  w[2] = (dx) * (1.0 - dy);
+  w[3] = (dx) * (dy);
+
+  int i00 = channels * (y0 * width + x0);
+  int i01 = channels * (y0 * width + x1);
+  int i10 = channels * (y1 * width + x0);
+  int i11 = channels * (y1 * width + x1);
+
+  for (int i = 0; i < channels; i++) {
+    rgba[i] = w[0] * texels[i00 + i] + w[1] * texels[i10 + i] +
+              w[2] * texels[i01 + i] + w[3] * texels[i11 + i];
+  }
+}
+
+static inline void sRGBToLinear(const unsigned char sRGB[3], float linear[3]) {
+  const float a = 0.055f;
+  const float a1 = 1.055f;
+  const float p = 2.4f;
+
+  for (size_t i = 0; i < 3; i++) {
+    float s = sRGB[i] / 255.0f;
+    if (s <= 0.04045f) {
+      linear[i] = s * (1.0f / 12.92f);
+    } else {
+      linear[i] = std::pow((s + a) / a1, p);  // TODO(LTE): Use fast pow
+    }
+  }
+}
+
+//
+// Simple bilinear texture filtering.
+//
+static void SampleTexture(float* rgba, float u, float v, int width, int height,
+                          int channels, const unsigned char* texels) {
+  float sx = std::floor(u);
+  float sy = std::floor(v);
+
+  // Wrap mode = repeat
+  float uu = u - sx;
+  float vv = v - sy;
+
+  // clamp
+  uu = std::max(uu, 0.0f);
+  uu = std::min(uu, 1.0f);
+  vv = std::max(vv, 0.0f);
+  vv = std::min(vv, 1.0f);
+
+  float px = (width - 1) * uu;
+  float py = (height - 1) * vv;
+
+  int x0 = std::max(0, std::min((int)px, (width - 1)));
+  int y0 = std::max(0, std::min((int)py, (height - 1)));
+  int x1 = std::max(0, std::min((x0 + 1), (width - 1)));
+  int y1 = std::max(0, std::min((y0 + 1), (height - 1)));
+
+  float dx = px - (float)x0;
+  float dy = py - (float)y0;
+
+  float w[4];
+
+  w[0] = (1.0f - dx) * (1.0 - dy);
+  w[1] = (1.0f - dx) * (dy);
+  w[2] = (dx) * (1.0 - dy);
+  w[3] = (dx) * (dy);
+
+  int i00 = channels * (y0 * width + x0);
+  int i01 = channels * (y0 * width + x1);
+  int i10 = channels * (y1 * width + x0);
+  int i11 = channels * (y1 * width + x1);
+
+  // Assume pixels are in sRGB space.
+  float t[4][3];
+
+  sRGBToLinear(texels + i00, t[0]);
+  sRGBToLinear(texels + i10, t[1]);
+  sRGBToLinear(texels + i01, t[2]);
+  sRGBToLinear(texels + i11, t[3]);
+
+  for (int i = 0; i < channels; i++) {
+    rgba[i] = w[0] * t[0][i] + w[1] * t[1][i] + w[2] * t[2][i] + w[3] * t[3][i];
+  }
+}
+
+void FetchTexture(const Texture& texture, float u, float v, float* col) {
+  SampleTexture(col, u, v, texture.width, texture.height, texture.components,
+                texture.image);
+}
+
+void SampleEnvmap(const example::Asset& asset, const float n[3], int lod, float *col)
+{
+  if (asset.cubemap_ibl.size() == 0) {
+    // no envmap
+    col[0] = 0.0f;
+    col[1] = 0.0f;
+    col[2] = 0.0f;
+  }
+
+  int face_idx;
+  float u, v;
+  convert_xyz_to_cube_uv(n[0], n[1], n[2], &face_idx, &u, &v);
+
+  // flipY
+  v = 1.0f - v;
+
+  lod = std::min(int(asset.cubemap_ibl.size()-1), std::max(0, lod));
+
+  const std::array<example::Image, 6> &cubemap = asset.cubemap_ibl[lod];
+
+  const example::Image &face = cubemap[face_idx];
+
+  float rgba[4];
+  SampleTexture(rgba, u, v, face.width, face.height, face.channels, face.pixels.data());
+
+  col[0] = rgba[0];
+  col[1] = rgba[1];
+  col[2] = rgba[2];
+}
+
+bool Renderer::Render(RenderLayer* layer, float quat[4],
+                      const nanosg::Scene<float, example::Mesh<float> >& scene,
+                      const example::Asset& asset, const RenderConfig& config,
+                      std::atomic<bool>& cancelFlag, int& _showBufferMode) {
   int width = config.width;
   int height = config.height;
 
@@ -263,7 +489,7 @@ bool Renderer::Render(RenderLayer *layer,
 
   auto startT = std::chrono::system_clock::now();
 
-  // Initialize RNG.
+  // TODO(LTE): Path tracing.
 
   for (auto t = 0; t < num_threads; t++) {
     workers.emplace_back(std::thread([&, t]() {
@@ -293,6 +519,7 @@ bool Renderer::Render(RenderLayer *layer,
         //}
 
         for (int x = 0; x < config.width; x++) {
+
           nanort::Ray<float> ray;
           ray.org[0] = origin[0];
           ray.org[1] = origin[1];
@@ -302,19 +529,17 @@ bool Renderer::Render(RenderLayer *layer,
           float u1 = pcg32_random(&rng);
 
           float3 dir;
-        
-        //for modes not a "color"
-		    if(_showBufferMode != SHOW_BUFFER_COLOR)
-		    {
-          //only one pass
-			    if(config.pass > 0)
-				    continue;
-				  
-          //to the center of pixel
-			      u0 = 0.5f;
-			      u1 = 0.5f;
-		      }
-      
+
+          // for modes not a "color"
+          if (_showBufferMode != SHOW_BUFFER_COLOR) {
+            // only one pass
+            if (config.pass > 0) continue;
+
+            // to the center of pixel
+            u0 = 0.5f;
+            u1 = 0.5f;
+          }
+
           dir = corner + (float(x) + u0) * u +
                 (float(config.height - y - 1) + u1) * v;
           dir = vnormalize(dir);
@@ -326,26 +551,21 @@ bool Renderer::Render(RenderLayer *layer,
           ray.min_t = 0.0f;
           ray.max_t = kFar;
 
-          
           nanosg::Intersection<float> isect;
-          bool hit = scene.Traverse(ray, &isect, /* cull_back_face */false);
+          bool hit = scene.Traverse(ray, &isect, /* cull_back_face */ false);
 
           if (hit) {
+            const std::vector<Material>& materials = asset.materials;
+            const std::vector<Texture>& textures = asset.textures;
+            const Mesh<float>& mesh = asset.meshes[isect.node_id];
 
-            const std::vector<Material> &materials = asset.materials;
-            const std::vector<Texture> &textures = asset.textures;
-            const Mesh<float> &mesh = asset.meshes[isect.node_id];
-			
-			//tigra: add default material
-			const Material &default_material = asset.default_material;
+            // tigra: add default material
+            const Material& default_material = asset.default_material;
 
             float3 p;
-            p[0] =
-                ray.org[0] + isect.t * ray.dir[0];
-            p[1] =
-                ray.org[1] + isect.t * ray.dir[1];
-            p[2] =
-                ray.org[2] + isect.t * ray.dir[2];
+            p[0] = ray.org[0] + isect.t * ray.dir[0];
+            p[1] = ray.org[1] + isect.t * ray.dir[1];
+            p[2] = ray.org[2] + isect.t * ray.dir[2];
 
             layer->positionRGBA[4 * (y * config.width + x) + 0] = p.x();
             layer->positionRGBA[4 * (y * config.width + x) + 1] = p.y();
@@ -372,6 +592,7 @@ bool Renderer::Render(RenderLayer *layer,
               n2[1] = mesh.facevarying_normals[9 * prim_id + 7];
               n2[2] = mesh.facevarying_normals[9 * prim_id + 8];
               N = Lerp3(n0, n1, n2, isect.u, isect.v);
+              N = vnormalize(N);
             } else {
               unsigned int f0, f1, f2;
               f0 = mesh.faces[3 * prim_id + 0];
@@ -399,12 +620,9 @@ bool Renderer::Render(RenderLayer *layer,
                 0.5f * N[2] + 0.5f;
             layer->normalRGBA[4 * (y * config.width + x) + 3] = 1.0f;
 
-            layer->depthRGBA[4 * (y * config.width + x) + 0] =
-                isect.t;
-            layer->depthRGBA[4 * (y * config.width + x) + 1] =
-                isect.t;
-            layer->depthRGBA[4 * (y * config.width + x) + 2] =
-                isect.t;
+            layer->depthRGBA[4 * (y * config.width + x) + 0] = isect.t;
+            layer->depthRGBA[4 * (y * config.width + x) + 1] = isect.t;
+            layer->depthRGBA[4 * (y * config.width + x) + 2] = isect.t;
             layer->depthRGBA[4 * (y * config.width + x) + 3] = 1.0f;
 
             float3 UV;
@@ -424,66 +642,78 @@ bool Renderer::Render(RenderLayer *layer,
             }
 
             // Fetch texture
-            unsigned int material_id =
-                mesh.material_ids[isect.prim_id];
-				
-			//printf("material_id=%d materials=%lld\n", material_id, materials.size());
+            unsigned int material_id = mesh.material_ids[isect.prim_id];
+
+            // printf("material_id=%d materials=%lld\n", material_id,
+            // materials.size());
 
             float diffuse_col[3];
 
             float specular_col[3];
-			
-			//tigra: material_id is ok
-			if(material_id>=0 && material_id<materials.size())
-			{
-				//printf("ok mat\n");
-				
-				int diffuse_texid = materials[material_id].diffuse_texid;
-				if (diffuse_texid >= 0) {
-				  FetchTexture(textures[diffuse_texid], UV[0], UV[1], diffuse_col);
-				} else {
-				  diffuse_col[0] = materials[material_id].diffuse[0];
-				  diffuse_col[1] = materials[material_id].diffuse[1];
-				  diffuse_col[2] = materials[material_id].diffuse[2];
-				}
-				
-				int specular_texid = materials[material_id].specular_texid;
-				if (specular_texid >= 0) {
-				  FetchTexture(textures[specular_texid], UV[0], UV[1], specular_col);
-				} else {
-				  specular_col[0] = materials[material_id].specular[0];
-				  specular_col[1] = materials[material_id].specular[1];
-				  specular_col[2] = materials[material_id].specular[2];
-				}
-			}
-			else
-				//tigra: wrong material_id, use default_material
-				{
-					
-				//printf("default_material\n");
-				
-					diffuse_col[0] = default_material.diffuse[0];
-					diffuse_col[1] = default_material.diffuse[1];
-					diffuse_col[2] = default_material.diffuse[2];
-					specular_col[0] = default_material.specular[0];
-					specular_col[1] = default_material.specular[1];
-					specular_col[2] = default_material.specular[2];
-				}
 
-            // Simple shading
-            float NdotV = fabsf(vdot(N, dir));
+            if (static_cast<int>(material_id) >= 0 &&
+                material_id < materials.size()) {
+              // printf("ok mat\n");
+
+              int diffuse_texid = materials[material_id].diffuse_texid;
+              if (diffuse_texid >= 0) {
+                FetchTexture(textures[diffuse_texid], UV[0], UV[1],
+                             diffuse_col);
+              } else {
+                diffuse_col[0] = materials[material_id].diffuse[0];
+                diffuse_col[1] = materials[material_id].diffuse[1];
+                diffuse_col[2] = materials[material_id].diffuse[2];
+              }
+
+              int specular_texid = materials[material_id].specular_texid;
+              if (specular_texid >= 0) {
+                FetchTexture(textures[specular_texid], UV[0], UV[1],
+                             specular_col);
+              } else {
+                specular_col[0] = materials[material_id].specular[0];
+                specular_col[1] = materials[material_id].specular[1];
+                specular_col[2] = materials[material_id].specular[2];
+              }
+            } else
+            // tigra: wrong material_id, use default_material
+            {
+              // printf("default_material\n");
+
+              diffuse_col[0] = default_material.diffuse[0];
+              diffuse_col[1] = default_material.diffuse[1];
+              diffuse_col[2] = default_material.diffuse[2];
+              specular_col[0] = default_material.specular[0];
+              specular_col[1] = default_material.specular[1];
+              specular_col[2] = default_material.specular[2];
+            }
+
+            // SH shading
+            
+            //float NdotV = fabsf(vdot(N, dir));
+            float irrad[3];
+            irradianceSH(asset.sh, N, irrad);
+
+            irrad[0] *= config.intensity;
+            irrad[1] *= config.intensity;
+            irrad[2] *= config.intensity;
 
             if (config.pass == 0) {
-              layer->rgba[4 * (y * config.width + x) + 0] = NdotV * diffuse_col[0];
-              layer->rgba[4 * (y * config.width + x) + 1] = NdotV * diffuse_col[1];
-              layer->rgba[4 * (y * config.width + x) + 2] = NdotV * diffuse_col[2];
+              layer->rgba[4 * (y * config.width + x) + 0] =
+                  irrad[0] * diffuse_col[0];
+              layer->rgba[4 * (y * config.width + x) + 1] =
+                  irrad[1] * diffuse_col[1];
+              layer->rgba[4 * (y * config.width + x) + 2] =
+                  irrad[2] * diffuse_col[2];
               layer->rgba[4 * (y * config.width + x) + 3] = 1.0f;
               layer->sampleCounts[y * config.width + x] =
                   1;  // Set 1 for the first pass
             } else {  // additive.
-              layer->rgba[4 * (y * config.width + x) + 0] += NdotV * diffuse_col[0];
-              layer->rgba[4 * (y * config.width + x) + 1] += NdotV * diffuse_col[1];
-              layer->rgba[4 * (y * config.width + x) + 2] += NdotV * diffuse_col[2];
+              layer->rgba[4 * (y * config.width + x) + 0] +=
+                  irrad[0] * diffuse_col[0];
+              layer->rgba[4 * (y * config.width + x) + 1] +=
+                  irrad[1] * diffuse_col[1];
+              layer->rgba[4 * (y * config.width + x) + 2] +=
+                  irrad[2] * diffuse_col[2];
               layer->rgba[4 * (y * config.width + x) + 3] += 1.0f;
               layer->sampleCounts[y * config.width + x]++;
             }
@@ -505,6 +735,15 @@ bool Renderer::Render(RenderLayer *layer,
               } else {
                 layer->sampleCounts[y * config.width + x]++;
               }
+
+              // See background(IBL)
+              int lod = 0; // TODO(LTE)
+              float bg_col[3];
+              SampleEnvmap(asset, ray.dir, lod, bg_col);
+              layer->rgba[4 * (y * config.width + x) + 0] += asset.bg_intensity * bg_col[0];
+              layer->rgba[4 * (y * config.width + x) + 1] += asset.bg_intensity * bg_col[1];
+              layer->rgba[4 * (y * config.width + x) + 2] += asset.bg_intensity * bg_col[2];
+              layer->rgba[4 * (y * config.width + x) + 3] += 1.0f;
 
               // No super sampling
               layer->normalRGBA[4 * (y * config.width + x) + 0] = 0.0f;

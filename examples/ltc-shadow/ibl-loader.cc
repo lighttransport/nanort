@@ -168,7 +168,7 @@ int LoadCubemaps(std::string& dirpath, std::vector<std::array<Image, 6>> *out_cu
 
   std::cout << "Load ibl from : " << dirpath << std::endl;
 
-  std::array<std::string, 6> cubemap_faces = {{ "nx", "px", "ny", "py", "nz", "pz" }};
+  std::array<std::string, 6> cubemap_faces = {{ "px", "nx", "py", "ny", "pz", "nz" }};
 
   int num_levels = 0;
 

@@ -59,15 +59,36 @@ struct Texture {
   int height;
   int components;
   int _pad_;
-  unsigned char* image;
+  unsigned char *image;
 
   Texture() {
     width = -1;
     height = -1;
     components = -1;
-    image = NULL;
+    image = nullptr;
   }
 };
+
+struct HDRTexture {
+  int width;
+  int height;
+  int components;
+  std::vector<float> image;
+
+  HDRTexture() {
+    width = -1;
+    height = -1;
+    components = -1;
+  }
+};
+
+struct Image {
+  int width;
+  int height;
+  int channels; // 3 or 4.
+  std::vector<float> pixels;  // channels x width x height
+};
+
 
 }  // namespace example
 

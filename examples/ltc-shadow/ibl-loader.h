@@ -4,14 +4,9 @@
 #include <string>
 #include <vector>
 
-namespace example {
+#include "material.h"
 
-struct Image {
-  int width;
-  int height;
-  int channels; // 3 or 4.
-  std::vector<float> pixels;  // channels x width x height
-};
+namespace example {
 
 ///
 /// Loads cubemaps
