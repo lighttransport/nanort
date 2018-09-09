@@ -1,11 +1,36 @@
 #include <fstream>
 #include <chrono>
 #include <iostream>
+#include <array>
 
 #include "stb_image.h"
 #include "ibl-loader.h"
 
 namespace example {
+
+static bool FileExists(const std::string &filepath) {
+  std::ifstream ifs(filepath);
+
+  if (!ifs) {
+    return false;
+  }
+
+  return true;
+}
+
+static std::string JoinPath(const std::string &dir, const std::string &filename) {
+  if (dir.empty()) {
+    return filename;
+  } else {
+    // check '/'
+    char lastChar = *dir.rbegin();
+    if (lastChar != '/') {
+      return dir + std::string("/") + filename;
+    } else {
+      return dir + filename;
+    }
+  }
+}
 
 // https://stackoverflow.com/questions/29310166/check-if-a-fstream-is-either-a-file-or-directory
 static bool IsDirectory(const std::string &filepath) {
@@ -138,5 +163,64 @@ bool LoadHDRImage(const std::string &filename,
 
   return true;
 }
+
+int LoadCubemaps(std::string& dirpath, std::vector<std::array<Image, 6>> *out_cubemaps) {
+
+  std::cout << "Load ibl from : " << dirpath << std::endl;
+
+  std::array<std::string, 6> cubemap_faces = {{ "nx", "px", "ny", "py", "nz", "pz" }};
+
+  int num_levels = 0;
+
+  std::array<Image, 6> cubemap;
+
+  // up to 8 levels.
+  for (size_t m = 0; m < 8; m++) {
+
+    std::string prefix = "m" + std::to_string(m) + "_";
+
+    for (size_t f = 0; f < 6; f++) {
+
+      std::string filename = JoinPath(dirpath, prefix + cubemap_faces[f]);
+
+      filename += ".rgbm";
+
+      std::cerr << "Trying to load file : " << filename << std::endl;
+
+      if (!FileExists(filename)) {
+        if (f == 0) {
+          // No files for this level.
+          std::cerr << "It looks file does not exit : " << filename << std::endl;
+          return num_levels;
+        } else {
+          std::cerr << "Image for cubemap face[" << f << "] at level " << m << " not found : " << f << std::endl;
+          return num_levels;
+        }
+      }
+
+      Image image;
+      if (!LoadHDRImage(filename, &image.pixels, &(image.width), &(image.height), &(image.channels))) {
+      
+        return num_levels;
+      }
+
+      if ((image.channels != 3) &&
+          (image.channels != 4)) {
+        std::cerr << "Image must be RGB or RGBA : " << filename << ", but got channels " << image.channels << std::endl;
+        return num_levels;
+      }
+
+      cubemap[f] = std::move(image);
+
+    }
+
+    out_cubemaps->emplace_back(std::move(cubemap));
+
+    num_levels++;
+  }
+
+  return num_levels;
+}
+
 
 } // namespace example

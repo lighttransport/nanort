@@ -88,6 +88,8 @@ THE SOFTWARE.
 #include "../nanosg/nanosg.h"
 #include "obj-loader.h"
 #include "render-config.h"
+#include "render-layer.h"
+#include "ibl-loader.h"
 #include "render.h"
 #include "trackball.h"
 
@@ -119,6 +121,7 @@ float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 static nanosg::Scene<float, example::Mesh<float> > gScene;
 static example::Asset gAsset;
 static std::vector<nanosg::Node<float, example::Mesh<float> > > gNodes;
+static std::vector<std::array<example::Image, 6>> gCubemapLOD;
 
 std::atomic<bool> gRenderQuit;
 std::atomic<bool> gRenderRefresh;
@@ -127,19 +130,7 @@ std::atomic<bool> gSceneDirty;
 example::RenderConfig gRenderConfig;
 std::mutex gMutex;
 
-struct RenderLayer {
-  std::vector<float> displayRGBA;  // Accumurated image.
-  std::vector<float> rgba;
-  std::vector<float> auxRGBA;        // Auxiliary buffer
-  std::vector<int> sampleCounts;     // Sample num counter for each pixel.
-  std::vector<float> normalRGBA;     // For visualizing normal
-  std::vector<float> positionRGBA;   // For visualizing position
-  std::vector<float> depthRGBA;      // For visualizing depth
-  std::vector<float> texCoordRGBA;   // For visualizing texcoord
-  std::vector<float> varyCoordRGBA;  // For visualizing varycentric coord
-};
-
-RenderLayer gRenderLayer;
+example::RenderLayer gRenderLayer;
 
 struct Camera {
   glm::mat4 view;
@@ -198,8 +189,7 @@ void RenderThread() {
     // Render() will repeatedly check this flag inside the rendering loop.
 
     bool ret = example::Renderer::Render(
-        &gRenderLayer.rgba.at(0), &gRenderLayer.auxRGBA.at(0),
-        &gRenderLayer.sampleCounts.at(0), gCurrQuat, gScene, gAsset,
+        &gRenderLayer, gCurrQuat, gScene, gAsset,
         gRenderConfig, gRenderCancel,
         gShowBufferMode  // added mode passing
     );
@@ -255,12 +245,6 @@ void InitRender(example::RenderConfig *rc) {
   gRenderLayer.varyCoordRGBA.resize(rc->width * rc->height * 4);
   std::fill(gRenderLayer.varyCoordRGBA.begin(),
             gRenderLayer.varyCoordRGBA.end(), 0.0);
-
-  rc->normalImage = &gRenderLayer.normalRGBA.at(0);
-  rc->positionImage = &gRenderLayer.positionRGBA.at(0);
-  rc->depthImage = &gRenderLayer.depthRGBA.at(0);
-  rc->texcoordImage = &gRenderLayer.texCoordRGBA.at(0);
-  rc->varycoordImage = &gRenderLayer.varyCoordRGBA.at(0);
 
   trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
@@ -720,7 +704,16 @@ int main(int argc, char **argv) {
         example::LoadRenderConfig(&gRenderConfig, config_filename.c_str());
     if (!ret) {
       std::cerr << "Failed to load [ " << config_filename << " ]" << std::endl;
-      return -1;
+      return EXIT_FAILURE;
+    }
+  }
+
+  // Load ibl
+  {
+    int level = LoadCubemaps(gRenderConfig.ibl_dirname, &gCubemapLOD);
+    if (level < 1) {
+      std::cerr << "Failed to load ibl" << std::endl;
+      return EXIT_FAILURE;
     }
   }
 

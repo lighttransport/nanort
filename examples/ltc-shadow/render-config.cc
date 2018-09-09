@@ -35,9 +35,9 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
-  if (o.find("eson_filename") != o.end()) {
-    if (o["eson_filename"].is<std::string>()) {
-      config->eson_filename = o["eson_filename"].get<std::string>();
+  if (o.find("ibl_dirname") != o.end()) {
+    if (o["ibl_dirname"].is<std::string>()) {
+      config->ibl_dirname = o["ibl_dirname"].get<std::string>();
     }
   }
 

@@ -1,4 +1,5 @@
 { "obj_filename" : "../common/cornellbox_suzanne.obj",
+  "ibl_dirname" : "sunsky",
   "scene_scale" : 1.0,
   "width" : 512,
   "height" : 512,

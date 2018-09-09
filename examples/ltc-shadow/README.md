@@ -17,6 +17,16 @@ make
 premake5 vs2015
 ```
 
+## How to generate IBL cubemaps
+
+Use Filament's cmgen to generate prefiltered IBL envmaps(in cubemap, RGBM format)
+
+```
+$ cmgen -x ibls input.exr
+```
+
+Set path to `ibls/input` to `ibl_dirname` in `config.json` to load IBL cubemaps.
+
 ## Third party libraries and its icenses
 
 * picojson : BSD license.

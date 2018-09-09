@@ -16,6 +16,7 @@
 #include "../nanosg/nanosg.h"
 #include "mesh.h"
 #include "material.h"
+#include "render-layer.h"
 
 namespace example {
 
@@ -34,7 +35,7 @@ class Renderer {
   ~Renderer() {}
 
   /// Returns false when the rendering was canceled.
-  static bool Render(float* rgba, float* aux_rgba, int *sample_counts, float quat[4],
+  static bool Render(RenderLayer *layer, float quat[4],
               const nanosg::Scene<float, Mesh<float>> &scene, const Asset &asset, const RenderConfig& config,
                      std::atomic<bool>& cancel_flag,
                      int& _showBufferMode

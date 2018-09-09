@@ -20,17 +20,11 @@ typedef struct {
   int pass;
   int max_passes;
 
-  // For debugging. Array size = width * height * 4.
-  float *normalImage;
-  float *positionImage;
-  float *depthImage;
-  float *texcoordImage;
-  float *varycoordImage;
-
   // Scene input info
   std::string obj_filename;
-  std::string eson_filename;
   float scene_scale;
+
+  std::string ibl_dirname;
 
 } RenderConfig;
 
