@@ -13,6 +13,8 @@
 namespace example {
 
 struct Material {
+  std::string name;
+
   // float ambient[3];
   float diffuse[3];
   float specular[3];
@@ -27,16 +29,21 @@ struct Material {
   // int normal_texid;  // normal map
   // int alpha_texid;  // alpha map
 
+  float roughness;
+
   Material() {
     // ambient[0] = 0.0;
     // ambient[1] = 0.0;
     // ambient[2] = 0.0;
-    diffuse[0] = 0.5;
-    diffuse[1] = 0.5;
-    diffuse[2] = 0.5;
-    specular[0] = 0.5;
-    specular[1] = 0.5;
-    specular[2] = 0.5;
+    diffuse[0] = 0.5f;
+    diffuse[1] = 0.5f;
+    diffuse[2] = 0.5f;
+    specular[0] = 0.5f;
+    specular[1] = 0.5f;
+    specular[2] = 0.5f;
+
+    roughness = 1.0f;
+
     // reflection[0] = 0.0;
     // reflection[1] = 0.0;
     // reflection[2] = 0.0;

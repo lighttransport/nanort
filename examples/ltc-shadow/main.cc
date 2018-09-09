@@ -546,6 +546,37 @@ void UpdateDisplayTextureGL(GLint tex_id, int width, int height) {
   //             static_cast<const GLvoid*>(&buf.at(0)));
 }
 
+static bool ImGuiCombo(const char* label, int* current_item,
+                       const std::vector<std::string>& items) {
+    return ImGui::Combo(label, current_item,
+        [](void* data, int idx_i, const char** out_text){
+            size_t idx = static_cast<size_t>(idx_i);
+            const std::vector<std::string>* str_vec =
+              reinterpret_cast<std::vector<std::string>*>(data);
+            if (idx_i < 0 || str_vec->size() <= idx) {
+              return false;
+            }
+            *out_text = str_vec->at(idx).c_str();
+            return true;
+        },
+        reinterpret_cast<void*>(const_cast<std::vector<std::string> *>(&items)),
+        static_cast<int>(items.size()),
+        static_cast<int>(items.size()));
+}
+
+static bool EditMaterial(const std::vector<std::string> &names, std::vector<example::Material> &materials) {
+
+  static int index = 0;
+  ImGuiCombo("material", &index, names);
+
+  bool rerender = false;
+
+  rerender |= ImGui::ColorEdit3("diffuse", materials[index].diffuse);
+  rerender |= ImGui::SliderFloat("roughness", &materials[index].roughness, 0.0f, 1.0f);
+
+  return rerender;
+}
+
 void EditTransform(const ManipConfig &config, const Camera &camera,
                    glm::mat4 &matrix) {
   static ImGuizmo::OPERATION mCurrentGizmoOperation(ImGuizmo::ROTATE);
@@ -916,6 +947,17 @@ int main(int argc, char **argv) {
 
   Camera camera;
 
+  // For ImGui Material panel.
+  std::vector<std::string> material_names;
+  for (size_t i = 0; i < gAsset.materials.size(); i++) {
+    if (gAsset.materials[i].name.empty()) {
+      std::string name = "material" + std::to_string(i);
+      material_names.push_back(name);
+    } else {
+      material_names.push_back(gAsset.materials[i].name);
+    }
+  }
+
   std::thread renderThread(RenderThread);
 
   // Trigger initial rendering request
@@ -1062,6 +1104,16 @@ int main(int argc, char **argv) {
 
       ImGui::End();
     }
+
+    ImGui::Begin("Material");
+    {
+      if (EditMaterial(material_names, gAsset.materials)) {
+        RequestRender();
+      }
+
+      ImGui::End();
+    }
+
 
     // Draw scene in OpenGL
     DrawScene(gScene, camera);
