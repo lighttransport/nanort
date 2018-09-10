@@ -571,8 +571,13 @@ static bool EditMaterial(const std::vector<std::string> &names, std::vector<exam
 
   bool rerender = false;
 
-  rerender |= ImGui::ColorEdit3("diffuse", materials[index].diffuse);
+  rerender |= ImGui::ColorEdit3("baseColor", materials[index].baseColor);
   rerender |= ImGui::SliderFloat("roughness", &materials[index].roughness, 0.0f, 1.0f);
+  rerender |= ImGui::SliderFloat("metallic", &materials[index].metallic, 0.0f, 1.0f);
+  rerender |= ImGui::SliderFloat("reflectance", &materials[index].reflectance, 0.0f, 1.0f);
+  rerender |= ImGui::SliderFloat("clearCoat", &materials[index].clearcoat, 0.0f, 1.0f);
+  rerender |= ImGui::SliderFloat("clearCoatRoughness", &materials[index].clearcoat_roughness, 0.0f, 1.0f);
+  rerender |= ImGui::SliderFloat("anisotropy", &materials[index].anisotropy, -1.0f, 1.0f);
 
   return rerender;
 }
@@ -816,13 +821,9 @@ int main(int argc, char **argv) {
     std::vector<example::Texture> textures;
 
     // tigra: set default material to 95% white diffuse
-    default_material.diffuse[0] = 0.95f;
-    default_material.diffuse[1] = 0.95f;
-    default_material.diffuse[2] = 0.95f;
-
-    default_material.specular[0] = 0;
-    default_material.specular[1] = 0;
-    default_material.specular[2] = 0;
+    default_material.baseColor[0] = 0.95f;
+    default_material.baseColor[1] = 0.95f;
+    default_material.baseColor[2] = 0.95f;
 
     bool ret = LoadObj(gRenderConfig.obj_filename, gRenderConfig.scene_scale,
                        &meshes, &materials, &textures);
@@ -984,7 +985,13 @@ int main(int argc, char **argv) {
       rerender |= ImGui::InputFloat3("up", gRenderConfig.up);
       rerender |= ImGui::InputFloat3("look_at", gRenderConfig.look_at);
 
+      ImGui::Separator();
+
       rerender |= ImGui::DragFloat("intensity", &gRenderConfig.intensity, 0.01f, 0.0f, 10.0f);
+
+      rerender |= ImGui::DragFloat("BG intensity", &gAsset.bg_intensity, 0.01f, 0.0f, 10.0f);
+
+      ImGui::Separator();
 
       ImGui::RadioButton("color", &gShowBufferMode, SHOW_BUFFER_COLOR);
       ImGui::SameLine();
@@ -1002,8 +1009,6 @@ int main(int argc, char **argv) {
 
       ImGui::InputFloat2("show depth range", gShowDepthRange);
       ImGui::Checkbox("show depth pseudo color", &gShowDepthPeseudoColor);
-
-      rerender |= ImGui::DragFloat("BG intensity", &gAsset.bg_intensity, 0.01f, 0.0f, 10.0f);
 
       if (rerender) {
         RequestRender();

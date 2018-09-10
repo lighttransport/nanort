@@ -33,11 +33,11 @@ THE SOFTWARE.
 
 #include "render.h"
 
+#include <array>
 #include <chrono>  // C++11
 #include <sstream>
 #include <thread>  // C++11
 #include <vector>
-#include <array>
 
 #include <iostream>
 
@@ -92,6 +92,16 @@ typedef nanort::real3<float> float3;
 inline float3 Lerp3(float3 v0, float3 v1, float3 v2, float u, float v) {
   return (1.0f - u - v) * v0 + u * v1 + v * v2;
 }
+
+inline float3 faceforward(const float3 n, const float3 I) {
+  const float ndotI = vdot(n, I);
+  if (ndotI > 0.0f) {
+    return -n;
+  }
+  return n;
+}
+
+inline float3 reflect(float3 I, float3 N) { return I - 2.0f * vdot(I, N) * N; }
 
 inline void CalcNormal(float3& N, float3 v0, float3 v1, float3 v2) {
   float3 v10 = v1 - v0;
@@ -199,7 +209,6 @@ void BuildCameraFrame(float3* origin, float3* corner, float3* u, float3* v,
   }
 }
 
-
 #if 0  // TODO(LTE): Not used method. Delete.
 nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
                                const float3& du, const float3& dv, float u,
@@ -226,18 +235,11 @@ nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
 #endif
 
 void irradianceSH(const float sh[9][3], const float3 n, float rgb[3]) {
-
   for (int i = 0; i < 3; i++) {
-    rgb[i] = 
-          sh[0][i]
-        + sh[1][i] * (n[1])
-        + sh[2][i] * (n[2])
-        + sh[3][i] * (n[0])
-        + sh[4][i] * (n[1] * n[0])
-        + sh[5][i] * (n[1] * n[2])
-        + sh[6][i] * (3.0f  * n[2] * n[2] - 1.0f)
-        + sh[7][i] * (n[2] * n[0])
-        + sh[8][i] * (n[0] * n[0] - n[1] * n[1]);
+    rgb[i] = sh[0][i] + sh[1][i] * (n[1]) + sh[2][i] * (n[2]) +
+             sh[3][i] * (n[0]) + sh[4][i] * (n[1] * n[0]) +
+             sh[5][i] * (n[1] * n[2]) + sh[6][i] * (3.0f * n[2] * n[2] - 1.0f) +
+             sh[7][i] * (n[2] * n[0]) + sh[8][i] * (n[0] * n[0] - n[1] * n[1]);
   }
 }
 
@@ -429,13 +431,35 @@ static void SampleTexture(float* rgba, float u, float v, int width, int height,
   }
 }
 
-void FetchTexture(const Texture& texture, float u, float v, float* col) {
+static void FetchTexture(const Texture& texture, float u, float v, float* col) {
   SampleTexture(col, u, v, texture.width, texture.height, texture.components,
                 texture.image);
 }
 
-void SampleEnvmap(const example::Asset& asset, const float n[3], int lod, float *col)
-{
+static void prefilteredDFG(float NoV, float roughness, float uv[2]) {
+  // Karis' approximation based on Lazarov's
+  const float c0[4] = {-1.0f, -0.0275f, -0.572f, 0.022f};
+  const float c1[4] = {1.0f, 0.0425f, 1.040f, -0.040f};
+  float r[4];
+  r[0] = roughness * c0[0] + c1[0];
+  r[1] = roughness * c0[1] + c1[1];
+  r[2] = roughness * c0[2] + c1[2];
+  r[3] = roughness * c0[3] + c1[3];
+
+  float a004 = std::min(r[0] * r[0], std::exp2(-9.28f * NoV)) * r[0] + r[1];
+  uv[0] = -1.04f * a004 + r[3];
+  uv[1] = 1.04f * a004 + r[2];
+  // Zioma's approximation based on Karis
+  // return vec2(1.0, pow(1.0 - max(roughness, NoV), 3.0));
+}
+
+static float roughness_to_lod(const float roughness) {
+  // Assume 256x256 cubemap
+  return 8.0f * roughness;
+}
+
+static void SampleEnvmap(const example::Asset& asset, const float3 n,
+                         float lod, float* col) {
   if (asset.cubemap_ibl.size() == 0) {
     // no envmap
     col[0] = 0.0f;
@@ -450,18 +474,28 @@ void SampleEnvmap(const example::Asset& asset, const float n[3], int lod, float 
   // flipY
   v = 1.0f - v;
 
-  lod = std::min(int(asset.cubemap_ibl.size()-1), std::max(0, lod));
+  int ilod0 = std::min(int(asset.cubemap_ibl.size() - 1),
+                       std::max(0, int(std::trunc(lod))));
+  int ilod1 =
+      std::min(int(asset.cubemap_ibl.size() - 1), std::max(0, ilod0 + 1));
+  float frac = lod - float(ilod0);
 
-  const std::array<example::Image, 6> &cubemap = asset.cubemap_ibl[lod];
+  const std::array<example::Image, 6>& cubemap0 = asset.cubemap_ibl[ilod0];
+  const std::array<example::Image, 6>& cubemap1 = asset.cubemap_ibl[ilod1];
 
-  const example::Image &face = cubemap[face_idx];
+  const example::Image& face0 = cubemap0[face_idx];
+  const example::Image& face1 = cubemap1[face_idx];
 
-  float rgba[4];
-  SampleTexture(rgba, u, v, face.width, face.height, face.channels, face.pixels.data());
+  float rgba0[4];
+  float rgba1[4];
+  SampleTexture(rgba0, u, v, face0.width, face0.height, face0.channels,
+                face0.pixels.data());
+  SampleTexture(rgba1, u, v, face1.width, face1.height, face1.channels,
+                face1.pixels.data());
 
-  col[0] = rgba[0];
-  col[1] = rgba[1];
-  col[2] = rgba[2];
+  col[0] = (1.0f - frac) * rgba0[0] + frac * rgba1[0];
+  col[1] = (1.0f - frac) * rgba0[1] + frac * rgba1[1];
+  col[2] = (1.0f - frac) * rgba0[2] + frac * rgba1[2];
 }
 
 bool Renderer::Render(RenderLayer* layer, float quat[4],
@@ -519,7 +553,6 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
         //}
 
         for (int x = 0; x < config.width; x++) {
-
           nanort::Ray<float> ray;
           ray.org[0] = origin[0];
           ray.org[1] = origin[1];
@@ -643,77 +676,71 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
 
             // Fetch texture
             unsigned int material_id = mesh.material_ids[isect.prim_id];
+            const Material& material = (static_cast<int>(material_id) >= 0 &&
+                                        material_id < materials.size())
+                                           ? materials[material_id]
+                                           : default_material;
 
-            // printf("material_id=%d materials=%lld\n", material_id,
-            // materials.size());
+            float base_col[3];
 
-            float diffuse_col[3];
-
-            float specular_col[3];
-
-            if (static_cast<int>(material_id) >= 0 &&
-                material_id < materials.size()) {
-              // printf("ok mat\n");
-
-              int diffuse_texid = materials[material_id].diffuse_texid;
-              if (diffuse_texid >= 0) {
-                FetchTexture(textures[diffuse_texid], UV[0], UV[1],
-                             diffuse_col);
-              } else {
-                diffuse_col[0] = materials[material_id].diffuse[0];
-                diffuse_col[1] = materials[material_id].diffuse[1];
-                diffuse_col[2] = materials[material_id].diffuse[2];
-              }
-
-              int specular_texid = materials[material_id].specular_texid;
-              if (specular_texid >= 0) {
-                FetchTexture(textures[specular_texid], UV[0], UV[1],
-                             specular_col);
-              } else {
-                specular_col[0] = materials[material_id].specular[0];
-                specular_col[1] = materials[material_id].specular[1];
-                specular_col[2] = materials[material_id].specular[2];
-              }
-            } else
-            // tigra: wrong material_id, use default_material
-            {
-              // printf("default_material\n");
-
-              diffuse_col[0] = default_material.diffuse[0];
-              diffuse_col[1] = default_material.diffuse[1];
-              diffuse_col[2] = default_material.diffuse[2];
-              specular_col[0] = default_material.specular[0];
-              specular_col[1] = default_material.specular[1];
-              specular_col[2] = default_material.specular[2];
+            int basecol_texid = material.diffuse_texid;
+            if (basecol_texid >= 0) {
+              FetchTexture(textures[basecol_texid], UV[0], UV[1], base_col);
+            } else {
+              base_col[0] = material.baseColor[0];
+              base_col[1] = material.baseColor[1];
+              base_col[2] = material.baseColor[2];
             }
 
-            // SH shading
-            
-            //float NdotV = fabsf(vdot(N, dir));
-            float irrad[3];
-            irradianceSH(asset.sh, N, irrad);
+            // Based on Filament's PBR model.
+            // Remap
+            float metallic = std::max(0.0f, std::min(1.0f, material.metallic));
+            float diffuseColor[3];
+            diffuseColor[0] = (1.0f - metallic) * base_col[0];
+            diffuseColor[1] = (1.0f - metallic) * base_col[1];
+            diffuseColor[2] = (1.0f - metallic) * base_col[2];
+          
 
-            irrad[0] *= config.intensity;
-            irrad[1] *= config.intensity;
-            irrad[2] *= config.intensity;
+            float diffuse_rgb[3];
+
+            float3 Nf = faceforward(N, dir);
+            float lod = roughness_to_lod(material.roughness); 
+            if (lod >= 7) {
+              // Use SH
+              float irrad[3];
+              irradianceSH(asset.sh, Nf, irrad);
+
+              diffuse_rgb[0] = irrad[0] * config.intensity * diffuseColor[0];
+              diffuse_rgb[1] = irrad[1] * config.intensity * diffuseColor[1];
+              diffuse_rgb[2] = irrad[2] * config.intensity * diffuseColor[2];
+            } else {
+              float3 R = reflect(dir, Nf);
+
+              float ibl[3];
+              SampleEnvmap(asset, R, lod, ibl);
+              diffuse_rgb[0] = ibl[0] * config.intensity * diffuseColor[0];
+              diffuse_rgb[1] = ibl[1] * config.intensity * diffuseColor[1];
+              diffuse_rgb[2] = ibl[2] * config.intensity * diffuseColor[2];
+            }
+
 
             if (config.pass == 0) {
               layer->rgba[4 * (y * config.width + x) + 0] =
-                  irrad[0] * diffuse_col[0];
+                  diffuse_rgb[0];
               layer->rgba[4 * (y * config.width + x) + 1] =
-                  irrad[1] * diffuse_col[1];
+                  diffuse_rgb[1];
               layer->rgba[4 * (y * config.width + x) + 2] =
-                  irrad[2] * diffuse_col[2];
+                  diffuse_rgb[2];
               layer->rgba[4 * (y * config.width + x) + 3] = 1.0f;
               layer->sampleCounts[y * config.width + x] =
                   1;  // Set 1 for the first pass
             } else {  // additive.
               layer->rgba[4 * (y * config.width + x) + 0] +=
-                  irrad[0] * diffuse_col[0];
+                  diffuse_rgb[0];
               layer->rgba[4 * (y * config.width + x) + 1] +=
-                  irrad[1] * diffuse_col[1];
+                  diffuse_rgb[1];
               layer->rgba[4 * (y * config.width + x) + 2] +=
-                  irrad[2] * diffuse_col[2];
+                  diffuse_rgb[2];
               layer->rgba[4 * (y * config.width + x) + 3] += 1.0f;
               layer->sampleCounts[y * config.width + x]++;
             }
@@ -737,12 +764,14 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
               }
 
               // See background(IBL)
-              int lod = 0; // TODO(LTE)
               float bg_col[3];
-              SampleEnvmap(asset, ray.dir, lod, bg_col);
-              layer->rgba[4 * (y * config.width + x) + 0] += asset.bg_intensity * bg_col[0];
-              layer->rgba[4 * (y * config.width + x) + 1] += asset.bg_intensity * bg_col[1];
-              layer->rgba[4 * (y * config.width + x) + 2] += asset.bg_intensity * bg_col[2];
+              SampleEnvmap(asset, dir, 0.0f, bg_col);
+              layer->rgba[4 * (y * config.width + x) + 0] +=
+                  asset.bg_intensity * bg_col[0];
+              layer->rgba[4 * (y * config.width + x) + 1] +=
+                  asset.bg_intensity * bg_col[1];
+              layer->rgba[4 * (y * config.width + x) + 2] +=
+                  asset.bg_intensity * bg_col[2];
               layer->rgba[4 * (y * config.width + x) + 3] += 1.0f;
 
               // No super sampling

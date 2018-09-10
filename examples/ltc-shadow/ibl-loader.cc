@@ -1,10 +1,11 @@
-#include <fstream>
-#include <chrono>
-#include <iostream>
 #include <array>
+#include <chrono>
+#include <cmath>
+#include <fstream>
+#include <iostream>
 
-#include "stb_image.h"
 #include "ibl-loader.h"
+#include "stb_image.h"
 
 namespace example {
 
@@ -18,7 +19,8 @@ static bool FileExists(const std::string &filepath) {
   return true;
 }
 
-static std::string JoinPath(const std::string &dir, const std::string &filename) {
+static std::string JoinPath(const std::string &dir,
+                            const std::string &filename) {
   if (dir.empty()) {
     return filename;
   } else {
@@ -80,10 +82,8 @@ static std::string GetFileExtension(const std::string &filename) {
   return "";
 }
 
-bool LoadHDRImage(const std::string &filename,
-                  std::vector<float> *out_image, int *out_width,
-                  int *out_height, int *out_channels) {
-
+bool LoadHDRImage(const std::string &filename, std::vector<float> *out_image,
+                  int *out_width, int *out_height, int *out_channels) {
   auto start_t = std::chrono::system_clock::now();
 
   size_t width = 0, height = 0;
@@ -91,18 +91,16 @@ bool LoadHDRImage(const std::string &filename,
 
   // TODO(LTE): Support EXR image
   // TODO(LTE): Support 16bit or 32bit TIFF.
-  
-  std::string ext = GetFileExtension(filename);
-  if ((ext.compare("rgbm") == 0) ||
-      (ext.compare("RGBM") == 0)) {
 
+  std::string ext = GetFileExtension(filename);
+  if ((ext.compare("rgbm") == 0) || (ext.compare("RGBM") == 0)) {
     // RGBM encoded HDR image with LDR format(usually JPG or PNG)
     // Use STB to load LDR image.
 
     int image_width, image_height, n;
 
-    unsigned char *data = stbi_load(filename.c_str(), &image_width, &image_height,
-                                    &n, STBI_default);
+    unsigned char *data = stbi_load(filename.c_str(), &image_width,
+                                    &image_height, &n, STBI_default);
 
     if (!data) {
       std::cerr << "File not found " << filename << std::endl;
@@ -155,7 +153,8 @@ bool LoadHDRImage(const std::string &filename,
 
   auto end_t = std::chrono::system_clock::now();
   std::chrono::duration<double, std::milli> ms = end_t - start_t;
-  std::cout << "Image loading time : " << ms.count() << " [msecs]" << std::endl;;
+  std::cout << "Image loading time : " << ms.count() << " [msecs]" << std::endl;
+  ;
 
   (*out_width) = int(width);
   (*out_height) = int(height);
@@ -164,11 +163,12 @@ bool LoadHDRImage(const std::string &filename,
   return true;
 }
 
-int LoadCubemaps(std::string& dirpath, std::vector<std::array<Image, 6>> *out_cubemaps) {
-
+int LoadCubemaps(std::string &dirpath,
+                 std::vector<std::array<Image, 6> > *out_cubemaps) {
   std::cout << "Load ibl from : " << dirpath << std::endl;
 
-  std::array<std::string, 6> cubemap_faces = {{ "px", "nx", "py", "ny", "pz", "nz" }};
+  std::array<std::string, 6> cubemap_faces = {
+      {"px", "nx", "py", "ny", "pz", "nz"}};
 
   int num_levels = 0;
 
@@ -176,11 +176,9 @@ int LoadCubemaps(std::string& dirpath, std::vector<std::array<Image, 6>> *out_cu
 
   // up to 8 levels.
   for (size_t m = 0; m < 8; m++) {
-
     std::string prefix = "m" + std::to_string(m) + "_";
 
     for (size_t f = 0; f < 6; f++) {
-
       std::string filename = JoinPath(dirpath, prefix + cubemap_faces[f]);
 
       filename += ".rgbm";
@@ -190,28 +188,29 @@ int LoadCubemaps(std::string& dirpath, std::vector<std::array<Image, 6>> *out_cu
       if (!FileExists(filename)) {
         if (f == 0) {
           // No files for this level.
-          std::cerr << "It looks file does not exit : " << filename << std::endl;
+          std::cerr << "It looks file does not exit : " << filename
+                    << std::endl;
           return num_levels;
         } else {
-          std::cerr << "Image for cubemap face[" << f << "] at level " << m << " not found : " << f << std::endl;
+          std::cerr << "Image for cubemap face[" << f << "] at level " << m
+                    << " not found : " << f << std::endl;
           return num_levels;
         }
       }
 
       Image image;
-      if (!LoadHDRImage(filename, &image.pixels, &(image.width), &(image.height), &(image.channels))) {
-      
+      if (!LoadHDRImage(filename, &image.pixels, &(image.width),
+                        &(image.height), &(image.channels))) {
         return num_levels;
       }
 
-      if ((image.channels != 3) &&
-          (image.channels != 4)) {
-        std::cerr << "Image must be RGB or RGBA : " << filename << ", but got channels " << image.channels << std::endl;
+      if ((image.channels != 3) && (image.channels != 4)) {
+        std::cerr << "Image must be RGB or RGBA : " << filename
+                  << ", but got channels " << image.channels << std::endl;
         return num_levels;
       }
 
       cubemap[f] = std::move(image);
-
     }
 
     out_cubemaps->emplace_back(std::move(cubemap));
@@ -222,5 +221,4 @@ int LoadCubemaps(std::string& dirpath, std::vector<std::array<Image, 6>> *out_cu
   return num_levels;
 }
 
-
-} // namespace example
+}  // namespace example

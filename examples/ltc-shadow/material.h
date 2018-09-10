@@ -15,49 +15,32 @@ namespace example {
 struct Material {
   std::string name;
 
-  // float ambient[3];
-  float diffuse[3];
-  float specular[3];
-  // float reflection[3];
-  // float refraction[3];
+  float baseColor[3];
+  float reflectance;
+  float metallic;
+  float clearcoat;  // clearcoat_thickness in PBR .mtl
+  float clearcoat_roughness;
+  float anisotropy;
+
   int id;
   int diffuse_texid;
-  int specular_texid;
-  // int reflection_texid;
-  // int transparency_texid;
-  // int bump_texid;
-  // int normal_texid;  // normal map
-  // int alpha_texid;  // alpha map
 
   float roughness;
 
   Material() {
-    // ambient[0] = 0.0;
-    // ambient[1] = 0.0;
-    // ambient[2] = 0.0;
-    diffuse[0] = 0.5f;
-    diffuse[1] = 0.5f;
-    diffuse[2] = 0.5f;
-    specular[0] = 0.5f;
-    specular[1] = 0.5f;
-    specular[2] = 0.5f;
+    baseColor[0] = 0.5f;
+    baseColor[1] = 0.5f;
+    baseColor[2] = 0.5f;
 
-    roughness = 1.0f;
+    reflectance = 0.0f;
+    roughness = 0.0f;
+    metallic = 0.0f;
+    anisotropy = 0.0f;
+    clearcoat = 0.0f;
+    clearcoat_roughness = 0.0f;
 
-    // reflection[0] = 0.0;
-    // reflection[1] = 0.0;
-    // reflection[2] = 0.0;
-    // refraction[0] = 0.0;
-    // refraction[1] = 0.0;
-    // refraction[2] = 0.0;
     id = -1;
     diffuse_texid = -1;
-    specular_texid = -1;
-    // reflection_texid = -1;
-    // transparency_texid = -1;
-    // bump_texid = -1;
-    // normal_texid = -1;
-    // alpha_texid = -1;
   }
 };
 
@@ -87,13 +70,6 @@ struct HDRTexture {
     height = -1;
     components = -1;
   }
-};
-
-struct Image {
-  int width;
-  int height;
-  int channels; // 3 or 4.
-  std::vector<float> pixels;  // channels x width x height
 };
 
 

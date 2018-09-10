@@ -12,6 +12,7 @@ sources = {
    "main.cc",
    "render.cc",
    "render-config.cc",
+   "pbr-util.cc",
    "ibl-loader.cc",
    "obj-loader.cc",
    "../common/matrix.cc",

@@ -1,5 +1,6 @@
-{ "obj_filename" : "../common/cornellbox_suzanne.obj",
-  "ibl_dirname" : "sunsky",
+{ "obj_filename" : "orb.obj",
+  "ibl_dirname" : "AR_20171114_008_hdr_001_srgb/",
+  "sh_filename" : "AR_20171114_008_hdr_001_srgb/sh.txt",
   "scene_scale" : 1.0,
   "width" : 512,
   "height" : 512,

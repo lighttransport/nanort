@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "material.h"
+#include "image.h"
 
 namespace example {
 

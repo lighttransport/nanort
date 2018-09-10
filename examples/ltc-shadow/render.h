@@ -16,6 +16,7 @@
 #include "../nanosg/nanosg.h"
 #include "mesh.h"
 #include "material.h"
+#include "image.h"
 #include "render-layer.h"
 
 namespace example {

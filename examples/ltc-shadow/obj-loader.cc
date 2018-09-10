@@ -438,23 +438,26 @@ bool LoadObj(const std::string &filename, float scale,
   for (size_t i = 0; i < materials.size(); i++) {
     (*out_materials)[i].name = materials[i].name;
 
-    (*out_materials)[i].diffuse[0] = materials[i].diffuse[0];
-    (*out_materials)[i].diffuse[1] = materials[i].diffuse[1];
-    (*out_materials)[i].diffuse[2] = materials[i].diffuse[2];
-    (*out_materials)[i].specular[0] = materials[i].specular[0];
-    (*out_materials)[i].specular[1] = materials[i].specular[1];
-    (*out_materials)[i].specular[2] = materials[i].specular[2];
+    (*out_materials)[i].baseColor[0] = materials[i].diffuse[0];
+    (*out_materials)[i].baseColor[1] = materials[i].diffuse[1];
+    (*out_materials)[i].baseColor[2] = materials[i].diffuse[2];
 
     (*out_materials)[i].id = int(i);
 
+    (*out_materials)[i].metallic = materials[i].metallic;
     (*out_materials)[i].roughness = materials[i].roughness;
+    (*out_materials)[i].clearcoat = materials[i].clearcoat_thickness;
+    (*out_materials)[i].clearcoat_roughness = materials[i].clearcoat_roughness;
+    (*out_materials)[i].anisotropy = materials[i].anisotropy;
+
+    if (materials[i].unknown_parameter.count("reflectance")) {
+      (*out_materials)[i].reflectance = std::atof(materials[i].unknown_parameter["reflectance"].c_str());
+    }
+      
 
     // map_Kd
     (*out_materials)[i].diffuse_texid =
         LoadTexture(materials[i].diffuse_texname, out_textures);
-    // map_Ks
-    (*out_materials)[i].specular_texid =
-        LoadTexture(materials[i].specular_texname, out_textures);
   }
 
   return true;
