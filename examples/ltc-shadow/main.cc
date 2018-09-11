@@ -93,6 +93,7 @@ THE SOFTWARE.
 #include "render-config.h"
 #include "render-layer.h"
 #include "ibl-loader.h"
+#include "pbr-util.h"
 #include "render.h"
 #include "trackball.h"
 
@@ -473,7 +474,18 @@ inline float pseudoColor(float v, int ch) {
   }
 }
 
-void UpdateDisplayTextureGL(GLint tex_id, int width, int height) {
+inline float linearTosRGB(float linear) {
+    if (linear <= 0.0031308f) {
+        return linear * 12.92f;
+    } else {
+        constexpr float a = 0.055f;
+        constexpr float a1 = 1.055f;
+        constexpr float p = 1 / 2.4f;
+        return a1 * std::pow(linear, p) - a;
+    }
+}
+
+static void UpdateDisplayTextureGL(GLint tex_id, int width, int height) {
   if (tex_id < 0) {
     // ???
     return;
@@ -495,6 +507,11 @@ void UpdateDisplayTextureGL(GLint tex_id, int width, int height) {
         buf[4 * i + 2] /= static_cast<float>(gRenderLayer.sampleCounts[i]);
         buf[4 * i + 3] /= static_cast<float>(gRenderLayer.sampleCounts[i]);
       }
+
+      // gamma correction
+      buf[4 * i + 0] = linearTosRGB(buf[4 * i + 0]);
+      buf[4 * i + 1] = linearTosRGB(buf[4 * i + 1]);
+      buf[4 * i + 2] = linearTosRGB(buf[4 * i + 2]);
     }
   } else if (gShowBufferMode == SHOW_BUFFER_NORMAL) {
     for (size_t i = 0; i < buf.size(); i++) {
@@ -812,6 +829,12 @@ int main(int argc, char **argv) {
       std::cerr << "Failed to load ibl" << std::endl;
       return EXIT_FAILURE;
     }
+  }
+
+  // Build DFG table.
+  {
+    // TODO(LTE): read multiscatter parameter from config.
+    example::BuildDFGLut(gRenderConfig.multiscatter, /* lut width */128, &(gAsset.dfg_lut));
   }
 
   // construct the scene

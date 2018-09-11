@@ -28,6 +28,8 @@ struct Asset {
   Material default_material;
   std::vector<Texture> textures;
 
+  Image dfg_lut;
+
   std::vector<std::array<Image, 6>> cubemap_ibl;
   float sh[9][3];
 

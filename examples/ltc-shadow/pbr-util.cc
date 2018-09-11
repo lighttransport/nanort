@@ -147,7 +147,7 @@ static void DFV_Multiscatter(float NoV, float roughness, size_t numSamples,
 // Compute DFG Lut.
 // x axis : NdotV, y axis : roughness
 //  
-void DFG(const bool multiscatter, const size_t width, Image *output) {
+void BuildDFGLut(const bool multiscatter, const size_t width, Image *output) {
   auto fn = multiscatter ? DFV_Multiscatter : DFV;
 
   size_t height = width;

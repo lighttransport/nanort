@@ -234,13 +234,20 @@ nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
 }
 #endif
 
-void irradianceSH(const float sh[9][3], const float3 n, float rgb[3]) {
+float3 irradianceSH(const float sh[9][3], const float3 n) {
+  float rgb[3];
+
   for (int i = 0; i < 3; i++) {
     rgb[i] = sh[0][i] + sh[1][i] * (n[1]) + sh[2][i] * (n[2]) +
              sh[3][i] * (n[0]) + sh[4][i] * (n[1] * n[0]) +
              sh[5][i] * (n[1] * n[2]) + sh[6][i] * (3.0f * n[2] * n[2] - 1.0f) +
              sh[7][i] * (n[2] * n[0]) + sh[8][i] * (n[0] * n[0] - n[1] * n[1]);
+
+    // clamp negative calue.
+    rgb[i] = std::max(rgb[i], 0.0f);
   }
+
+  return float3(rgb);
 }
 
 void convert_xyz_to_cube_uv(float x, float y, float z, int* index, float* u,
@@ -458,8 +465,8 @@ static float roughness_to_lod(const float roughness) {
   return 8.0f * roughness;
 }
 
-static void SampleEnvmap(const example::Asset& asset, const float3 n,
-                         float lod, float* col) {
+static void SampleEnvmap(const example::Asset& asset, const float3 n, float lod,
+                         float* col) {
   if (asset.cubemap_ibl.size() == 0) {
     // no envmap
     col[0] = 0.0f;
@@ -497,6 +504,183 @@ static void SampleEnvmap(const example::Asset& asset, const float3 n,
   col[1] = (1.0f - frac) * rgba0[1] + frac * rgba1[1];
   col[2] = (1.0f - frac) * rgba0[2] + frac * rgba1[2];
 }
+
+// Based on Filament's GLSL shader --------------------------------------
+
+#if defined(TARGET_MOBILE)
+// min roughness such that (MIN_ROUGHNESS^4) > 0 in fp16 (i.e. 2^(-14/4),
+// slightly rounded up)
+#define MIN_ROUGHNESS 0.089f
+#define MIN_LINEAR_ROUGHNESS 0.007921f
+#else
+#define MIN_ROUGHNESS 0.045f
+#define MIN_LINEAR_ROUGHNESS 0.002025f
+#endif
+
+#define MAX_CLEAR_COAT_ROUGHNESS 0.6
+
+static inline float pow5(float x) { return (x * x) * (x * x) * x; }
+
+static inline float3 saturate(const float3 v) {
+  return float3(std::max(0.0f, std::min(v[0], 1.0f)),
+                std::max(0.0f, std::min(v[1], 1.0f)),
+                std::max(0.0f, std::min(v[2], 1.0f)));
+}
+
+static float3 f0ClearCoatToSurface(const float3 f0) {
+  // Approximation of iorTof0(f0ToIor(f0), 1.5)
+  // This assumes that the clear coat layer has an IOR of 1.5
+#if defined(TARGET_MOBILE)
+  return saturate(f0 * (f0 * 0.526868f + 0.529324f) - 0.0482256f);
+#else
+  return saturate(f0 * (f0 * (0.941892f - 0.263008f * f0) + 0.346479f) -
+                  0.0285998f);
+#endif
+}
+
+static float3 prefilteredDFG(const Image& lut, const float NoV,
+                             const float roughness) {
+  float rgba[4];
+  SampleTexture(rgba, NoV, roughness, lut.width, lut.height, lut.channels,
+                lut.pixels.data());
+
+  return float3(rgba[0], rgba[1], 0.0f);  // float2
+}
+
+float computeSpecularAO(float NoV, float ao, float roughness) {
+#if defined(IBL_SPECULAR_OCCLUSION) && defined(MATERIAL_HAS_AMBIENT_OCCLUSION)
+  return saturate(pow(NoV + ao, exp2(-16.0 * roughness - 1.0)) - 1.0 + ao);
+#else
+  return 1.0;
+#endif
+}
+
+float3 specularDFG(const float3 dfg, const float3 f0) {
+#if defined(SHADING_MODEL_CLOTH) || \
+    !defined(USE_MULTIPLE_SCATTERING_COMPENSATION)
+  return f0 * dfg[0] + dfg[1];
+#else
+  return dfg[0] * (1.0f - f0) + dfg[1] * f0;
+#endif
+}
+
+static float3 specularIrradiance(const example::Asset& asset, const float3 r,
+                                 float roughness) {
+  // lod = nb_mips * sqrt(linear_roughness)
+  // where linear_roughness = roughness^2
+  // using all the mip levels requires seamless cubemap sampling
+  const float IBL_MAX_MIP_LEVEL =
+      8.0f;  // FIXME(LTE): Set max mip level from cubemap size.
+  float lod = IBL_MAX_MIP_LEVEL * roughness;
+  float rgba[4];
+  SampleEnvmap(asset, r, lod, rgba);
+
+  return float3(rgba[0], rgba[1], rgba[2]);
+}
+
+static float F_Schlick(float f0, float f90, float VoH) {
+  return f0 + (f90 - f0) * pow5(1.0f - VoH);
+}
+
+void evaluateClearCoatIBL(const example::Asset& asset, const float NoV,
+                          const float3& R, const float clearCoat,
+                          const float clearCoatRoughness, float specularAO,
+                          /* input */ float3* Fd, /* input */ float3* Fr) {
+//#if defined(MATERIAL_HAS_NORMAL) || defined(MATERIAL_HAS_CLEAR_COAT_NORMAL)
+#if 0
+    // We want to use the geometric normal for the clear coat layer
+    float clearCoatNoV = abs(dot(shading_clearCoatNormal, shading_view)) + FLT_EPS;
+    vec3 clearCoatR = reflect(-shading_view, shading_clearCoatNormal);
+#else
+  float clearCoatNoV = NoV;
+  float3 clearCoatR = R;
+#endif
+
+  // The clear coat layer assumes an IOR of 1.5 (4% reflectance)
+  float Fc = F_Schlick(0.04f, 1.0f, clearCoatNoV) * clearCoat;
+  float attenuation = 1.0f - Fc;
+  (*Fr) = (*Fr) * attenuation * attenuation;
+  (*Fr) = (*Fr) + specularIrradiance(asset, clearCoatR, clearCoatRoughness) *
+                      (specularAO * Fc);
+  (*Fd) = (*Fd) * attenuation;
+}
+
+static float3 Shade(const example::Asset& asset,
+                    const example::Material& material,
+                    const float3 inputBaseColor, const float3 N,
+                    const float3 V) {
+  float3 baseColor = inputBaseColor;
+  float metallic = std::max(0.0f, std::min(1.0f, material.metallic));
+  float3 diffuseColor = (1.0f - metallic) * float3(baseColor);
+  float reflectance = material.reflectance;
+  // Assumes an interface from air to an IOR of 1.5 for dielectrics
+  float3 f0 = float3(0.16f * reflectance * reflectance * (1.0f - metallic)) +
+              baseColor * metallic;
+
+  // Clamp the roughness to a minimum value to avoid divisions by 0 in the
+  // lighting code
+  float roughness = material.roughness;
+  roughness = std::min(1.0f, std::max(roughness, MIN_ROUGHNESS));
+
+  float linearRoughness = roughness * roughness;
+
+  // Clear coat ----------------------------------------
+  float clearCoat = material.clearcoat;
+  // Clamp the clear coat roughness to avoid divisions by 0
+  float clearCoatRoughness = material.clearcoat_roughness;
+  clearCoatRoughness = MIN_ROUGHNESS * (1.0f - clearCoatRoughness) +
+                       MAX_CLEAR_COAT_ROUGHNESS * clearCoatRoughness;
+
+  // Remap the roughness to perceptually linear roughness
+  float clearCoatLinearRoughness = clearCoatRoughness * clearCoatRoughness;
+  // The base layer's f0 is computed assuming an interface from air to an IOR
+  // of 1.5, but the clear coat layer forms an interface from IOR 1.5 to IOR
+  // 1.5. We recompute f0 by first computing its IOR, then reconverting to f0
+  // by using the correct interface
+  f0 = f0 * (1.0f - clearCoat) + f0ClearCoatToSurface(f0) * clearCoat;
+  // TODO: the base layer should be rougher
+
+  // ----------------------------------------------------
+
+  // Pre-filtered DFG term used for image-based lighting
+  float NoV = std::fabs(vdot(N, V));
+
+  // LUT texture version
+  float3 dfg = prefilteredDFG(asset.dfg_lut, NoV, roughness);
+  //float dfg_uv[2];
+  //prefilteredDFG(NoV, roughness, dfg_uv);
+  //float3 dfg = float3(dfg_uv[0], dfg_uv[1], 0.0f);
+
+  // Evaluate Light
+  // TODO(LTE): light loop
+  float3 color(0.0f);
+
+  float3 R = reflect(V, N);
+
+  float ao = 1.0f;  // TODO(LTE): material.ao
+  float specularAO = computeSpecularAO(NoV, ao, roughness);
+
+  float3 diffuseBRDF = ao;
+  float3 diffuseIrradiance = irradianceSH(asset.sh, N);
+  float3 Fd = diffuseColor * diffuseIrradiance * diffuseBRDF;
+
+  // specular indirect
+  float3 Fr_DFG = specularDFG(dfg, f0);
+  float3 Fr = Fr_DFG * specularIrradiance(asset, R, roughness) * specularAO;
+
+  float energyCompensation = 1.0f;  // FIXME(LTE)
+  Fr = Fr * energyCompensation;
+
+  evaluateClearCoatIBL(asset, NoV, R, clearCoat, clearCoatRoughness, specularAO,
+                       &Fd, &Fr);
+
+  // TODO
+  // evaluateSubsurfaceIBL
+
+  return (Fd + Fr);  // TODO(LTE): multiply iblLuminance here;
+}
+
+// -------------------------------------------------------------------------
 
 bool Renderer::Render(RenderLayer* layer, float quat[4],
                       const nanosg::Scene<float, example::Mesh<float> >& scene,
@@ -692,18 +876,11 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
               base_col[2] = material.baseColor[2];
             }
 
-            // Based on Filament's PBR model.
-            // Remap
-            float metallic = std::max(0.0f, std::min(1.0f, material.metallic));
-            float diffuseColor[3];
-            diffuseColor[0] = (1.0f - metallic) * base_col[0];
-            diffuseColor[1] = (1.0f - metallic) * base_col[1];
-            diffuseColor[2] = (1.0f - metallic) * base_col[2];
-          
-
-            float diffuse_rgb[3];
-
             float3 Nf = faceforward(N, dir);
+
+            float3 col = Shade(asset, material, float3(base_col), Nf, dir);
+
+#if 0
             float lod = roughness_to_lod(material.roughness); 
             if (lod >= 7) {
               // Use SH
@@ -722,25 +899,25 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
               diffuse_rgb[1] = ibl[1] * config.intensity * diffuseColor[1];
               diffuse_rgb[2] = ibl[2] * config.intensity * diffuseColor[2];
             }
-
+#endif
 
             if (config.pass == 0) {
               layer->rgba[4 * (y * config.width + x) + 0] =
-                  diffuse_rgb[0];
+                  config.intensity * col[0];
               layer->rgba[4 * (y * config.width + x) + 1] =
-                  diffuse_rgb[1];
+                  config.intensity * col[1];
               layer->rgba[4 * (y * config.width + x) + 2] =
-                  diffuse_rgb[2];
+                  config.intensity * col[2];
               layer->rgba[4 * (y * config.width + x) + 3] = 1.0f;
               layer->sampleCounts[y * config.width + x] =
                   1;  // Set 1 for the first pass
             } else {  // additive.
               layer->rgba[4 * (y * config.width + x) + 0] +=
-                  diffuse_rgb[0];
+                  config.intensity * col[0];
               layer->rgba[4 * (y * config.width + x) + 1] +=
-                  diffuse_rgb[1];
+                  config.intensity * col[1];
               layer->rgba[4 * (y * config.width + x) + 2] +=
-                  diffuse_rgb[2];
+                  config.intensity * col[2];
               layer->rgba[4 * (y * config.width + x) + 3] += 1.0f;
               layer->sampleCounts[y * config.width + x]++;
             }

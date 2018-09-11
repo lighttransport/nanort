@@ -117,6 +117,13 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
+  config->multiscatter = false;
+  if (o.find("multiscatter") != o.end()) {
+    if (o["multiscatter"].is<bool>()) {
+      config->multiscatter = o["height"].get<bool>();
+    }
+  }
+
   return true;
 }
 }

@@ -30,6 +30,8 @@ typedef struct {
   std::string ibl_dirname;
   std::string sh_filename;
 
+  bool multiscatter;
+
 } RenderConfig;
 
 /// Loads config from JSON file.
