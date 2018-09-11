@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2012-2017 Syoyo Fujita and many contributors.
+Copyright (c) 2012-2018 Syoyo Fujita and many contributors.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,8 @@ THE SOFTWARE.
 */
 
 //
+// version 1.2.0 : Hardened implementation(#175)
+// version 1.1.1 : Support smoothing groups(#162)
 // version 1.1.0 : Support parsing vertex color(#144)
 // version 1.0.8 : Fix parsing `g` tag just after `usemtl`(#138)
 // version 1.0.7 : Support multiple tex options(#126)
@@ -50,6 +52,16 @@ THE SOFTWARE.
 #include <vector>
 
 namespace tinyobj {
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#if __has_warning("-Wzero-as-null-pointer-constant")
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#endif
+
+#pragma clang diagnostic ignored "-Wpadded"
+
+#endif
 
 // https://en.wikipedia.org/wiki/Wavefront_.obj_file says ...
 //
@@ -101,11 +113,11 @@ namespace tinyobj {
 //         cube_left   | cube_right
 
 #ifdef TINYOBJLOADER_USE_DOUBLE
-  //#pragma message "using double"
-  typedef double real_t;
+//#pragma message "using double"
+typedef double real_t;
 #else
-  //#pragma message "using float"
-  typedef float real_t;
+//#pragma message "using float"
+typedef float real_t;
 #endif
 
 typedef enum {
@@ -120,7 +132,7 @@ typedef enum {
 } texture_type_t;
 
 typedef struct {
-  texture_type_t type;     // -type (default TEXTURE_TYPE_NONE)
+  texture_type_t type;      // -type (default TEXTURE_TYPE_NONE)
   real_t sharpness;         // -boost (default 1.0?)
   real_t brightness;        // base_value in -mm option (default 0)
   real_t contrast;          // gain_value in -mm option (default 1)
@@ -218,7 +230,10 @@ typedef struct {
                                                  // face. 3 = polygon, 4 = quad,
                                                  // ... Up to 255.
   std::vector<int> material_ids;                 // per-face material ID
-  std::vector<tag_t> tags;                       // SubD tag
+  std::vector<unsigned int> smoothing_group_ids;  // per-face smoothing group
+                                                  // ID(0 = off. positive value
+                                                  // = group id)
+  std::vector<tag_t> tags;                        // SubD tag
 } mesh_t;
 
 typedef struct {
@@ -358,6 +373,7 @@ void LoadMtl(std::map<std::string, int> *material_map,
 #include <cstdlib>
 #include <cstring>
 #include <utility>
+#include <limits>
 
 #include <fstream>
 #include <sstream>
@@ -366,13 +382,23 @@ namespace tinyobj {
 
 MaterialReader::~MaterialReader() {}
 
-
-struct vertex_index {
+struct vertex_index_t {
   int v_idx, vt_idx, vn_idx;
-  vertex_index() : v_idx(-1), vt_idx(-1), vn_idx(-1) {}
-  explicit vertex_index(int idx) : v_idx(idx), vt_idx(idx), vn_idx(idx) {}
-  vertex_index(int vidx, int vtidx, int vnidx)
+  vertex_index_t() : v_idx(-1), vt_idx(-1), vn_idx(-1) {}
+  explicit vertex_index_t(int idx) : v_idx(idx), vt_idx(idx), vn_idx(idx) {}
+  vertex_index_t(int vidx, int vtidx, int vnidx)
       : v_idx(vidx), vt_idx(vtidx), vn_idx(vnidx) {}
+};
+
+// Internal data structure for face representation
+// index + smoothing group.
+struct face_t {
+  unsigned int
+      smoothing_group_id;  // smoothing group id. 0 = smoothing groupd is off.
+  int pad_;
+  std::vector<vertex_index_t> vertex_indices;  // face vertex indices.
+
+  face_t() : smoothing_group_id(0) {}
 };
 
 struct tag_sizes {
@@ -430,10 +456,27 @@ static std::istream &safeGetline(std::istream &is, std::string &t) {
 #define IS_NEW_LINE(x) (((x) == '\r') || ((x) == '\n') || ((x) == '\0'))
 
 // Make index zero-base, and also support relative index.
-static inline int fixIndex(int idx, int n) {
-  if (idx > 0) return idx - 1;
-  if (idx == 0) return 0;
-  return n + idx;  // negative value = relative
+static inline bool fixIndex(int idx, int n, int *ret) {
+  if (!ret) {
+    return false;
+  }
+
+  if (idx > 0) {
+    (*ret) = idx - 1;
+    return true;
+  }
+
+  if (idx == 0) {
+    // zero is not allowed according to the spec.
+    return false;
+  }
+
+  if (idx < 0) {
+    (*ret) = n + idx;  // negative value = relative
+    return true;
+  }
+
+  return false;  // never reach here.
 }
 
 static inline std::string parseString(const char **token) {
@@ -586,9 +629,9 @@ static bool tryParseDouble(const char *s, const char *s_end, double *result) {
   }
 
 assemble:
-  *result =
-      (sign == '+' ? 1 : -1) *
-      (exponent ? std::ldexp(mantissa * std::pow(5.0, exponent), exponent) : mantissa);
+  *result = (sign == '+' ? 1 : -1) *
+            (exponent ? std::ldexp(mantissa * std::pow(5.0, exponent), exponent)
+                      : mantissa);
   return true;
 fail:
   return false;
@@ -618,16 +661,16 @@ static inline bool parseReal(const char **token, real_t *out) {
 }
 
 static inline void parseReal2(real_t *x, real_t *y, const char **token,
-                               const double default_x = 0.0,
-                               const double default_y = 0.0) {
+                              const double default_x = 0.0,
+                              const double default_y = 0.0) {
   (*x) = parseReal(token, default_x);
   (*y) = parseReal(token, default_y);
 }
 
-static inline void parseReal3(real_t *x, real_t *y, real_t *z, const char **token,
-                               const double default_x = 0.0,
-                               const double default_y = 0.0,
-                               const double default_z = 0.0) {
+static inline void parseReal3(real_t *x, real_t *y, real_t *z,
+                              const char **token, const double default_x = 0.0,
+                              const double default_y = 0.0,
+                              const double default_z = 0.0) {
   (*x) = parseReal(token, default_x);
   (*y) = parseReal(token, default_y);
   (*z) = parseReal(token, default_z);
@@ -645,11 +688,12 @@ static inline void parseV(real_t *x, real_t *y, real_t *z, real_t *w,
 }
 
 // Extension: parse vertex with colors(6 items)
-static inline bool parseVertexWithColor(real_t *x, real_t *y, real_t *z, real_t *r,
-                          real_t *g, real_t *b,
-                          const char **token, const double default_x = 0.0,
-                          const double default_y = 0.0,
-                          const double default_z = 0.0) {
+static inline bool parseVertexWithColor(real_t *x, real_t *y, real_t *z,
+                                        real_t *r, real_t *g, real_t *b,
+                                        const char **token,
+                                        const double default_x = 0.0,
+                                        const double default_y = 0.0,
+                                        const double default_z = 0.0) {
   (*x) = parseReal(token, default_x);
   (*y) = parseReal(token, default_y);
   (*z) = parseReal(token, default_z);
@@ -705,63 +749,85 @@ static inline texture_type_t parseTextureType(
 static tag_sizes parseTagTriple(const char **token) {
   tag_sizes ts;
 
+  (*token) += strspn((*token), " \t");
   ts.num_ints = atoi((*token));
   (*token) += strcspn((*token), "/ \t\r");
   if ((*token)[0] != '/') {
     return ts;
   }
-  (*token)++;
 
+  (*token)++;  // Skip '/'
+
+  (*token) += strspn((*token), " \t");
   ts.num_reals = atoi((*token));
   (*token) += strcspn((*token), "/ \t\r");
   if ((*token)[0] != '/') {
     return ts;
   }
-  (*token)++;
+  (*token)++;  // Skip '/'
 
-  ts.num_strings = atoi((*token));
-  (*token) += strcspn((*token), "/ \t\r") + 1;
+  ts.num_strings = parseInt(token);
 
   return ts;
 }
 
 // Parse triples with index offsets: i, i/j/k, i//k, i/j
-static vertex_index parseTriple(const char **token, int vsize, int vnsize,
-                                int vtsize) {
-  vertex_index vi(-1);
+static bool parseTriple(const char **token, int vsize, int vnsize, int vtsize,
+                        vertex_index_t *ret) {
+  if (!ret) {
+    return false;
+  }
 
-  vi.v_idx = fixIndex(atoi((*token)), vsize);
+  vertex_index_t vi(-1);
+
+  if (!fixIndex(atoi((*token)), vsize, &(vi.v_idx))) {
+    return false;
+  }
+
   (*token) += strcspn((*token), "/ \t\r");
   if ((*token)[0] != '/') {
-    return vi;
+    (*ret) = vi;
+    return true;
   }
   (*token)++;
 
   // i//k
   if ((*token)[0] == '/') {
     (*token)++;
-    vi.vn_idx = fixIndex(atoi((*token)), vnsize);
+    if (!fixIndex(atoi((*token)), vnsize, &(vi.vn_idx))) {
+      return false;
+    }
     (*token) += strcspn((*token), "/ \t\r");
-    return vi;
+    (*ret) = vi;
+    return true;
   }
 
   // i/j/k or i/j
-  vi.vt_idx = fixIndex(atoi((*token)), vtsize);
+  if (!fixIndex(atoi((*token)), vtsize, &(vi.vt_idx))) {
+    return false;
+  }
+
   (*token) += strcspn((*token), "/ \t\r");
   if ((*token)[0] != '/') {
-    return vi;
+    (*ret) = vi;
+    return true;
   }
 
   // i/j/k
   (*token)++;  // skip '/'
-  vi.vn_idx = fixIndex(atoi((*token)), vnsize);
+  if (!fixIndex(atoi((*token)), vnsize, &(vi.vn_idx))) {
+    return false;
+  }
   (*token) += strcspn((*token), "/ \t\r");
-  return vi;
+
+  (*ret) = vi;
+
+  return true;
 }
 
 // Parse raw triples: i, i/j/k, i//k, i/j
-static vertex_index parseRawTriple(const char **token) {
-  vertex_index vi(static_cast<int>(0));  // 0 is an invalid index in OBJ
+static vertex_index_t parseRawTriple(const char **token) {
+  vertex_index_t vi(static_cast<int>(0));  // 0 is an invalid index in OBJ
 
   vi.v_idx = atoi((*token));
   (*token) += strcspn((*token), "/ \t\r");
@@ -805,22 +871,22 @@ static bool ParseTextureNameAndOption(std::string *texname,
   } else {
     texopt->imfchan = 'm';
   }
-  texopt->bump_multiplier = 1.0f;
+  texopt->bump_multiplier = static_cast<real_t>(1.0);
   texopt->clamp = false;
   texopt->blendu = true;
   texopt->blendv = true;
-  texopt->sharpness = 1.0f;
-  texopt->brightness = 0.0f;
-  texopt->contrast = 1.0f;
-  texopt->origin_offset[0] = 0.0f;
-  texopt->origin_offset[1] = 0.0f;
-  texopt->origin_offset[2] = 0.0f;
-  texopt->scale[0] = 1.0f;
-  texopt->scale[1] = 1.0f;
-  texopt->scale[2] = 1.0f;
-  texopt->turbulence[0] = 0.0f;
-  texopt->turbulence[1] = 0.0f;
-  texopt->turbulence[2] = 0.0f;
+  texopt->sharpness = static_cast<real_t>(1.0);
+  texopt->brightness = static_cast<real_t>(0.0);
+  texopt->contrast = static_cast<real_t>(1.0);
+  texopt->origin_offset[0] = static_cast<real_t>(0.0);
+  texopt->origin_offset[1] = static_cast<real_t>(0.0);
+  texopt->origin_offset[2] = static_cast<real_t>(0.0);
+  texopt->scale[0] = static_cast<real_t>(1.0);
+  texopt->scale[1] = static_cast<real_t>(1.0);
+  texopt->scale[2] = static_cast<real_t>(1.0);
+  texopt->turbulence[0] = static_cast<real_t>(0.0);
+  texopt->turbulence[1] = static_cast<real_t>(0.0);
+  texopt->turbulence[2] = static_cast<real_t>(0.0);
   texopt->type = TEXTURE_TYPE_NONE;
 
   const char *token = linebuf;  // Assume line ends with NULL
@@ -845,15 +911,15 @@ static bool ParseTextureNameAndOption(std::string *texname,
     } else if ((0 == strncmp(token, "-o", 2)) && IS_SPACE((token[2]))) {
       token += 3;
       parseReal3(&(texopt->origin_offset[0]), &(texopt->origin_offset[1]),
-                  &(texopt->origin_offset[2]), &token);
+                 &(texopt->origin_offset[2]), &token);
     } else if ((0 == strncmp(token, "-s", 2)) && IS_SPACE((token[2]))) {
       token += 3;
       parseReal3(&(texopt->scale[0]), &(texopt->scale[1]), &(texopt->scale[2]),
-                  &token, 1.0, 1.0, 1.0);
+                 &token, 1.0, 1.0, 1.0);
     } else if ((0 == strncmp(token, "-t", 2)) && IS_SPACE((token[2]))) {
       token += 3;
       parseReal3(&(texopt->turbulence[0]), &(texopt->turbulence[1]),
-                  &(texopt->turbulence[2]), &token);
+                 &(texopt->turbulence[2]), &token);
     } else if ((0 == strncmp(token, "-type", 5)) && IS_SPACE((token[5]))) {
       token += 5;
       texopt->type = parseTextureType((&token), TEXTURE_TYPE_NONE);
@@ -869,12 +935,19 @@ static bool ParseTextureNameAndOption(std::string *texname,
       token += 4;
       parseReal2(&(texopt->brightness), &(texopt->contrast), &token, 0.0, 1.0);
     } else {
-      // Assume texture filename
+    // Assume texture filename
+#if 0
       size_t len = strcspn(token, " \t\r");  // untile next space
       texture_name = std::string(token, token + len);
       token += len;
 
       token += strspn(token, " \t");  // skip space
+#else
+      // Read filename until line end to parse filename containing whitespace
+      // TODO(syoyo): Support parsing texture option flag after the filename.
+      texture_name = std::string(token);
+      token += texture_name.length();
+#endif
 
       found_texname = true;
     }
@@ -899,24 +972,24 @@ static void InitMaterial(material_t *material) {
   material->reflection_texname = "";
   material->alpha_texname = "";
   for (int i = 0; i < 3; i++) {
-    material->ambient[i] = 0.f;
-    material->diffuse[i] = 0.f;
-    material->specular[i] = 0.f;
-    material->transmittance[i] = 0.f;
-    material->emission[i] = 0.f;
+    material->ambient[i] = static_cast<real_t>(0.0);
+    material->diffuse[i] = static_cast<real_t>(0.0);
+    material->specular[i] = static_cast<real_t>(0.0);
+    material->transmittance[i] = static_cast<real_t>(0.0);
+    material->emission[i] = static_cast<real_t>(0.0);
   }
   material->illum = 0;
-  material->dissolve = 1.f;
-  material->shininess = 1.f;
-  material->ior = 1.f;
+  material->dissolve = static_cast<real_t>(1.0);
+  material->shininess = static_cast<real_t>(1.0);
+  material->ior = static_cast<real_t>(1.0);
 
-  material->roughness = 0.f;
-  material->metallic = 0.f;
-  material->sheen = 0.f;
-  material->clearcoat_thickness = 0.f;
-  material->clearcoat_roughness = 0.f;
-  material->anisotropy_rotation = 0.f;
-  material->anisotropy = 0.f;
+  material->roughness = static_cast<real_t>(0.0);
+  material->metallic = static_cast<real_t>(0.0);
+  material->sheen = static_cast<real_t>(0.0);
+  material->clearcoat_thickness = static_cast<real_t>(0.0);
+  material->clearcoat_roughness = static_cast<real_t>(0.0);
+  material->anisotropy_rotation = static_cast<real_t>(0.0);
+  material->anisotropy = static_cast<real_t>(0.0);
   material->roughness_texname = "";
   material->metallic_texname = "";
   material->sheen_texname = "";
@@ -926,60 +999,256 @@ static void InitMaterial(material_t *material) {
   material->unknown_parameter.clear();
 }
 
-static bool exportFaceGroupToShape(
-    shape_t *shape, const std::vector<std::vector<vertex_index> > &faceGroup,
-    const std::vector<tag_t> &tags, const int material_id,
-    const std::string &name, bool triangulate) {
+// code from https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html
+template<typename T>
+static int pnpoly(int nvert, T *vertx, T *verty, T testx,
+                  T testy) {
+  int i, j, c = 0;
+  for (i = 0, j = nvert - 1; i < nvert; j = i++) {
+    if (((verty[i] > testy) != (verty[j] > testy)) &&
+        (testx <
+         (vertx[j] - vertx[i]) * (testy - verty[i]) / (verty[j] - verty[i]) +
+             vertx[i]))
+      c = !c;
+  }
+  return c;
+}
+
+// TODO(syoyo): refactor function.
+static bool exportFaceGroupToShape(shape_t *shape,
+                                   const std::vector<face_t> &faceGroup,
+                                   const std::vector<tag_t> &tags,
+                                   const int material_id,
+                                   const std::string &name, bool triangulate,
+                                   const std::vector<real_t> &v) {
   if (faceGroup.empty()) {
     return false;
   }
 
   // Flatten vertices and indices
   for (size_t i = 0; i < faceGroup.size(); i++) {
-    const std::vector<vertex_index> &face = faceGroup[i];
+    const face_t &face = faceGroup[i];
 
-    vertex_index i0 = face[0];
-    vertex_index i1(-1);
-    vertex_index i2 = face[1];
+    size_t npolys = face.vertex_indices.size();
 
-    size_t npolys = face.size();
+    if (npolys < 3) {
+      // Face must have 3+ vertices.
+      continue;
+    }
+
+    vertex_index_t i0 = face.vertex_indices[0];
+    vertex_index_t i1(-1);
+    vertex_index_t i2 = face.vertex_indices[1];
 
     if (triangulate) {
-      // Polygon -> triangle fan conversion
-      for (size_t k = 2; k < npolys; k++) {
-        i1 = i2;
-        i2 = face[k];
+      // find the two axes to work in
+      size_t axes[2] = {1, 2};
+      for (size_t k = 0; k < npolys; ++k) {
+        i0 = face.vertex_indices[(k + 0) % npolys];
+        i1 = face.vertex_indices[(k + 1) % npolys];
+        i2 = face.vertex_indices[(k + 2) % npolys];
+        size_t vi0 = size_t(i0.v_idx);
+        size_t vi1 = size_t(i1.v_idx);
+        size_t vi2 = size_t(i2.v_idx);
 
-        index_t idx0, idx1, idx2;
-        idx0.vertex_index = i0.v_idx;
-        idx0.normal_index = i0.vn_idx;
-        idx0.texcoord_index = i0.vt_idx;
-        idx1.vertex_index = i1.v_idx;
-        idx1.normal_index = i1.vn_idx;
-        idx1.texcoord_index = i1.vt_idx;
-        idx2.vertex_index = i2.v_idx;
-        idx2.normal_index = i2.vn_idx;
-        idx2.texcoord_index = i2.vt_idx;
+        if (((3 * vi0 + 2) >= v.size()) ||
+            ((3 * vi1 + 2) >= v.size()) ||
+            ((3 * vi2 + 2) >= v.size())) {
+          // Invalid triangle.
+          // FIXME(syoyo): Is it ok to simply skip this invalid triangle?
+          continue;
+        }
+        real_t v0x = v[vi0 * 3 + 0];
+        real_t v0y = v[vi0 * 3 + 1];
+        real_t v0z = v[vi0 * 3 + 2];
+        real_t v1x = v[vi1 * 3 + 0];
+        real_t v1y = v[vi1 * 3 + 1];
+        real_t v1z = v[vi1 * 3 + 2];
+        real_t v2x = v[vi2 * 3 + 0];
+        real_t v2y = v[vi2 * 3 + 1];
+        real_t v2z = v[vi2 * 3 + 2];
+        real_t e0x = v1x - v0x;
+        real_t e0y = v1y - v0y;
+        real_t e0z = v1z - v0z;
+        real_t e1x = v2x - v1x;
+        real_t e1y = v2y - v1y;
+        real_t e1z = v2z - v1z;
+        real_t cx = std::fabs(e0y * e1z - e0z * e1y);
+        real_t cy = std::fabs(e0z * e1x - e0x * e1z);
+        real_t cz = std::fabs(e0x * e1y - e0y * e1x);
+        const real_t epsilon = std::numeric_limits<real_t>::epsilon();
+        if (cx > epsilon || cy > epsilon || cz > epsilon) {
+          // found a corner
+          if (cx > cy && cx > cz) {
+          } else {
+            axes[0] = 0;
+            if (cz > cx && cz > cy) axes[1] = 1;
+          }
+          break;
+        }
+      }
 
-        shape->mesh.indices.push_back(idx0);
-        shape->mesh.indices.push_back(idx1);
-        shape->mesh.indices.push_back(idx2);
+      real_t area = 0;
+      for (size_t k = 0; k < npolys; ++k) {
+        i0 = face.vertex_indices[(k + 0) % npolys];
+        i1 = face.vertex_indices[(k + 1) % npolys];
+        size_t vi0 = size_t(i0.v_idx);
+        size_t vi1 = size_t(i1.v_idx);
+        if (((vi0 * 3 + axes[0]) >= v.size()) ||
+            ((vi0 * 3 + axes[1]) >= v.size()) ||
+            ((vi1 * 3 + axes[0]) >= v.size()) ||
+            ((vi1 * 3 + axes[1]) >= v.size())) {
+          // Invalid index.
+          continue;
+        }
+        real_t v0x = v[vi0 * 3 + axes[0]];
+        real_t v0y = v[vi0 * 3 + axes[1]];
+        real_t v1x = v[vi1 * 3 + axes[0]];
+        real_t v1y = v[vi1 * 3 + axes[1]];
+        area += (v0x * v1y - v0y * v1x) * static_cast<real_t>(0.5);
+      }
 
-        shape->mesh.num_face_vertices.push_back(3);
-        shape->mesh.material_ids.push_back(material_id);
+      int maxRounds =
+          10;  // arbitrary max loop count to protect against unexpected errors
+
+      face_t remainingFace = face;  // copy
+      size_t guess_vert = 0;
+      vertex_index_t ind[3];
+      real_t vx[3];
+      real_t vy[3];
+      while (remainingFace.vertex_indices.size() > 3 && maxRounds > 0) {
+        npolys = remainingFace.vertex_indices.size();
+        if (guess_vert >= npolys) {
+          maxRounds -= 1;
+          guess_vert -= npolys;
+        }
+        for (size_t k = 0; k < 3; k++) {
+          ind[k] = remainingFace.vertex_indices[(guess_vert + k) % npolys];
+          size_t vi = size_t(ind[k].v_idx);
+          if (((vi * 3 + axes[0]) >= v.size()) ||
+              ((vi * 3 + axes[1]) >= v.size())) {
+            // ???
+            vx[k] = static_cast<real_t>(0.0);
+            vy[k] = static_cast<real_t>(0.0);
+          } else {
+            vx[k] = v[vi * 3 + axes[0]];
+            vy[k] = v[vi * 3 + axes[1]];
+          }
+        }
+        real_t e0x = vx[1] - vx[0];
+        real_t e0y = vy[1] - vy[0];
+        real_t e1x = vx[2] - vx[1];
+        real_t e1y = vy[2] - vy[1];
+        real_t cross = e0x * e1y - e0y * e1x;
+        // if an internal angle
+        if (cross * area < static_cast<real_t>(0.0)) {
+          guess_vert += 1;
+          continue;
+        }
+
+        // check all other verts in case they are inside this triangle
+        bool overlap = false;
+        for (size_t otherVert = 3; otherVert < npolys; ++otherVert) {
+          size_t idx = (guess_vert + otherVert) % npolys;
+
+          if (idx >= remainingFace.vertex_indices.size()) {
+            // ???
+            continue;
+          }
+
+          size_t ovi = size_t(
+              remainingFace.vertex_indices[idx]
+                  .v_idx);
+
+          if (((ovi * 3 + axes[0]) >= v.size()) ||
+              ((ovi * 3 + axes[1]) >= v.size())) {
+            // ???
+            continue;
+          }
+          real_t tx = v[ovi * 3 + axes[0]];
+          real_t ty = v[ovi * 3 + axes[1]];
+          if (pnpoly(3, vx, vy, tx, ty)) {
+            overlap = true;
+            break;
+          }
+        }
+
+        if (overlap) {
+          guess_vert += 1;
+          continue;
+        }
+
+        // this triangle is an ear
+        {
+          index_t idx0, idx1, idx2;
+          idx0.vertex_index = ind[0].v_idx;
+          idx0.normal_index = ind[0].vn_idx;
+          idx0.texcoord_index = ind[0].vt_idx;
+          idx1.vertex_index = ind[1].v_idx;
+          idx1.normal_index = ind[1].vn_idx;
+          idx1.texcoord_index = ind[1].vt_idx;
+          idx2.vertex_index = ind[2].v_idx;
+          idx2.normal_index = ind[2].vn_idx;
+          idx2.texcoord_index = ind[2].vt_idx;
+
+          shape->mesh.indices.push_back(idx0);
+          shape->mesh.indices.push_back(idx1);
+          shape->mesh.indices.push_back(idx2);
+
+          shape->mesh.num_face_vertices.push_back(3);
+          shape->mesh.material_ids.push_back(material_id);
+          shape->mesh.smoothing_group_ids.push_back(face.smoothing_group_id);
+        }
+
+        // remove v1 from the list
+        size_t removed_vert_index = (guess_vert + 1) % npolys;
+        while (removed_vert_index + 1 < npolys) {
+          remainingFace.vertex_indices[removed_vert_index] =
+              remainingFace.vertex_indices[removed_vert_index + 1];
+          removed_vert_index += 1;
+        }
+        remainingFace.vertex_indices.pop_back();
+      }
+
+      if (remainingFace.vertex_indices.size() == 3) {
+        i0 = remainingFace.vertex_indices[0];
+        i1 = remainingFace.vertex_indices[1];
+        i2 = remainingFace.vertex_indices[2];
+        {
+          index_t idx0, idx1, idx2;
+          idx0.vertex_index = i0.v_idx;
+          idx0.normal_index = i0.vn_idx;
+          idx0.texcoord_index = i0.vt_idx;
+          idx1.vertex_index = i1.v_idx;
+          idx1.normal_index = i1.vn_idx;
+          idx1.texcoord_index = i1.vt_idx;
+          idx2.vertex_index = i2.v_idx;
+          idx2.normal_index = i2.vn_idx;
+          idx2.texcoord_index = i2.vt_idx;
+
+          shape->mesh.indices.push_back(idx0);
+          shape->mesh.indices.push_back(idx1);
+          shape->mesh.indices.push_back(idx2);
+
+          shape->mesh.num_face_vertices.push_back(3);
+          shape->mesh.material_ids.push_back(material_id);
+          shape->mesh.smoothing_group_ids.push_back(face.smoothing_group_id);
+        }
       }
     } else {
       for (size_t k = 0; k < npolys; k++) {
         index_t idx;
-        idx.vertex_index = face[k].v_idx;
-        idx.normal_index = face[k].vn_idx;
-        idx.texcoord_index = face[k].vt_idx;
+        idx.vertex_index = face.vertex_indices[k].v_idx;
+        idx.normal_index = face.vertex_indices[k].vn_idx;
+        idx.texcoord_index = face.vertex_indices[k].vt_idx;
         shape->mesh.indices.push_back(idx);
       }
 
       shape->mesh.num_face_vertices.push_back(
           static_cast<unsigned char>(npolys));
       shape->mesh.material_ids.push_back(material_id);  // per face
+      shape->mesh.smoothing_group_ids.push_back(
+          face.smoothing_group_id);  // per face
     }
   }
 
@@ -1173,7 +1442,7 @@ void LoadMtl(std::map<std::string, int> *material_map,
         // We invert value of Tr(assume Tr is in range [0, 1])
         // NOTE: Interpretation of Tr is application(exporter) dependent. For
         // some application(e.g. 3ds max obj exporter), Tr = d(Issue 43)
-        material.dissolve = 1.0f - parseReal(&token);
+        material.dissolve = static_cast<real_t>(1.0) - parseReal(&token);
       }
       has_tr = true;
       continue;
@@ -1470,6 +1739,13 @@ bool LoadObj(attrib_t *attrib, std::vector<shape_t> *shapes,
   std::string baseDir;
   if (mtl_basedir) {
     baseDir = mtl_basedir;
+#ifndef _WIN32
+    const char dirsep = '/';
+#else
+    const char dirsep = '\\';
+#endif
+    if (baseDir[baseDir.length() - 1] != dirsep)
+      baseDir += dirsep;
   }
   MaterialFileReader matFileReader(baseDir);
 
@@ -1488,12 +1764,16 @@ bool LoadObj(attrib_t *attrib, std::vector<shape_t> *shapes,
   std::vector<real_t> vt;
   std::vector<real_t> vc;
   std::vector<tag_t> tags;
-  std::vector<std::vector<vertex_index> > faceGroup;
+  std::vector<face_t> faceGroup;
   std::string name;
 
   // material
   std::map<std::string, int> material_map;
   int material = -1;
+
+  // smoothing group id
+  unsigned int current_smoothing_id =
+      0;  // Initial value. 0 means no smoothing.
 
   shape_t shape;
 
@@ -1567,21 +1847,29 @@ bool LoadObj(attrib_t *attrib, std::vector<shape_t> *shapes,
       token += 2;
       token += strspn(token, " \t");
 
-      std::vector<vertex_index> face;
-      face.reserve(3);
+      face_t face;
+
+      face.smoothing_group_id = current_smoothing_id;
+      face.vertex_indices.reserve(3);
 
       while (!IS_NEW_LINE(token[0])) {
-        vertex_index vi = parseTriple(&token, static_cast<int>(v.size() / 3),
-                                      static_cast<int>(vn.size() / 3),
-                                      static_cast<int>(vt.size() / 2));
-        face.push_back(vi);
+        vertex_index_t vi;
+        if (!parseTriple(&token, static_cast<int>(v.size() / 3),
+                         static_cast<int>(vn.size() / 3),
+                         static_cast<int>(vt.size() / 2), &vi)) {
+          if (err) {
+            (*err) = "Failed parse `f' line(e.g. zero value for face index).\n";
+          }
+          return false;
+        }
+
+        face.vertex_indices.push_back(vi);
         size_t n = strspn(token, " \t\r");
         token += n;
       }
 
       // replace with emplace_back + std::move on C++11
-      faceGroup.push_back(std::vector<vertex_index>());
-      faceGroup[faceGroup.size() - 1].swap(face);
+      faceGroup.push_back(face);
 
       continue;
     }
@@ -1605,7 +1893,7 @@ bool LoadObj(attrib_t *attrib, std::vector<shape_t> *shapes,
         // this time.
         // just clear `faceGroup` after `exportFaceGroupToShape()` call.
         exportFaceGroupToShape(&shape, faceGroup, tags, material, name,
-                               triangulate);
+                               triangulate, v);
         faceGroup.clear();
         material = newMaterialId;
       }
@@ -1660,8 +1948,8 @@ bool LoadObj(attrib_t *attrib, std::vector<shape_t> *shapes,
     if (token[0] == 'g' && IS_SPACE((token[1]))) {
       // flush previous face group.
       bool ret = exportFaceGroupToShape(&shape, faceGroup, tags, material, name,
-                                        triangulate);
-      (void)ret; // return value not used.
+                                        triangulate, v);
+      (void)ret;  // return value not used.
 
       if (shape.mesh.indices.size() > 0) {
         shapes->push_back(shape);
@@ -1697,7 +1985,7 @@ bool LoadObj(attrib_t *attrib, std::vector<shape_t> *shapes,
     if (token[0] == 'o' && IS_SPACE((token[1]))) {
       // flush previous face group.
       bool ret = exportFaceGroupToShape(&shape, faceGroup, tags, material, name,
-                                        triangulate);
+                                        triangulate, v);
       if (ret) {
         shapes->push_back(shape);
       }
@@ -1716,46 +2004,96 @@ bool LoadObj(attrib_t *attrib, std::vector<shape_t> *shapes,
     }
 
     if (token[0] == 't' && IS_SPACE(token[1])) {
+      const int max_tag_nums = 8192; // FIXME(syoyo): Parameterize.
       tag_t tag;
 
       token += 2;
-      std::stringstream ss;
-      ss << token;
-      tag.name = ss.str();
 
-      token += tag.name.size() + 1;
+      tag.name = parseString(&token);
 
       tag_sizes ts = parseTagTriple(&token);
+
+      if (ts.num_ints < 0) {
+        ts.num_ints = 0;
+      }
+      if (ts.num_ints > max_tag_nums) {
+        ts.num_ints = max_tag_nums;
+      }
+
+      if (ts.num_reals < 0) {
+        ts.num_reals = 0;
+      }
+      if (ts.num_reals > max_tag_nums) {
+        ts.num_reals = max_tag_nums;
+      }
+
+      if (ts.num_strings < 0) {
+        ts.num_strings = 0;
+      }
+      if (ts.num_strings > max_tag_nums) {
+        ts.num_strings = max_tag_nums;
+      }
 
       tag.intValues.resize(static_cast<size_t>(ts.num_ints));
 
       for (size_t i = 0; i < static_cast<size_t>(ts.num_ints); ++i) {
-        tag.intValues[i] = atoi(token);
-        token += strcspn(token, "/ \t\r") + 1;
+        tag.intValues[i] = parseInt(&token);
       }
 
       tag.floatValues.resize(static_cast<size_t>(ts.num_reals));
       for (size_t i = 0; i < static_cast<size_t>(ts.num_reals); ++i) {
         tag.floatValues[i] = parseReal(&token);
-        token += strcspn(token, "/ \t\r") + 1;
       }
 
       tag.stringValues.resize(static_cast<size_t>(ts.num_strings));
       for (size_t i = 0; i < static_cast<size_t>(ts.num_strings); ++i) {
-        std::stringstream sstr;
-        sstr << token;
-        tag.stringValues[i] = sstr.str();
-        token += tag.stringValues[i].size() + 1;
+        tag.stringValues[i] = parseString(&token);
       }
 
       tags.push_back(tag);
+
+      continue;
     }
+
+    if (token[0] == 's' && IS_SPACE(token[1])) {
+      // smoothing group id
+      token += 2;
+
+      // skip space.
+      token += strspn(token, " \t");  // skip space
+
+      if (token[0] == '\0') {
+        continue;
+      }
+
+      if (token[0] == '\r' || token[1] == '\n') {
+        continue;
+      }
+
+      if (strlen(token) >= 3) {
+        if (token[0] == 'o' && token[1] == 'f' && token[2] == 'f') {
+          current_smoothing_id = 0;
+        }
+      } else {
+        // assume number
+        int smGroupId = parseInt(&token);
+        if (smGroupId < 0) {
+          // parse error. force set to 0.
+          // FIXME(syoyo): Report warning.
+          current_smoothing_id = 0;
+        } else {
+          current_smoothing_id = static_cast<unsigned int>(smGroupId);
+        }
+      }
+
+      continue;
+    }  // smoothing group id
 
     // Ignore unknown command.
   }
 
   bool ret = exportFaceGroupToShape(&shape, faceGroup, tags, material, name,
-                                    triangulate);
+                                    triangulate, v);
   // exportFaceGroupToShape return false when `usemtl` is called in the last
   // line.
   // we also add `shape` to `shapes` when `shape.mesh` has already some
@@ -1863,7 +2201,7 @@ bool LoadObjWithCallback(std::istream &inStream, const callback_t &callback,
 
       indices.clear();
       while (!IS_NEW_LINE(token[0])) {
-        vertex_index vi = parseRawTriple(&token);
+        vertex_index_t vi = parseRawTriple(&token);
 
         index_t idx;
         idx.vertex_index = vi.v_idx;
@@ -2056,6 +2394,10 @@ bool LoadObjWithCallback(std::istream &inStream, const callback_t &callback,
 
   return true;
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 }  // namespace tinyobj
 
 #endif
