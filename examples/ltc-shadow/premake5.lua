@@ -15,6 +15,7 @@ sources = {
    "pbr-util.cc",
    "ibl-loader.cc",
    "obj-loader.cc",
+   "denoise.cc",
    "../common/matrix.cc",
    "../common/trackball.cc",
    "../common/imgui/imgui.cpp",
