@@ -269,7 +269,7 @@ void convert_xyz_to_cube_uv(float x, float y, float z, int* index, float* u,
     maxAxis = absX;
     uc = -z;
     vc = y;
-    *index = 0;
+    *index = 1;
   }
   // NEGATIVE X
   if (!isXPositive && absX >= absY && absX >= absZ) {
@@ -278,7 +278,7 @@ void convert_xyz_to_cube_uv(float x, float y, float z, int* index, float* u,
     maxAxis = absX;
     uc = z;
     vc = y;
-    *index = 1;
+    *index = 0;
   }
   // POSITIVE Y
   if (isYPositive && absY >= absX && absY >= absZ) {
@@ -287,7 +287,7 @@ void convert_xyz_to_cube_uv(float x, float y, float z, int* index, float* u,
     maxAxis = absY;
     uc = x;
     vc = -z;
-    *index = 2;
+    *index = 3;
   }
   // NEGATIVE Y
   if (!isYPositive && absY >= absX && absY >= absZ) {
@@ -296,7 +296,7 @@ void convert_xyz_to_cube_uv(float x, float y, float z, int* index, float* u,
     maxAxis = absY;
     uc = x;
     vc = z;
-    *index = 3;
+    *index = 2;
   }
   // POSITIVE Z
   if (isZPositive && (absZ >= absX) && (absZ >= absY)) {
@@ -305,7 +305,7 @@ void convert_xyz_to_cube_uv(float x, float y, float z, int* index, float* u,
     maxAxis = absZ;
     uc = x;
     vc = y;
-    *index = 4;
+    *index = 5;
   }
   // NEGATIVE Z
   if (!isZPositive && (absZ >= absX) && (absZ >= absY)) {
@@ -314,7 +314,7 @@ void convert_xyz_to_cube_uv(float x, float y, float z, int* index, float* u,
     maxAxis = absZ;
     uc = -x;
     vc = y;
-    *index = 5;
+    *index = 4;
   }
 
   // Convert range from -1 to 1 to 0 to 1
@@ -487,11 +487,11 @@ static void SampleEnvmap(const example::Asset& asset, const float3 n, float lod,
       std::min(int(asset.cubemap_ibl.size() - 1), std::max(0, ilod0 + 1));
   float frac = lod - float(ilod0);
 
-  const std::array<example::Image, 6>& cubemap0 = asset.cubemap_ibl[ilod0];
-  const std::array<example::Image, 6>& cubemap1 = asset.cubemap_ibl[ilod1];
+  //const std::array<example::Image, 6>& cubemap0 = asset.cubemap_ibl[ilod0];
+  //const std::array<example::Image, 6>& cubemap1 = asset.cubemap_ibl[ilod1];
 
-  const example::Image& face0 = cubemap0[face_idx];
-  const example::Image& face1 = cubemap1[face_idx];
+  const example::Image& face0 = asset.cubemap_ibl[ilod0].faces[face_idx];
+  const example::Image& face1 = asset.cubemap_ibl[ilod1].faces[face_idx];
 
   float rgba0[4];
   float rgba1[4];

@@ -6,6 +6,7 @@
 
 #include "material.h"
 #include "image.h"
+#include "cubemap.h"
 
 namespace example {
 
@@ -15,7 +16,7 @@ namespace example {
 ///
 /// Returns 0 when failed to load any cubemaps.
 ///
-int LoadCubemaps(std::string& dirpath, std::vector<std::array<Image, 6>> *out_cubemaps);
+int LoadCubemaps(std::string& dirpath, std::vector<Cubemap> *out_cubemaps);
 
 ///
 /// Loads HDR image.

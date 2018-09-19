@@ -164,22 +164,22 @@ bool LoadHDRImage(const std::string &filename, std::vector<float> *out_image,
 }
 
 int LoadCubemaps(std::string &dirpath,
-                 std::vector<std::array<Image, 6> > *out_cubemaps) {
+                 std::vector<Cubemap> *out_cubemaps) {
   std::cout << "Load ibl from : " << dirpath << std::endl;
 
-  std::array<std::string, 6> cubemap_faces = {
-      {"px", "nx", "py", "ny", "pz", "nz"}};
+  std::array<std::string, 6> cubemap_face_names = {
+      {"nx", "px", "py", "ny", "nz", "pz"}};
 
   int num_levels = 0;
 
-  std::array<Image, 6> cubemap;
+  std::array<Image, 6> cubemap_faces;
 
   // up to 8 levels.
   for (size_t m = 0; m < 8; m++) {
     std::string prefix = "m" + std::to_string(m) + "_";
 
     for (size_t f = 0; f < 6; f++) {
-      std::string filename = JoinPath(dirpath, prefix + cubemap_faces[f]);
+      std::string filename = JoinPath(dirpath, prefix + cubemap_face_names[f]);
 
       filename += ".rgbm";
 
@@ -210,8 +210,10 @@ int LoadCubemaps(std::string &dirpath,
         return num_levels;
       }
 
-      cubemap[f] = std::move(image);
+      cubemap_faces[f] = std::move(image);
     }
+
+    Cubemap cubemap(cubemap_faces);
 
     out_cubemaps->emplace_back(std::move(cubemap));
 

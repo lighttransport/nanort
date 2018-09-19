@@ -837,6 +837,11 @@ int main(int argc, char **argv) {
     example::BuildDFGLut(gRenderConfig.multiscatter, /* lut width */128, &(gAsset.dfg_lut));
   }
 
+  // Build prefiltered roughness envmap
+  {
+    example::BuildPrefilteredRoughnessMap(gAsset.cubemap_ibl[0], gRenderConfig.prefilter_num_samples, /* base output height */256, &gAsset.roughness_lod_maps);
+  }
+
   // construct the scene
   {
     std::vector<example::Mesh<float> > meshes;

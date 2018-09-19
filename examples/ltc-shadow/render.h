@@ -17,6 +17,7 @@
 #include "mesh.h"
 #include "material.h"
 #include "image.h"
+#include "cubemap.h"
 #include "render-layer.h"
 
 namespace example {
@@ -30,7 +31,9 @@ struct Asset {
 
   Image dfg_lut;
 
-  std::vector<std::array<Image, 6>> cubemap_ibl;
+  std::vector<Image> roughness_lod_maps;
+
+  std::vector<Cubemap> cubemap_ibl;
   float sh[9][3];
 
   float bg_intensity = 1.0f;
