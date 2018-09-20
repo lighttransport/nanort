@@ -47,6 +47,12 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
+  if (o.find("envmap_filename") != o.end()) {
+    if (o["envmap_filename"].is<std::string>()) {
+      config->envmap_filename = o["envmap_filename"].get<std::string>();
+    }
+  }
+
   config->scene_scale = 1.0f;
   if (o.find("scene_scale") != o.end()) {
     if (o["scene_scale"].is<double>()) {
@@ -120,7 +126,15 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
   config->multiscatter = false;
   if (o.find("multiscatter") != o.end()) {
     if (o["multiscatter"].is<bool>()) {
-      config->multiscatter = o["height"].get<bool>();
+      config->multiscatter = o["multiscatter"].get<bool>();
+    }
+  }
+
+  config->prefilter_num_samples = 1024;
+  if (o.find("prefilter_num_samples") != o.end()) {
+    if (o["prefilter_num_samples"].is<double>()) {
+      config->prefilter_num_samples = int(o["prefilter_num_samples"].get<double>());
+      std::cout << "aaa" << std::endl;
     }
   }
 

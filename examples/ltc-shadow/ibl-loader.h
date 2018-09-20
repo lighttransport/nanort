@@ -30,6 +30,12 @@ bool LoadHDRImage(const std::string &filename,
                   std::vector<float> *out_image, int *out_width,
                   int *out_height, int *out_channels);
 
+///
+/// Loads LDR image. Convert pixel from sRRB space to linear space.
+///
+bool LoadLDRImage(const std::string &filename,
+                  Image *output);
+
 } // namespace eample
 
 

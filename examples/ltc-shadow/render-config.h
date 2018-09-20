@@ -30,6 +30,9 @@ typedef struct {
   std::string ibl_dirname;
   std::string sh_filename;
 
+  // longlat envmap
+  std::string envmap_filename;
+
   // For IBL creation
   bool multiscatter;
   int prefilter_num_samples;

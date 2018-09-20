@@ -8,8 +8,8 @@
 #include <iostream>
 #include <limits>
 
-#include <thread>
 #include <atomic>
+#include <thread>
 
 // for debug
 #define TINYEXR_IMPLEMENTATION
@@ -20,6 +20,65 @@ namespace example {
 constexpr float kPI = 3.141592f;
 
 typedef nanort::real3<float> float3;
+
+static float3 uv_to_dir(float u, float v, float phi_offset);
+static void dir_to_uv(float *uu, float *vv, const float3 n);
+static void SaveImage(const Image& image, const std::string& filename);
+
+//
+// Simple bilinear filtering.
+//
+static void SampleImage(float* rgba, float u, float v, int width, int height,
+                        int channels, const float* texels) {
+  float sx = std::floor(u);
+  float sy = std::floor(v);
+
+  // Wrap mode = repeat
+  float uu = u - sx;
+  float vv = v - sy;
+
+  // clamp
+  uu = std::max(uu, 0.0f);
+  uu = std::min(uu, 1.0f);
+  vv = std::max(vv, 0.0f);
+  vv = std::min(vv, 1.0f);
+
+  float px = (width - 1) * uu;
+  float py = (height - 1) * vv;
+
+  int x0 = std::max(0, std::min((int)px, (width - 1)));
+  int y0 = std::max(0, std::min((int)py, (height - 1)));
+  int x1 = std::max(0, std::min((x0 + 1), (width - 1)));
+  int y1 = std::max(0, std::min((y0 + 1), (height - 1)));
+
+  float dx = px - (float)x0;
+  float dy = py - (float)y0;
+
+  float w[4];
+
+  w[0] = (1.0f - dx) * (1.0 - dy);
+  w[1] = (1.0f - dx) * (dy);
+  w[2] = (dx) * (1.0 - dy);
+  w[3] = (dx) * (dy);
+
+  int i00 = channels * (y0 * width + x0);
+  int i01 = channels * (y0 * width + x1);
+  int i10 = channels * (y1 * width + x0);
+  int i11 = channels * (y1 * width + x1);
+
+  float t[4][4]; // Assume channels <= 4
+
+  for (int c = 0; c < channels; c++) {
+    t[0][c] = texels[i00 + c];
+    t[1][c] = texels[i01 + c];
+    t[2][c] = texels[i10 + c];
+    t[3][c] = texels[i11 + c];
+  }
+  
+  for (int i = 0; i < channels; i++) {
+    rgba[i] = w[0] * t[0][i] + w[1] * t[1][i] + w[2] * t[2][i] + w[3] * t[3][i];
+  }
+}
 
 // Base on Filament -----------------------
 
@@ -225,22 +284,22 @@ inline float3 getDirectionFor(int face_idx, float x, float y, int dim) {
   float3 dir;
   const float l = std::sqrt(cx * cx + cy * cy + 1.0f);
   switch (face_idx) {
-    case 0:
+    case 1: // PX
       dir = {1, cy, -cx};
       break;
-    case 1:
+    case 0: // NX
       dir = {-1, cy, cx};
       break;
-    case 2:
+    case 3: // PY
       dir = {cx, 1, -cy};
       break;
-    case 3:
+    case 2: // NY
       dir = {cx, -1, cy};
       break;
-    case 4:
+    case 5: // PZ
       dir = {cx, cy, 1};
       break;
-    case 5:
+    case 4: // NZ
       dir = {-cx, cy, -1};
       break;
   }
@@ -256,33 +315,33 @@ CubemapAddress getAddressFor(const float3& r) {
   if (rx >= ry && rx >= rz) {
     ma = rx;
     if (r[0] >= 0) {
-      addr.face = 1; // PX
+      addr.face = 1;  // PX
       sc = -r[2];
       tc = -r[1];
     } else {
-      addr.face = 0; // NX
+      addr.face = 0;  // NX
       sc = r[2];
       tc = -r[1];
     }
   } else if (ry >= rx && ry >= rz) {
     ma = ry;
     if (r[1] >= 0) {
-      addr.face = 3; // PY
+      addr.face = 3;  // PY
       sc = r[0];
       tc = r[2];
     } else {
-      addr.face = 2; // NY
+      addr.face = 2;  // NY
       sc = r[0];
       tc = -r[2];
     }
   } else {
     ma = rz;
     if (r[2] >= 0) {
-      addr.face = 5; // PZ
+      addr.face = 5;  // PZ
       sc = r[0];
       tc = -r[1];
     } else {
-      addr.face = 4; // NZ
+      addr.face = 4;  // NZ
       sc = -r[0];
       tc = -r[1];
     }
@@ -296,7 +355,9 @@ CubemapAddress getAddressFor(const float3& r) {
 float3 sampleAt(const Image& image, size_t x, size_t y) {
   float3 r;
   // Assume channels >= 3
-  //std::cout << "x = " << x << ", y = " << y << ", width = " << image.width << ", chan = " << image.channels << ", len = " << image.pixels.size() << std::endl;
+  // std::cout << "x = " << x << ", y = " << y << ", width = " << image.width <<
+  // ", chan = " << image.channels << ", len = " << image.pixels.size() <<
+  // std::endl;
   r[0] = image.pixels[image.channels * (y * image.width + x) + 0];
   r[1] = image.pixels[image.channels * (y * image.width + x) + 1];
   r[2] = image.pixels[image.channels * (y * image.width + x) + 2];
@@ -329,6 +390,15 @@ float3 filterAt(const Image& image, double x, double y) {
   const float3 c3 = sampleAt(image, x1, y1);
   return (one_minus_u * one_minus_v) * c0 + (u * one_minus_v) * c1 +
          (one_minus_u * v) * c2 + (u * v) * c3;
+}
+
+inline float3 filterAt(const Cubemap& cubemap, const float3& direction) {
+  CubemapAddress addr(getAddressFor(direction));
+  int dim = cubemap.dim();
+  double s = std::min(addr.s * dim, dim - 1.0f);
+  double t = std::min(addr.t * dim, dim - 1.0f);
+
+  return filterAt(cubemap.faces[addr.face], s, t);
 }
 
 float3 trilinearFilterAt(const Cubemap& l0, const Cubemap& l1, float lerp,
@@ -379,6 +449,25 @@ static void downsampleCubemapLevelBoxFilter(Cubemap& dst, const Cubemap& src) {
   }
 }
 
+static void downsampleImageLevelBoxFilter(Image& dst, const Image& src) {
+  dst.width = src.width / 2;
+  dst.height = src.height / 2;
+  dst.channels = src.channels;
+  dst.pixels.resize(dst.width * dst.height * dst.channels);
+
+  for (size_t y = 0; y < dst.height; y++) {
+    float v = (y + 0.5f) / float(dst.height);
+    for (size_t x = 0; x < dst.width; ++x) {
+      float rgba[4];
+      float u = (x + 0.5f) / float(dst.width);
+      SampleImage(rgba, u, v, src.width, src.height, src.channels, src.pixels.data());
+      for (size_t c = 0; c < dst.channels; c++) {
+        dst.pixels[dst.channels * (y * dst.width + x) + c] = rgba[c];
+      }
+    }
+  }
+}
+
 static void* getPixelRef(Image& image, size_t x, size_t y) {
   return static_cast<void*>(
       &image.pixels[image.channels * (y * image.width + x)]);
@@ -394,7 +483,6 @@ static void* getPixelRef(Image& image, size_t x, size_t y) {
 static void makeSeamless(Cubemap& cubemap) {
   // Geometry geometry = mGeometry;
   size_t dim = cubemap.dim();
-  std::cout << "dim = " << dim << std::endl;
 
   if (dim < 2) {
     return;
@@ -458,9 +546,31 @@ void generateMipmaps(std::vector<Cubemap>& levels) {
 
     makeSeamless(dst);
 
-#if 1 // dbg
+#if 1  // dbg
     std::string basename = "cubemap_l" + std::to_string(mipLevel);
     SaveCubemap(dst, basename);
+#endif
+
+    // images.push_back(std::move(temp));
+    levels.push_back(std::move(dst));
+  }
+}
+
+void generateMipmaps(std::vector<Image>& levels) {
+  // Image temp;
+  const Image& base(levels[0]);
+  size_t dim = base.height;
+  size_t mipLevel = 0;
+  while (dim > 1) {
+    dim >>= 1;
+
+    const Image& src(levels[mipLevel++]);
+    Image dst;
+    downsampleImageLevelBoxFilter(dst, src);
+
+#if 1  // dbg
+    std::string filename = "longlat_mip_l" + std::to_string(mipLevel) + ".exr";
+    SaveImage(dst, filename);
 #endif
 
     // images.push_back(std::move(temp));
@@ -474,7 +584,7 @@ void roughnessFilter(Cubemap& dst, const std::vector<Cubemap>& levels,
   const float inumSamples = 1.0f / numSamples;
   const size_t maxLevel = levels.size() - 1;
   const float maxLevelf = maxLevel;
-  //const Cubemap& base(levels[0]);
+  // const Cubemap& base(levels[0]);
   const size_t dim0 = dst.dim();
   const float omegaP = float((4 * kPI) / (6 * dim0 * dim0));
 
@@ -631,11 +741,9 @@ void roughnessFilter(Cubemap& dst, const std::vector<Cubemap>& levels,
 
     for (uint32_t t = 0; t < num_threads; t++) {
       workers.emplace_back(std::thread([&]() {
-
         size_t y = 0;
 
         for ((y = i++); y < dim0; ++y) {
-
           float3 R[3];
           const size_t numSamples = cache.size();
           for (size_t x = 0; x < dim0; ++x) {
@@ -643,7 +751,8 @@ void roughnessFilter(Cubemap& dst, const std::vector<Cubemap>& levels,
             // getDirectionFor(f, p[0], [1]);
             const float3 N = getDirectionFor(f, p[0], p[1], dim0);
 
-            // center the cone around the normal (handle case of normal close to up)
+            // center the cone around the normal (handle case of normal close to
+            // up)
             float3 up;
             if (std::abs(N[2] < 0.999f)) {
               up = float3(0, 0, 1);
@@ -656,33 +765,33 @@ void roughnessFilter(Cubemap& dst, const std::vector<Cubemap>& levels,
             R[2] = N;
 
             float3 Li = 0;
-            //for (size_t sample = 0; sample < numSamples; sample++) {
-            for (size_t sample = 0; sample < 1; sample++) {
+            for (size_t sample = 0; sample < numSamples; sample++) {
               const CacheEntry& e = cache[sample];
               float3 L;
-              L[0] = R[0][0] * e.L[0] + R[1][0] * e.L[0] + R[2][0] * e.L[0];
-              L[1] = R[0][1] * e.L[1] + R[1][1] * e.L[1] + R[2][1] * e.L[1];
-              L[2] = R[0][2] * e.L[2] + R[1][2] * e.L[2] + R[2][2] * e.L[2];
+              L[0] = R[0][0] * e.L[0] + R[1][0] * e.L[1] + R[2][0] * e.L[2];
+              L[1] = R[0][1] * e.L[0] + R[1][1] * e.L[1] + R[2][1] * e.L[2];
+              L[2] = R[0][2] * e.L[0] + R[1][2] * e.L[1] + R[2][2] * e.L[2];
               const Cubemap& cmBase = levels[e.l0];
               const Cubemap& next = levels[e.l1];
-              //const float3 c0 = trilinearFilterAt(cmBase, next, e.lerp, L);
-              //Li += c0 * e.brdf_NoL;
+              const float3 c0 = trilinearFilterAt(cmBase, next, e.lerp, L);
+              Li += c0 * e.brdf_NoL;
               // HACK
-              const float3 c0 = trilinearFilterAt(cmBase, next, 1.0f /*e.lerp*/, N);
-              Li += c0;
+              //const float3 c0 =
+              //    trilinearFilterAt(cmBase, next, 1.0f /*e.lerp*/, );
+              //Li += c0 * e.brdf_NoL;
             }
             // Cubemap::writeAt(data, Cubemap::Texel(Li));
             // HACK
             writeAt(dst.faces[f], x, y, Li);
-            //dst.faces[f].pixels[3 * (y * dim0 + x) + 0] = Li[0];
-            //dst.faces[f].pixels[3 * (y * dim0 + x) + 1] = Li[1];
-            //dst.faces[f].pixels[3 * (y * dim0 + x) + 2] = Li[2];
+            // dst.faces[f].pixels[3 * (y * dim0 + x) + 0] = Li[0];
+            // dst.faces[f].pixels[3 * (y * dim0 + x) + 1] = Li[1];
+            // dst.faces[f].pixels[3 * (y * dim0 + x) + 2] = Li[2];
           }
         }
       }));
     }
 
-    for (auto &t : workers) {
+    for (auto& t : workers) {
       t.join();
     }
   }
@@ -692,33 +801,48 @@ void roughnessFilter(Cubemap& dst, const std::vector<Cubemap>& levels,
   std::cout << "Processing time : " << ms.count() << " [ms]" << std::endl;
 }
 
-#if 0
-void roughnessFilterLonglat(const Image &src, float linearRoughness, size_t maxNumSamples, Image *dst)
-{
-  dst->width = src.width;
-  dst->height = src.height;
-  dst->channels = src.channels;
-  dst->pixels.resize(src.pixels.size());
+void roughnessFilterLonglat(const std::vector<Image>& levels,
+                            float linearRoughness, size_t maxNumSamples,
+                            const size_t output_height, Image* dst) {
+  dst->width = output_height * 2;
+  dst->height = output_height;
+  dst->channels = 3;
+  dst->pixels.resize(dst->width * dst->height * 3);
 
-    const float numSamples = maxNumSamples;
-    const float inumSamples = 1.0f / numSamples;
-    const size_t dim0 = base.size();
-    const float omegaP = float((4 * kPI) / (2 * dim0 * dim0)); // FIXME(LTE): Validate
+  const size_t maxLevel = levels.size() - 1;
 
-  if ( linearRoughness < std::numeric_limits<float>::epsilon() )  {
+  const float numSamples = maxNumSamples;
+  const float inumSamples = 1.0f / numSamples;
+  const size_t dim0 = dst->height;
+  const float omegaP =
+      float((4 * kPI) / (2 * dim0 * dim0));  // FIXME(LTE): Validate
+
+  if (linearRoughness < std::numeric_limits<float>::epsilon()) {
     // No roughness filtering.
-    // TODO(LTE): Use texture filtering for better quality 
-    memcpy(dst->pixels.data(), src.pixels.data(), sizeof(float) * src.pixels.size());
+
+    for (size_t y = 0; y < dst->height; y++) {
+      float v = (y + 0.5f) / float(dst->height);
+      for (size_t x = 0; x < dst->width; ++x) {
+        float u = (x + 0.5f) / float(dst->width);
+
+        float rgba[4];
+        SampleImage(rgba, u, v, levels[0].width, levels[0].height, levels[0].channels, levels[0].pixels.data());
+
+        dst->pixels[3 * (y * dst->width + x) + 0] = rgba[0];
+        dst->pixels[3 * (y * dst->width + x) + 1] = rgba[1];
+        dst->pixels[3 * (y * dst->width + x) + 2] = rgba[2];
+
+      }
+    }
 
   } else {
-
     // be careful w/ the size of this structure, the smaller the better
     struct CacheEntry {
-        float3 L;
-        float brdf_NoL;
-        float lerp;
-        uint8_t l0;
-        uint8_t l1;
+      float3 L;
+      float brdf_NoL;
+      float lerp;
+      uint8_t l0;
+      uint8_t l1;
     };
 
     std::vector<CacheEntry> cache;
@@ -730,31 +854,31 @@ void roughnessFilterLonglat(const Image &src, float linearRoughness, size_t maxN
     // our goal is to use maxNumSamples for which NoL is > 0
     // to achieve this, we might have to try more samples than
     // maxNumSamples
-    for (size_t sampleIndex = 0 ; sampleIndex < maxNumSamples; sampleIndex++) {
-        /*
-         *       (sampling)
-         *            L         H (never calculated below)
-         *            .\       /.
-         *            . \     / .
-         *            .  \   /  .
-         *            .   \ /   .
-         *         ---|----o----|-------> n
-         *    cos(2*theta)    cos(theta)
-         *       = n.L           = n.H
-         *
-         * Note: NoH == LoH
-         * (H is the half-angle between L and V, and V == N)
-         *
-         */
+    for (size_t sampleIndex = 0; sampleIndex < maxNumSamples; sampleIndex++) {
+      /*
+       *       (sampling)
+       *            L         H (never calculated below)
+       *            .\       /.
+       *            . \     / .
+       *            .  \   /  .
+       *            .   \ /   .
+       *         ---|----o----|-------> n
+       *    cos(2*theta)    cos(theta)
+       *       = n.L           = n.H
+       *
+       * Note: NoH == LoH
+       * (H is the half-angle between L and V, and V == N)
+       *
+       */
 
-        // get Hammersley distribution for the half-sphere
-        float u[2];
-        hammersley(uint32_t(sampleIndex), inumSamples, u);
+      // get Hammersley distribution for the half-sphere
+      float u[2];
+      hammersley(uint32_t(sampleIndex), inumSamples, u);
 
-        // Importance sampling GGX - Trowbridge-Reitz
-        // This corresponds to integrating Dggx()*cos(theta) over the hemisphere
-        float H[3];
-        hemisphereImportanceSampleDggx(u, linearRoughness, H);
+      // Importance sampling GGX - Trowbridge-Reitz
+      // This corresponds to integrating Dggx()*cos(theta) over the hemisphere
+      float H[3];
+      hemisphereImportanceSampleDggx(u, linearRoughness, H);
 
 #if 0
         // This produces the same result that the code below using the the non-simplified
@@ -769,74 +893,101 @@ void roughnessFilterLonglat(const Image &src, float linearRoughness, size_t maxN
         const double NoV = dot(N, V);
         const double LoH = dot(L, H);
 #else
-        const float NoV = 1;
-        const float NoH = H[2];
-        const float NoH2 = H[2]*H[2];
-        const float NoL = 2*NoH2 - 1;
-        float L[3];
-        L[0] = 2*NoH*H[0];
-        L[1] = 2*NoH*H[1];
-        L[2] = NoL;
-        const float LoH = dot(L, H);
+      const float NoV = 1;
+      const float NoH = H[2];
+      const float NoH2 = H[2] * H[2];
+      const float NoL = 2 * NoH2 - 1;
+      float L[3];
+      L[0] = 2 * NoH * H[0];
+      L[1] = 2 * NoH * H[1];
+      L[2] = NoL;
+      const float LoH = dot(L, H);
 #endif
 
-        if (NoL > 0) {
-            // pre-filtered importance sampling
-            // see: "Real-time Shading with Filtered Importance Sampling", Jaroslav Krivanek
-            // see: "GPU-Based Importance Sampling, GPU Gems 3", Mark Colbert
+      if (NoL > 0) {
+        // pre-filtered importance sampling
+        // see: "Real-time Shading with Filtered Importance Sampling", Jaroslav
+        // Krivanek see: "GPU-Based Importance Sampling, GPU Gems 3", Mark
+        // Colbert
 
-            // K is a LOD bias that allows a bit of overlapping between samples
-            // log4(K)=1 empirically works well with box-filtered mipmaps
-            constexpr float K = 4;
+        // K is a LOD bias that allows a bit of overlapping between samples
+        // log4(K)=1 empirically works well with box-filtered mipmaps
+        constexpr float K = 4;
 
-            // OmegaS is is the solid-angle of an important sample (i.e. how much surface
-            // of the sphere it represents). It obviously is function of the PDF.
-            const float pdf = DistributionGGX(NoH, linearRoughness) / 4;
-            const float omegaS = 1 / (numSamples * pdf);
+        // OmegaS is is the solid-angle of an important sample (i.e. how much
+        // surface of the sphere it represents). It obviously is function of the
+        // PDF.
+        const float pdf = DistributionGGX(NoH, linearRoughness) / 4;
+        const float omegaS = 1 / (numSamples * pdf);
 
-            // The LOD is given by: max[ log4(Os/Op) + K, 0 ]
-            const float l = float(log4(omegaS) - log4(omegaP) + log4(K));
-            const float mipLevel = std::max(0.0f, std::min(float(l), maxLevelf));
+        // The LOD is given by: max[ log4(Os/Op) + K, 0 ]
+        const float l = float(log4(omegaS) - log4(omegaP) + log4(K));
+        const float mipLevel = std::max(0.0f, std::min(float(l), float(maxLevel)));
 
-            const float V = Visibility(NoV, NoL, linearRoughness);
-            const float F = Fresnel(1, 0, LoH);
-            const float brdf_NoL = float(F * V * NoL);
+        const float V = Visibility(NoV, NoL, linearRoughness);
+        const float F = Fresnel(1, 0, LoH);
+        const float brdf_NoL = float(F * V * NoL);
 
-            weight += brdf_NoL;
+        weight += brdf_NoL;
 
-            uint8_t l0 = uint8_t(mipLevel);
-            uint8_t l1 = uint8_t(std::min(maxLevel, size_t(l0 + 1)));
-            float lerp = mipLevel - l0;
+        uint8_t l0 = uint8_t(mipLevel);
+        uint8_t l1 = uint8_t(std::min(maxLevel, size_t(l0 + 1)));
+        float lerp = mipLevel - l0;
 
-            CacheEntry entry;
-            entry.L[0] = L[0];
-            entry.L[1] = L[1];
-            entry.L[2] = L[2];
-            entry.brdf_NoL = brdf_NoL;
-            entry.lerp = lerp;
-            entry.l0 = l0;
-            entry.l1 = l1;
-            cache.push_back(entry);
-        }
+        CacheEntry entry;
+        entry.L[0] = L[0];
+        entry.L[1] = L[1];
+        entry.L[2] = L[2];
+        entry.brdf_NoL = brdf_NoL;
+        entry.lerp = lerp;
+        entry.l0 = l0;
+        entry.l1 = l1;
+        cache.push_back(entry);
+      }
     }
 
-    std::for_each(cache.begin(), cache.end(), [weight](CacheEntry& entry){
-        entry.brdf_NoL /= weight;
-    });
+    std::for_each(cache.begin(), cache.end(),
+                  [weight](CacheEntry& entry) { entry.brdf_NoL /= weight; });
 
-    // we can sample the cubemap in any order, sort by the weight, it could improve fp precision
-    std::sort(cache.begin(), cache.end(), [](CacheEntry const& lhs, CacheEntry const& rhs){
-        return lhs.brdf_NoL < rhs.brdf_NoL;
-    });
+    // we can sample the cubemap in any order, sort by the weight, it could
+    // improve fp precision
+    std::sort(cache.begin(), cache.end(),
+              [](CacheEntry const& lhs, CacheEntry const& rhs) {
+                return lhs.brdf_NoL < rhs.brdf_NoL;
+              });
 
+    std::vector<std::thread> workers;
+    std::atomic<size_t> i(0);
 
-      for (size_t y = 0; y < height; ++y) {
-        float3 R[3];
-        const size_t numSamples = cache.size();
-        for (size_t x = 0; x < width; ++x) {
-            float p[2] = {x + 0.5f, y + 0.5f};
-            // getDirectionFor(f, p[0], [1]);
-            const float3 N = getDirectionFor(f, p[0], p[1], dim0);
+    int num_threads = std::thread::hardware_concurrency();
+
+    num_threads = std::max(1, num_threads);
+
+    if (dst->height < num_threads) {
+      num_threads = dst->height; 
+    }
+
+    size_t ndiv = dst->height / num_threads;
+
+    std::cout << "ndiv = " << ndiv << std::endl;
+    std::cout << "num_threads = " << num_threads << std::endl;
+
+    for (uint32_t t = 0; t < num_threads; t++) {
+      workers.emplace_back(std::thread([&, t]() {
+
+        size_t sy = t * ndiv;
+        size_t ey = (t == (num_threads - 1)) ? dst->height : std::min(size_t(dst->height), (t + 1) * ndiv);
+
+        std::cout << "sy = " << sy << ", ey = " << ey << std::endl;
+
+        for (size_t y = sy; y < ey; ++y) {
+          float3 R[3];
+          const size_t numSamples = cache.size();
+          for (size_t x = 0; x < dst->width; ++x) {
+            float p[2] = {(x + 0.5f) / float(dst->width), (y + 0.5f) / float(dst->height)};
+            // CacheEntry uses mirrored vector direction?
+            // so take an negate for X here
+            float3 N = uv_to_dir(-p[0], p[1], 0.0f);
 
             // center the cone around the normal (handle case of normal close to up)
             float3 up;
@@ -852,27 +1003,133 @@ void roughnessFilterLonglat(const Image &src, float linearRoughness, size_t maxN
 
             float3 Li = 0;
             for (size_t sample = 0; sample < numSamples; sample++) {
-                const CacheEntry& e = cache[sample];
-                float3 L;
-                L[0] = R[0][0] * e.L[0] + R[1][0] * e.L[0] + R[2][0] * e.L[0];
-                L[1] = R[0][1] * e.L[1] + R[1][1] * e.L[1] + R[2][1] * e.L[1];
-                L[2] = R[0][2] * e.L[2] + R[1][2] * e.L[2] + R[2][2] * e.L[2];
-                const Cubemap& cmBase = levels[e.l0];
-                const Cubemap& next = levels[e.l1];
-                const float3 c0 = trilinearFilterAt(cmBase, next, e.lerp, L);
-                Li += c0 * e.brdf_NoL;
+              const CacheEntry& e = cache[sample];
+              float3 L;
+              L[0] = R[0][0] * e.L[0] + R[1][0] * e.L[1] + R[2][0] * e.L[2];
+              L[1] = R[0][1] * e.L[0] + R[1][1] * e.L[1] + R[2][1] * e.L[2];
+              L[2] = R[0][2] * e.L[0] + R[1][2] * e.L[1] + R[2][2] * e.L[2];
+              //const Image& base = levels[e.l0];
+
+              //L = vnormalize(L);
+              
+
+              // HACK
+              const Image& base = levels[e.l0];
+              const Image& next = levels[e.l1];
+              //const float3 c0 = trilinearFilterAt(cmBase, next, e.lerp, L);
+              // TODO trilinear filtering.
+
+              float uv[2];
+              dir_to_uv(&uv[0], &uv[1], L);
+
+              float rgba[4];
+              assert(!std::isnan(uv[0]));
+              assert(!std::isnan(uv[1]));
+              SampleImage(rgba, uv[0], uv[1], base.width, base.height, base.channels, base.pixels.data());
+
+              const float3 c0(rgba[0], rgba[1], rgba[2]);
+              //std::cout << "col = " << rgba[0] << std::endl;
+
+              //Li += c0 * e.brdf_NoL;
+              Li += c0 * e.brdf_NoL;
             }
-            //Cubemap::writeAt(data, Cubemap::Texel(Li));
-            dst.faces[f].pixels[3 * (y * dim0 + x) + 0] = Li[0];
-            dst.faces[f].pixels[3 * (y * dim0 + x) + 1] = Li[1];
-            dst.faces[f].pixels[3 * (y * dim0 + x) + 2] = Li[2];
+            dst->pixels[3 * (y * dst->width + x) + 0] = Li[0];
+            dst->pixels[3 * (y * dst->width + x) + 1] = Li[1];
+            dst->pixels[3 * (y * dst->width + x) + 2] = Li[2];
+          }
         }
-      }
+      }));
     }
+
+    for (auto &t : workers) {
+      t.join();
+    }
+  }
 }
-#endif
 
 // ----------------------------------------
+
+static float3 uv_to_dir(float u, float v, float phi_offset)
+{
+  float cos_theta = std::cos(v * kPI);
+  float sin_theta = std::sqrt(1.0f - cos_theta * cos_theta);
+
+  float phi = u * 2.0f * kPI;
+
+  phi += phi_offset;
+
+  // Y-up
+  float3 n(sin_theta * std::cos(phi), cos_theta,
+           -sin_theta * std::sin(phi));
+
+  return n;
+}
+
+static void dir_to_uv(float *uu, float *vv, const float3 n) {
+#if 1
+  // C version
+
+  float v[3];
+  // Z up, right-handed
+  v[0] = n[0];
+  //v[1] = -n[2];
+  v[1] = n[2];
+  v[2] = n[1];
+
+  // atan2(y, x) =
+  //
+  //           y                                  y
+  //       pi/2|^                            pi/2 |^
+  //           |                                  |
+  //   pi      |       0                 pi       |        0
+  //  ---------o---------> x       =>>   ---------o--------> x
+  //  -pi      |      -0                 pi       |      2 pi
+  //           |                                  |
+  //           |                                  |
+  //      -pi/2|                             3/2pi|
+  //
+
+  float phi = std::atan2(v[1], v[0]);
+
+  if (phi < 0.0f) {
+    phi += 2.0f * kPI;  
+  }
+
+  // -> now phi in > 0.0
+
+  // wrap around in [0, 2 pi] range.
+  phi = std::fmod(phi, 2.0f * kPI);
+
+  // for safety
+  if (phi < 0.0f) phi = 0.0f;
+  if (phi > 2.0f * kPI) phi = 2.0f * kPI;
+
+
+  float z = v[2];
+  if (z < -1.0f) z = -1.0f;
+  if (z > 1.0f) z = 1.0f;
+  float theta = std::acos(z);
+
+  (*uu) = phi / (2.0f * kPI);
+  (*vv) = theta / kPI;
+#else
+  // GLSL version
+  // v to (theta, phi). Y up to Z up.
+  float theta = acosf(n[1]);
+  float phi = 0.0f;
+  if (n[2] == 0.0f) {
+  } else {
+    phi = atan2f(n[0], -n[2]);
+  }
+
+  (*uu) = phi / (2.0 * pi);
+  (*vv) = 1.0f - theta / pi;
+  if ((*vv) < 0.0f) (*v) = 0.0f;
+  if ((*vv) > 0.99999f)
+    (*vv) = 0.9999f;  // 0.99999 = prevent texture wrap around.
+#endif
+}
+
 
 void CubemapToEquirectangular(const Cubemap& cubemap, const float phi_offset,
                               size_t output_height, Image* output) {
@@ -887,7 +1144,7 @@ void CubemapToEquirectangular(const Cubemap& cubemap, const float phi_offset,
   for (size_t y = 0; y < height; y++) {
     float v = (y + 0.5f) / float(height);
 
-    float cos_theta = 1.0f - 2.0f * v;
+    float cos_theta = std::cos(v * kPI);
     float sin_theta = std::sqrt(1.0f - cos_theta * cos_theta);
 
     for (size_t x = 0; x < width; x++) {
@@ -900,7 +1157,7 @@ void CubemapToEquirectangular(const Cubemap& cubemap, const float phi_offset,
       float3 n(sin_theta * std::cos(phi), cos_theta,
                -sin_theta * std::sin(phi));
 
-      float3 L = sampleAt(cubemap, n);
+      float3 L = filterAt(cubemap, n);
 
       output->pixels[3 * (y * width + x) + 0] = L[0];
       output->pixels[3 * (y * width + x) + 1] = L[1];
@@ -909,7 +1166,7 @@ void CubemapToEquirectangular(const Cubemap& cubemap, const float phi_offset,
   }
 }
 
-static void SaveImage(const Image& image, const std::string& filename) {
+void SaveImage(const Image& image, const std::string& filename) {
   int ret = SaveEXR(image.pixels.data(), image.width, image.height,
                     image.channels, /* fp16 */ 0, filename.c_str());
   if (TINYEXR_SUCCESS != ret) {
@@ -917,8 +1174,7 @@ static void SaveImage(const Image& image, const std::string& filename) {
   }
 }
 
-static void SaveCubemap(const Cubemap& cubemap, const std::string& basename)
-{
+static void SaveCubemap(const Cubemap& cubemap, const std::string& basename) {
   for (size_t f = 0; f < 6; f++) {
     std::string filename = basename + "_face" + std::to_string(f) + ".exr";
     SaveImage(cubemap.faces[f], filename);
@@ -928,7 +1184,7 @@ static void SaveCubemap(const Cubemap& cubemap, const std::string& basename)
 void BuildPrefilteredRoughnessMap(const Cubemap& cubemap, int num_samples,
                                   const size_t output_base_height,
                                   std::vector<Image>* output_levels) {
-  int e = int(std::log2(float(cubemap.dim()))) - 2;
+  int e = int(std::log2(float(cubemap.dim()))) - 1;
   size_t num_levels = 1 + e;
 
   size_t output_height = output_base_height;
@@ -949,7 +1205,8 @@ void BuildPrefilteredRoughnessMap(const Cubemap& cubemap, int num_samples,
     float roughness = saturate(float(level) / (num_levels - 1.0f));
     float linear_roughness = roughness * roughness;
 
-    std::cout << "level " << level << ", roughness = " << roughness << ", num_samples = " << num_samples << std::endl;
+    std::cout << "level " << level << ", roughness = " << roughness
+              << ", num_samples = " << num_samples << std::endl;
 
     Cubemap dst(int(std::pow(2, i)));
     std::cout << "dst size " << dst.dim() << std::endl;
@@ -970,6 +1227,73 @@ void BuildPrefilteredRoughnessMap(const Cubemap& cubemap, int num_samples,
 
     output_height /= 2;
   }
+}
+
+bool BuildPrefilteredRoughnessMap(const Image& longlat, int num_samples,
+                                  const size_t output_base_height,
+                                  std::vector<Image>* output_levels) {
+  int e = std::max(1, int(std::log2(float(output_base_height))) - 1);
+  size_t num_levels = 1 + e;
+
+  size_t output_height = output_base_height;
+
+  std::vector<Image> levels;
+  Image base;
+  if (longlat.channels < 3) {
+    std::cerr << "Only RGB or RGBA format image are supported.";
+    return false;
+  }
+
+  // create RGB image.
+  base.pixels.resize(longlat.width * longlat.height * 3);
+  for (size_t i = 0; i < longlat.width * longlat.height; i++) {
+    base.pixels[3 * i + 0] = longlat.pixels[longlat.channels * i + 0];
+    base.pixels[3 * i + 1] = longlat.pixels[longlat.channels * i + 1];
+    base.pixels[3 * i + 2] = longlat.pixels[longlat.channels * i + 2];
+  }
+  base.width = longlat.width;
+  base.height = longlat.height;
+  base.channels = 3;
+
+  levels.push_back(base); // base layer
+  generateMipmaps(levels);
+
+  std::cout << "num e = " << e << std::endl;
+
+  for (size_t i = e; i >= 0; --i) {
+    int level = e - i;
+    if (level >= 2) {
+      // increase the number of samples per level
+      num_samples *= 2;
+    }
+
+    float roughness = saturate(float(level) / (num_levels - 1.0f));
+    float linear_roughness = roughness * roughness;
+
+    std::cout << "level " << level << ", roughness = " << roughness
+              << ", num_samples = " << num_samples << std::endl;
+
+    size_t dst_dim = size_t(std::pow(2, i));
+
+    if (dst_dim < 2) {
+      break;
+    }
+
+    std::cout << "dst size " << dst_dim << std::endl;
+    Image longlat;
+    roughnessFilterLonglat(levels, linear_roughness, num_samples, dst_dim, &longlat);
+
+
+#if 1  // debug
+    SaveImage(longlat, "longlat_" + std::to_string(level) + ".exr");
+#endif
+
+    output_levels->push_back(std::move(longlat));
+
+    output_height /= 2;
+  }
+
+  return true;
 }
 
 }  // namespace example

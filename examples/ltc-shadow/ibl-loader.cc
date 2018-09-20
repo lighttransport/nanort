@@ -163,12 +163,102 @@ bool LoadHDRImage(const std::string &filename, std::vector<float> *out_image,
   return true;
 }
 
+inline float sRGBToLinear(const float &sRGB) {
+  const float a = 0.055f;
+  const float a1 = 1.055f;
+  const float p = 2.4f;
+  float linear;
+  if (sRGB <= 0.04045f) {
+    linear = sRGB * (1.0f / 12.92f);
+  } else {
+    linear = std::pow((sRGB + a) / a1, p);
+  }
+  return linear;
+}
+
+
+bool LoadLDRImage(const std::string &filename, Image *dst) {
+
+  int image_width, image_height, n;
+
+  unsigned char *data = stbi_load(filename.c_str(), &image_width,
+                                  &image_height, &n, STBI_default);
+
+  if (!data) {
+    std::cerr << "File not found " << filename << std::endl;
+    return false;
+  }
+
+  if ((image_width == -1) || (image_height == -1)) {
+    stbi_image_free(data);
+    return false;
+  }
+
+  // Reconstruct HDR.
+  const size_t num_pixels = static_cast<size_t>(image_width * image_height);
+
+  dst->pixels.resize(num_pixels * n);
+
+  // color
+  int col_channels = n;
+  if (n == 4) {
+    col_channels = 3;
+  }
+  
+  for (size_t i = 0; i < num_pixels; i++) {
+    for (size_t c = 0; c < col_channels; c++) {
+      float v = data[n * i + c] / 255.0f;
+
+      // sRGB -> linear
+      dst->pixels[n * i + c] = sRGBToLinear(v);
+    }
+  }
+
+  // alpha
+  if (n == 4) {
+    for (size_t i = 0; i < num_pixels; i++) {
+      float alpha = data[n * i + 3] / 255.0f;
+
+      dst->pixels[n * i + 3] = alpha;
+
+    }
+  }
+
+  stbi_image_free(data);
+
+  dst->width = image_width;
+  dst->height = image_height;
+  dst->channels = n;
+
+  return true;
+}
+
+// Swap pixels in both x and y 
+static void FlipImage(Image &image)
+{
+  Image tmp = image;
+
+  for (size_t y = 0; y < image.height; y++) {
+    size_t dy = (image.height - 1) - y;
+    for (size_t x = 0; x < image.height; x++) {
+      size_t dx = (image.width - 1) - x;
+
+      for (size_t c = 0; c < image.channels; c++) {
+        tmp.pixels[image.channels * (y * image.width + x) + c] = image.pixels[image.channels * (dy * image.width + dx) + c];
+      }
+    }
+  }
+
+  image = tmp;
+
+}
+
 int LoadCubemaps(std::string &dirpath,
                  std::vector<Cubemap> *out_cubemaps) {
   std::cout << "Load ibl from : " << dirpath << std::endl;
 
   std::array<std::string, 6> cubemap_face_names = {
-      {"nx", "px", "py", "ny", "nz", "pz"}};
+      {"nx", "px", "ny", "py", "nz", "pz"}};
 
   int num_levels = 0;
 
@@ -183,7 +273,7 @@ int LoadCubemaps(std::string &dirpath,
 
       filename += ".rgbm";
 
-      std::cerr << "Trying to load file : " << filename << std::endl;
+      std::cerr << "Trying to load file : " << filename << " for face " << std::to_string(f) << std::endl;
 
       if (!FileExists(filename)) {
         if (f == 0) {
@@ -209,6 +299,12 @@ int LoadCubemaps(std::string &dirpath,
                   << ", but got channels " << image.channels << std::endl;
         return num_levels;
       }
+
+      // // Work around.
+      // // PY, NY image should be flipped in my configuration.
+      // if ((f == 2) || (f == 3)) {
+      //   FlipImage(image);
+      // }
 
       cubemap_faces[f] = std::move(image);
     }

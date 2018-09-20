@@ -33,6 +33,8 @@ struct Asset {
 
   std::vector<Image> roughness_lod_maps;
 
+  Image envmap;
+
   std::vector<Cubemap> cubemap_ibl;
   float sh[9][3];
 

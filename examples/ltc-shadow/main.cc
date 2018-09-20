@@ -822,6 +822,21 @@ int main(int argc, char **argv) {
     }
   }
 
+  // Load envmap
+  {
+    if (gRenderConfig.envmap_filename.empty()) {
+      std::cerr << "Envmap filename not found in config.json" << std::endl;
+      return EXIT_FAILURE;
+    }
+
+    // Assume LDR envmap
+    if (!LoadLDRImage(gRenderConfig.envmap_filename, &gAsset.envmap)) {
+      std::cerr << "Failed to load envmap image" << std::endl;
+      return EXIT_FAILURE;
+    }
+  }
+
+#if 1
   // Load ibl
   {
     int level = LoadCubemaps(gRenderConfig.ibl_dirname, &gAsset.cubemap_ibl);
@@ -836,10 +851,12 @@ int main(int argc, char **argv) {
     // TODO(LTE): read multiscatter parameter from config.
     example::BuildDFGLut(gRenderConfig.multiscatter, /* lut width */128, &(gAsset.dfg_lut));
   }
+#endif
 
   // Build prefiltered roughness envmap
   {
-    example::BuildPrefilteredRoughnessMap(gAsset.cubemap_ibl[0], gRenderConfig.prefilter_num_samples, /* base output height */256, &gAsset.roughness_lod_maps);
+    example::BuildPrefilteredRoughnessMap(gAsset.cubemap_ibl[0], gRenderConfig.prefilter_num_samples, /* base output height */512, &gAsset.roughness_lod_maps);
+    //example::BuildPrefilteredRoughnessMap(gAsset.envmap, gRenderConfig.prefilter_num_samples, /* base output height */1024, &gAsset.roughness_lod_maps);
   }
 
   // construct the scene

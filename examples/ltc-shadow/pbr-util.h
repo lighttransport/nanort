@@ -26,6 +26,9 @@ void BuildDFGLut(const bool multiscatter, const size_t width, Image *output);
 void BuildPrefilteredRoughnessMap(const Cubemap &cubemap, int num_samples, const size_t output_base_height, std::vector<Image> *output_levels);
 
 
+bool BuildPrefilteredRoughnessMap(const Image& longlat, int num_samples,
+                                  const size_t output_base_height,
+                                  std::vector<Image>* output_levels);
 
 } // namespace example
 
