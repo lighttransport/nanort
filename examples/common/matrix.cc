@@ -17,16 +17,16 @@ static inline void vcross(float c[3], float a[3], float b[3]) {
 
 static inline float vlength(float v[3]) {
   float len2 = vdot(v, v);
-  if (std::abs(len2) > 1.0e-30) {
-    return sqrt(len2);
+  if (std::abs(len2) > 1.0e-6f) {
+    return std::sqrt(len2);
   }
   return 0.0f;
 }
 
 static void vnormalize(float v[3]) {
   float len = vlength(v);
-  if (std::abs(len) > 1.0e-30) {
-    float inv_len = 1.0 / len;
+  if (std::abs(len) > 1.0e-6f) {
+    float inv_len = 1.0f / len;
     v[0] *= inv_len;
     v[1] *= inv_len;
     v[2] *= inv_len;
@@ -35,7 +35,11 @@ static void vnormalize(float v[3]) {
 
 void Matrix::Print(float m[4][4]) {
   for (int i = 0; i < 4; i++) {
-    printf("m[%d] = %f, %f, %f, %f\n", i, m[i][0], m[i][1], m[i][2], m[i][3]);
+    printf("m[%d] = %f, %f, %f, %f\n", i,
+      double(m[i][0]),
+      double(m[i][1]),
+      double(m[i][2]),
+      double(m[i][3]));
   }
 }
 

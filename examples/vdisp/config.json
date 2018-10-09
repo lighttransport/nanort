@@ -1,0 +1,13 @@
+{ "obj_filename" : "../../common/cornellbox_suzanne.obj",
+  "scene_scale" : 1.0,
+  "width" : 512,
+  "height" : 512,
+  "eye" : [-1.1757215, -30.791911, 150],
+  "up" : [0, 1, 0],
+  "look_at" : [0, 0, -1],
+  "dummy" : 0,
+  "vertice" : [0,0,0],
+  "radius" : 3.0,
+  "max_strands" : 10000,
+  "thickness" : 0.1
+}
