@@ -71,8 +71,6 @@ THE SOFTWARE.
 #include <mutex>
 #include <thread>
 
-#include <iostream> // HACK
-
 #define kNANORT_MAX_THREADS (256)
 
 // Parallel build should work well for C++11 version, thus force enable it.
@@ -1992,7 +1990,6 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
             const Pred local_pred = pred;
             unsigned int left_idx = shallow_node_infos_[size_t(idx)].left_idx;
             unsigned int right_idx = shallow_node_infos_[size_t(idx)].right_idx;
-            std::cout << "task shallow[" << t << "] = " << left_idx << ", " << right_idx << std::endl;
             BuildTree(&(local_stats[size_t(idx)]), &(local_nodes[size_t(idx)]), left_idx, right_idx,
                       options.shallow_depth, p, local_pred);
           }
