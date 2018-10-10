@@ -3,6 +3,7 @@
 
 #define NANORT_USE_CPP11_FEATURE
 #define NANORT_ENABLE_PARALLEL_BUILD
+#define NANORT_ENABLE_SERIALIZATION
 #include "../../nanort.h"
 
 #include <cstdint>

@@ -23,12 +23,12 @@ void ComputeTangentsAndBinormals(
 /// Faces whose material id is `vdisp_material_id` will be displaced.
 ///
 /// Assume all faces are triangles.
-/// Displacement is applied to vertices with facevrying manner, thus large
-/// displacement with different UV will generate cracks.
+/// Displacement is applied to shared vertices.
+/// displacement with different UV assinged may result in unexpected displacements.
 ///
 /// @param[in] vdisp_space What coordinate is used for vector displacement
 /// value(0 = world, 1 = tangent)
-/// @param[out] displaced_vertices Displaced face varying vertex position.
+/// @param[out] displaced_vertices Displaced vertex position.
 ///
 void ApplyVectorDispacement(
     const std::vector<float> &vertices, const std::vector<uint32_t> &faces,
@@ -39,9 +39,21 @@ void ApplyVectorDispacement(
     const std::vector<float> &facevarying_binormals,
     const uint32_t vdisp_material_id,
     const std::vector<float> &vdisp_image,  // rgb
-    const size_t vdisp_width, const size_t vdisp_height, const int vdisp_space,
+    const size_t vdisp_width, const size_t vdisp_height,
+    const int vdisp_channels,
     const float vdisp_scale,
     std::vector<float> *displaced_vertices);  // this is facevarying.
+
+///
+/// Recompute smooth vertex normal.
+///
+/// @param[in] area_weighting Weighting normal by face's area.
+///
+void RecomputeSmoothNormals(
+    const std::vector<float> &vertices,
+    const std::vector<uint32_t> &faces,
+    const bool area_weighting,
+    std::vector<float> *facevarying_normals);
 
 }  // namespace example
 

@@ -6,14 +6,27 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <iostream>
 
 namespace example {
 
 inline float lerp(float x, float y, float t) {
   return x + t * (y - x); }
 
+inline float AngleBetween(const float3 &a, const float3 &b)
+{
+  const float mag = vlength(a) * vlength(b);
+  if (mag > 1.0e-6f) {
+    const float cos_alpha = vdot(a, b) / mag;
 
-static void SampleTexture(
+    return std::acos(cos_alpha);
+  }
+  return 1.0f;
+}
+
+
+// Sample texel with bi-linear filtering.
+static void FilterTexture(
   const std::vector<float> &image,
   const size_t width,
   const size_t height,
@@ -74,16 +87,57 @@ static void SampleTexture(
                    lerp(texel[2][i], texel[3][i], dx), dy);
   }
 
+  if (stride >= 3) {
+      // also flip read Y coordinate
+      rgb[1] = -rgb[1];
+  }
+
+  if (stride == 1) {
+    // mono -> RGB
+    rgb[1] = rgb[0];
+    rgb[2] = rgb[0];
+  }
+}
+
+#if 0
+// Sample texel without filtering.
+static void SampleTexture(
+  const std::vector<float> &image,
+  const size_t width,
+  const size_t height,
+  const float u, const float v,
+  float rgb[3])
+{
+  float uu, vv;
+
+  // clamp
+  uu = std::max(u, 0.0f);
+  uu = std::min(uu, 1.0f);
+  vv = std::max(v, 0.0f);
+  vv = std::min(vv, 1.0f);
+
+  float px = width * uu;
+  float py = height * vv;
+
+  int x0 = std::max(0, std::min(int(width - 1), int(px)));
+  int y0 = std::max(0, std::min(int(height - 1), int(py)));
+
+  int stride = 3;
+
+  int i00 = stride * (y0 * int(width) + x0);
+
+  for (int i = 0; i < stride; i++) {
+    rgb[i] = image[size_t(i00 + i)];
+  }
+
   if (stride == 1) {
     // mono -> RGB
     rgb[1] = rgb[0];
     rgb[2] = rgb[0];
   }
 
-
-
-
 }
+#endif
 
 
 //
@@ -109,6 +163,7 @@ void ComputeTangentsAndBinormals(
 
   // Assume all triangle face.
   for (size_t i = 0; i < faces.size() / 3; i++) {
+
     uint32_t vf0 = faces[3 * i + 0];
     uint32_t vf1 = faces[3 * i + 1];
     uint32_t vf2 = faces[3 * i + 2];
@@ -208,6 +263,7 @@ void ComputeTangentsAndBinormals(
         float3 n[3];
 
         // http://www.terathon.com/code/tangent.html
+        assert((9 * i + 8) < facevarying_normals.size());
 
         {
           n[0][0] = facevarying_normals[9 * i + 0];
@@ -253,6 +309,10 @@ void ComputeTangentsAndBinormals(
       }
     }));
   }
+
+  for (auto &t : workers) {
+    t.join();
+  }
 }
 
 void ApplyVectorDispacement(const std::vector<float> &vertices,
@@ -268,105 +328,100 @@ void ApplyVectorDispacement(const std::vector<float> &vertices,
                       const int vdisp_space,
                       const float vdisp_scale,
                       std::vector<float> *displaced_vertices) {
+
+  // not used at the moment.
+  (void)facevarying_normals;
+  (void)facevarying_tangents;
+  (void)facevarying_binormals;
+
   if (vdisp_space == 0) {
     // world space
 
+    size_t num_verts = vertices.size() / 3;
     size_t num_faces = faces.size() / 3;
 
-    displaced_vertices->resize(num_faces * 3);
+    // records the number of references of a shared vertex.
+    std::vector<int> counts(num_verts);
+    memset(counts.data(), 0, sizeof(int) * num_verts);
 
-    std::vector<std::thread> workers;
+    // per-vertex vector displacemenents
+    std::vector<float> displacements(num_verts * 3);
+    memset(displacements.data(), 0, sizeof(float) * num_verts);
 
-    uint32_t num_threads = std::max(1U, std::thread::hardware_concurrency());
+    displaced_vertices->resize(vertices.size());
 
-    if (num_faces < num_threads) {
-      num_threads = uint32_t(num_faces);
-    }
-
-    size_t ndiv = num_faces / num_threads;
-
-    for (size_t t = 0; t < num_threads; t++) {
-      workers.emplace_back(std::thread([&, t]() {
-        size_t fs = t * ndiv;
-        size_t fe = (t == (num_threads - 1)) ? num_faces : std::min((t + 1) * ndiv, num_faces);
-
-        for (size_t f = fs; f < fe; f++) {
+    // TODO(LTE): parallelize.
+    for (size_t f = 0; f < num_faces; f++) {
           
-          float uv[3][2];
+      float uv[3][2];
 
-          uv[0][0] = facevarying_texcoords[6 * f + 0];
-          uv[0][1] = facevarying_texcoords[6 * f + 1];
+      uv[0][0] = facevarying_texcoords[6 * f + 0];
+      uv[0][1] = facevarying_texcoords[6 * f + 1];
 
-          uv[1][0] = facevarying_texcoords[6 * f + 2];
-          uv[1][1] = facevarying_texcoords[6 * f + 3];
+      uv[1][0] = facevarying_texcoords[6 * f + 2];
+      uv[1][1] = facevarying_texcoords[6 * f + 3];
 
-          uv[2][0] = facevarying_texcoords[6 * f + 4];
-          uv[2][1] = facevarying_texcoords[6 * f + 5];
+      uv[2][0] = facevarying_texcoords[6 * f + 4];
+      uv[2][1] = facevarying_texcoords[6 * f + 5];
 
-          float3 dv[3];
+      float3 dv[3];
 
-          size_t vidx0, vidx1, vidx2;
+      size_t vidx0, vidx1, vidx2;
 
-          vidx0 = faces[3 * f + 0];
-          vidx1 = faces[3 * f + 1];
-          vidx2 = faces[3 * f + 2];
+      vidx0 = faces[3 * f + 0];
+      vidx1 = faces[3 * f + 1];
+      vidx2 = faces[3 * f + 2];
 
-          float p[3][3];
+      float disp0[3] = {0.0f, 0.0f, 0.0f};
+      float disp1[3] = {0.0f, 0.0f, 0.0f};
+      float disp2[3] = {0.0f, 0.0f, 0.0f};
 
-          p[0][0] = vertices[3 * vidx0 + 0];
-          p[0][1] = vertices[3 * vidx0 + 1];
-          p[0][2] = vertices[3 * vidx0 + 2];
+      const uint32_t material_id = material_ids[f];
 
-          p[1][0] = vertices[3 * vidx1 + 0];
-          p[1][1] = vertices[3 * vidx1 + 1];
-          p[1][2] = vertices[3 * vidx1 + 2];
+      if (material_id == vdisp_material_id) {
 
-          p[2][0] = vertices[3 * vidx2 + 0];
-          p[2][1] = vertices[3 * vidx2 + 1];
-          p[2][2] = vertices[3 * vidx2 + 2];
+        FilterTexture(vdisp_image, vdisp_width, vdisp_height, uv[0][0], uv[0][1], disp0);
+        FilterTexture(vdisp_image, vdisp_width, vdisp_height, uv[1][0], uv[1][1], disp1);
+        FilterTexture(vdisp_image, vdisp_width, vdisp_height, uv[2][0], uv[2][1], disp2);
 
-          float disp0[3] = {0.0f, 0.0f, 0.0f};
-          float disp1[3] = {0.0f, 0.0f, 0.0f};
-          float disp2[3] = {0.0f, 0.0f, 0.0f};
+        displacements[3 * vidx0 + 0] += vdisp_scale * disp0[0];
+        displacements[3 * vidx0 + 1] += vdisp_scale * disp0[1];
+        displacements[3 * vidx0 + 2] += vdisp_scale * disp0[2];
+        counts[vidx0]++;
 
-          const uint32_t material_id = material_ids[f];
+        displacements[3 * vidx1 + 0] += vdisp_scale * disp1[0];
+        displacements[3 * vidx1 + 1] += vdisp_scale * disp1[1];
+        displacements[3 * vidx1 + 2] += vdisp_scale * disp1[2];
+        counts[vidx1]++;
 
-          if (material_id == vdisp_material_id) {
-            SampleTexture(vdisp_image, vdisp_width, vdisp_height, uv[0][0], uv[0][1], disp0);
-            SampleTexture(vdisp_image, vdisp_width, vdisp_height, uv[1][0], uv[1][1], disp1);
-            SampleTexture(vdisp_image, vdisp_width, vdisp_height, uv[2][0], uv[2][1], disp2);
-          }
+        displacements[3 * vidx2 + 0] += vdisp_scale * disp2[0];
+        displacements[3 * vidx2 + 1] += vdisp_scale * disp2[1];
+        displacements[3 * vidx2 + 2] += vdisp_scale * disp2[2];
+        counts[vidx2]++;
 
-          dv[0][0] = p[0][0] + vdisp_scale * disp0[0];;
-          dv[0][1] = p[0][1] + vdisp_scale * disp0[1];;
-          dv[0][2] = p[0][2] + vdisp_scale * disp0[2];;
+      }
 
-          dv[1][0] = p[1][0] + vdisp_scale * disp1[0];;
-          dv[1][1] = p[1][1] + vdisp_scale * disp1[1];;
-          dv[1][2] = p[1][2] + vdisp_scale * disp1[2];;
-
-          dv[2][0] = p[2][0] + vdisp_scale * disp2[0];;
-          dv[2][1] = p[2][1] + vdisp_scale * disp2[1];;
-          dv[2][2] = p[2][2] + vdisp_scale * disp2[2];;
-
-          (*displaced_vertices)[9 * f + 0] = dv[0][0]; 
-          (*displaced_vertices)[9 * f + 1] = dv[0][1]; 
-          (*displaced_vertices)[9 * f + 2] = dv[0][2]; 
-
-          (*displaced_vertices)[9 * f + 3] = dv[1][0]; 
-          (*displaced_vertices)[9 * f + 4] = dv[1][1]; 
-          (*displaced_vertices)[9 * f + 5] = dv[1][2]; 
-
-          (*displaced_vertices)[9 * f + 6] = dv[2][0]; 
-          (*displaced_vertices)[9 * f + 7] = dv[2][1]; 
-          (*displaced_vertices)[9 * f + 8] = dv[2][2]; 
-
-        }
-      }));
     }
 
-    for (auto &t : workers) {
-      t.join();
+    // normalize displacements and add it to vertices
+    for (size_t v = 0; v < num_verts; v++) {
+
+      float dv[3] = {0.0f, 0.0f, 0.0f};
+
+      // normalize displacments
+      if (counts[v] > 0) {
+          float weight = 1.0f / float(counts[v]);
+
+          dv[0] = displacements[3 * v + 0] * weight;
+          dv[1] = displacements[3 * v + 1] * weight;
+          dv[2] = displacements[3 * v + 2] * weight;
+      }
+
+
+      (*displaced_vertices)[3 * v + 0] = vertices[3 * v + 0] + dv[0]; 
+      (*displaced_vertices)[3 * v + 1] = vertices[3 * v + 1] + dv[1]; 
+      (*displaced_vertices)[3 * v + 2] = vertices[3 * v + 2] + dv[2]; 
+
     }
 
   } else {
@@ -376,6 +431,97 @@ void ApplyVectorDispacement(const std::vector<float> &vertices,
 
     assert(0);  // TODO(LTE):
   }
+}
+
+// http://www.bytehazard.com/articles/vertnorm.html
+void RecomputeSmoothNormals(
+    const std::vector<float> &vertices,
+    const std::vector<uint32_t> &faces,
+    const bool area_weighting,
+    std::vector<float> *facevarying_normals) {
+
+  const size_t num_verts = vertices.size() / 3;
+  const size_t num_faces = faces.size() / 3;
+
+  // vertex normals
+  std::vector<float3> normals(num_verts);
+  memset(normals.data(), 0, sizeof(float3) * num_verts);
+
+  facevarying_normals->resize(num_faces * 3 * 3);
+  memset(facevarying_normals->data(), 0, sizeof(float) * num_faces * 3 * 3);
+
+  for (size_t f = 0; f < num_faces; f++) {
+
+    uint32_t f0, f1, f2;
+    f0 = faces[3 * f + 0];
+    f1 = faces[3 * f + 1];
+    f2 = faces[3 * f + 2];
+
+    float3 v0, v1, v2;
+
+    v0[0] = vertices[3 * f0 + 0];
+    v0[1] = vertices[3 * f0 + 1];
+    v0[2] = vertices[3 * f0 + 2];
+
+    v1[0] = vertices[3 * f1 + 0];
+    v1[1] = vertices[3 * f1 + 1];
+    v1[2] = vertices[3 * f1 + 2];
+
+    v2[0] = vertices[3 * f2 + 0];
+    v2[1] = vertices[3 * f2 + 1];
+    v2[2] = vertices[3 * f2 + 2];
+
+    // compute the cross product and add it to each vertex.
+    float3 pn;
+    pn = vcross(v1 - v0, v2 - v0); // TODO(LTE): Validate handness.
+
+    if (!area_weighting) {
+      pn = vnormalize(pn);
+    }
+
+    const float a1 = AngleBetween((v1 - v0), (v2 - v0));
+    const float a2 = AngleBetween((v2 - v1), (v0 - v1));
+    const float a3 = AngleBetween((v0 - v2), (v1 - v2));
+
+    normals[f0] += a1 * pn; 
+    normals[f1] += a2 * pn; 
+    normals[f2] += a3 * pn; 
+  }
+
+  // normalize.
+  for (size_t v = 0; v < num_verts; v++) {
+    float3 N = vnormalize(normals[v]);
+
+    normals[v] = N;
+  }
+
+  for (size_t f = 0; f < num_faces; f++) {
+
+    uint32_t vidx0, vidx1, vidx2;
+
+    vidx0 = faces[3 * f + 0];
+    vidx1 = faces[3 * f + 1];
+    vidx2 = faces[3 * f + 2];
+
+    float3 n0, n1, n2; 
+    n0 = normals[vidx0];
+    n1 = normals[vidx1];
+    n2 = normals[vidx2];
+
+    (*facevarying_normals)[9 * f + 0] = n0[0];
+    (*facevarying_normals)[9 * f + 1] = n0[1];
+    (*facevarying_normals)[9 * f + 2] = n0[2];
+
+    (*facevarying_normals)[9 * f + 3] = n1[0];
+    (*facevarying_normals)[9 * f + 4] = n1[1];
+    (*facevarying_normals)[9 * f + 5] = n1[2];
+
+    (*facevarying_normals)[9 * f + 6] = n2[0];
+    (*facevarying_normals)[9 * f + 7] = n2[1];
+    (*facevarying_normals)[9 * f + 8] = n2[2];
+
+  }
+
 }
 
 }  // namespace example

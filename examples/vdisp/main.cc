@@ -89,6 +89,7 @@ THE SOFTWARE.
 #include "render.h"
 #include "save_img.h"
 #include "trackball.h"
+#include "serialize.h"
 
 #ifdef WIN32
 #undef min
@@ -96,13 +97,14 @@ THE SOFTWARE.
 #endif
 
 #define SHOW_BUFFER_RENDER (0)
-#define SHOW_BUFFER_NORMAL (1)
-#define SHOW_BUFFER_POSITION (2)
-#define SHOW_BUFFER_DEPTH (3)
-#define SHOW_BUFFER_DIFFUSE (4)
-#define SHOW_BUFFER_TEXCOORD (5)
-#define SHOW_BUFFER_VARYCOORD (6)
-#define SHOW_BUFFER_VERTEXCOLOR (7)
+#define SHOW_BUFFER_SHADING_NORMAL (1)
+#define SHOW_BUFFER_GEOM_NORMAL (2)
+#define SHOW_BUFFER_POSITION (3)
+#define SHOW_BUFFER_DEPTH (4)
+#define SHOW_BUFFER_DIFFUSE (5)
+#define SHOW_BUFFER_TEXCOORD (6)
+#define SHOW_BUFFER_VARYCOORD (7)
+#define SHOW_BUFFER_VERTEXCOLOR (8)
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -376,9 +378,13 @@ static void Display(int width, int height) {
         buf[4 * i + 3] /= static_cast<float>(gRenderLayer.count[i]);
       }
     }
-  } else if (gShowBufferMode == SHOW_BUFFER_NORMAL) {
+  } else if (gShowBufferMode == SHOW_BUFFER_SHADING_NORMAL) {
     for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = gRenderLayer.normal[i];
+      buf[i] = gRenderLayer.shading_normal[i];
+    }
+  } else if (gShowBufferMode == SHOW_BUFFER_GEOM_NORMAL) {
+    for (size_t i = 0; i < buf.size(); i++) {
+      buf[i] = gRenderLayer.geometric_normal[i];
     }
   } else if (gShowBufferMode == SHOW_BUFFER_POSITION) {
     for (size_t i = 0; i < buf.size(); i++) {
@@ -470,7 +476,7 @@ static bool ApplyDisplacement(example::Scene &scene, const example::RenderConfig
   uint32_t vdisp_material_id = static_cast<uint32_t>(-1);
   for (size_t i = 0; i < scene.materials.size(); i++) {
     if (scene.materials[i].vdisp_texid >= 0) {
-      vdisp_material_id = static_cast<uint32_t>(scene.materials[i].vdisp_texid >= 0);
+      vdisp_material_id = uint32_t(i);
       std::cout << "Found material with vector displacement : " << scene.materials[i].name << std::endl;
       break;
     }
@@ -481,7 +487,12 @@ static bool ApplyDisplacement(example::Scene &scene, const example::RenderConfig
     return false;
   }
 
+  std::cout << "vdisp matid = " << vdisp_material_id << std::endl;
+  assert(vdisp_material_id < uint32_t(scene.materials.size()));
   const example::Material &vdisp_material = scene.materials[vdisp_material_id];
+
+  std::cout << "vdisp texid = " << vdisp_material.vdisp_texid << std::endl;
+  assert(vdisp_material.vdisp_texid < int(scene.textures.size()));
 
   const example::Texture &vdisp_texture = scene.textures[size_t(vdisp_material.vdisp_texid)];
 
@@ -504,7 +515,39 @@ static bool ApplyDisplacement(example::Scene &scene, const example::RenderConfig
     size_t(vdisp_texture.height),
     int(config.vdisp_space),
     config.vdisp_scale,
-    &scene.mesh.facevarying_displaced_vertices);
+    &scene.mesh.displaced_vertices);
+
+  // swap
+  // TODO(LTE): Save original vertex somewhere
+  scene.mesh.vertices.swap(scene.mesh.displaced_vertices);
+
+  std::vector<float> facevarying_normals;
+
+  std::cout << "Area weighting = " << config.area_weighting << std::endl;
+
+  // Recompute normals
+  example::RecomputeSmoothNormals(
+    scene.mesh.vertices,
+    scene.mesh.faces,
+    /* area_weighting */config.area_weighting,
+    &facevarying_normals);
+    
+  // swap
+  // TODO(LTE): Save original facevarying normals somewhere
+  scene.mesh.facevarying_normals.swap(facevarying_normals);
+
+  std::cout << "Computing tangents and binormals..." << std::endl;
+
+  // Compute tangents and binormals from displaced mesh + recomputed normal.
+  example::ComputeTangentsAndBinormals(
+    scene.mesh.vertices,
+    scene.mesh.faces,
+    scene.mesh.facevarying_uvs,
+    scene.mesh.facevarying_normals,
+    &(scene.mesh.facevarying_tangents),
+    &(scene.mesh.facevarying_binormals));
+
+  std::cout << "Finish applying displacements." << std::endl;
 
   return true;
 }
@@ -526,7 +569,14 @@ int main(int argc, char** argv) {
     }
   }
 
-  {
+  bool eson_load_ok = false;
+
+  if (!gRenderConfig.eson_filename.empty()) {
+    eson_load_ok =  LoadSceneFromEson(gRenderConfig.eson_filename, &gScene);
+  }
+
+  if (!eson_load_ok) {
+
     // load obj
     bool obj_ret = gRenderer.LoadObjMesh(gRenderConfig.obj_filename.c_str(),
                                          gRenderConfig.scene_scale, gScene);
@@ -535,20 +585,25 @@ int main(int argc, char** argv) {
               gRenderConfig.obj_filename.c_str());
       return -1;
     }
-  }
 
-  ApplyDisplacement(gScene, gRenderConfig);
+    if (!gRenderConfig.eson_filename.empty()) {
+      // serialize to ESON
+      if (!SaveSceneToEson(gRenderConfig.eson_filename, gScene)) {
+        std::cerr << "Failed to save scene to ESON." << std::endl;
+        return -1;
+      }
 
-  {
-    bool ret = gRenderer.Build(gScene, gRenderConfig);
-    if (!ret) {
-      fprintf(stderr, "Failed to load .obj [ %s ]\n",
-              gRenderConfig.obj_filename.c_str());
-      return -1;
     }
   }
-  std::cerr << gRenderConfig.look_at[0] << " " << gRenderConfig.look_at[1]
-            << " " << gRenderConfig.look_at[2] << std::endl;
+
+  // TODO(LTE): Regenerate ESON and BVH when displacement parameter changes.
+  ApplyDisplacement(gScene, gRenderConfig);
+
+  bool ret = gRenderer.Build(gScene, gRenderConfig);
+  if (!ret) {
+    fprintf(stderr, "Failed to build BVH\n");
+    return -1;
+  }
 
   window = new b3gDefaultOpenGLWindow;
   b3gWindowConstructionInfo ci;
@@ -633,7 +688,9 @@ int main(int argc, char** argv) {
 
       ImGui::RadioButton("render", &gShowBufferMode, SHOW_BUFFER_RENDER);
       ImGui::SameLine();
-      ImGui::RadioButton("normal", &gShowBufferMode, SHOW_BUFFER_NORMAL);
+      ImGui::RadioButton("shading normal", &gShowBufferMode, SHOW_BUFFER_SHADING_NORMAL);
+      ImGui::SameLine();
+      ImGui::RadioButton("geom normal", &gShowBufferMode, SHOW_BUFFER_GEOM_NORMAL);
       ImGui::SameLine();
       ImGui::RadioButton("position", &gShowBufferMode, SHOW_BUFFER_POSITION);
       ImGui::SameLine();

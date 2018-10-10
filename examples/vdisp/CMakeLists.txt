@@ -34,6 +34,7 @@ add_definitions("-DGLEW_STATIC")
 set(MAIN_SOURCES
     main.cc
     render.cc
+    serialize.cc
     render-config.cc
     geometry-util.cc
 )

@@ -89,10 +89,17 @@ static void ClearAOVPixel(size_t px, size_t py, RenderLayer* layer) {
   layer->diffuse[4 * idx + 2] = 0.0f;
   layer->diffuse[4 * idx + 3] = 0.0f;
 
-  layer->normal[4 * idx + 0] = 0.0f;
-  layer->normal[4 * idx + 1] = 0.0f;
-  layer->normal[4 * idx + 2] = 0.0f;
-  layer->normal[4 * idx + 3] = 0.0f;
+  layer->depth[idx] = 0.0f;
+
+  layer->shading_normal[4 * idx + 0] = 0.0f;
+  layer->shading_normal[4 * idx + 1] = 0.0f;
+  layer->shading_normal[4 * idx + 2] = 0.0f;
+  layer->shading_normal[4 * idx + 3] = 0.0f;
+
+  layer->geometric_normal[4 * idx + 0] = 0.0f;
+  layer->geometric_normal[4 * idx + 1] = 0.0f;
+  layer->geometric_normal[4 * idx + 2] = 0.0f;
+  layer->geometric_normal[4 * idx + 3] = 0.0f;
 
   layer->position[4 * idx + 0] = 0.0f;
   layer->position[4 * idx + 1] = 0.0f;
@@ -248,23 +255,13 @@ static void FetchTexture(const Scene& scene, int tex_idx, float u, float v,
 
 static void FetchNormal(const Scene& scene,
                         const nanort::TriangleIntersection<float>& isect,
-                        float3& N) {
+                        float3& Ns,
+                        float3& Ng) {
   const Mesh& mesh = scene.mesh;
 
   unsigned int prim_id = isect.prim_id;
-  if (mesh.facevarying_normals.size() > 0) {
-    float3 n0, n1, n2;
-    n0[0] = mesh.facevarying_normals[9 * prim_id + 0];
-    n0[1] = mesh.facevarying_normals[9 * prim_id + 1];
-    n0[2] = mesh.facevarying_normals[9 * prim_id + 2];
-    n1[0] = mesh.facevarying_normals[9 * prim_id + 3];
-    n1[1] = mesh.facevarying_normals[9 * prim_id + 4];
-    n1[2] = mesh.facevarying_normals[9 * prim_id + 5];
-    n2[0] = mesh.facevarying_normals[9 * prim_id + 6];
-    n2[1] = mesh.facevarying_normals[9 * prim_id + 7];
-    n2[2] = mesh.facevarying_normals[9 * prim_id + 8];
-    N = Lerp3(n0, n1, n2, isect.u, isect.v);
-  } else {
+
+  {
     unsigned int f0, f1, f2;
     f0 = mesh.faces[3 * prim_id + 0];
     f1 = mesh.faces[3 * prim_id + 1];
@@ -280,7 +277,23 @@ static void FetchNormal(const Scene& scene,
     v2[0] = mesh.vertices[3 * f2 + 0];
     v2[1] = mesh.vertices[3 * f2 + 1];
     v2[2] = mesh.vertices[3 * f2 + 2];
-    CalcNormal(N, v0, v1, v2);
+    CalcNormal(Ng, v0, v1, v2);
+  }
+
+  if (mesh.facevarying_normals.size() > 0) {
+    float3 n0, n1, n2;
+    n0[0] = mesh.facevarying_normals[9 * prim_id + 0];
+    n0[1] = mesh.facevarying_normals[9 * prim_id + 1];
+    n0[2] = mesh.facevarying_normals[9 * prim_id + 2];
+    n1[0] = mesh.facevarying_normals[9 * prim_id + 3];
+    n1[1] = mesh.facevarying_normals[9 * prim_id + 4];
+    n1[2] = mesh.facevarying_normals[9 * prim_id + 5];
+    n2[0] = mesh.facevarying_normals[9 * prim_id + 6];
+    n2[1] = mesh.facevarying_normals[9 * prim_id + 7];
+    n2[2] = mesh.facevarying_normals[9 * prim_id + 8];
+    Ns = Lerp3(n0, n1, n2, isect.u, isect.v);
+  } else {
+    Ns = Ng;
   }
 }
 
@@ -375,11 +388,20 @@ static void TraceRay(const Scene& scene, nanort::Ray<float> ray, size_t px,
   P[1] = ray.org[1] + isect.t * ray.dir[1];
   P[2] = ray.org[2] + isect.t * ray.dir[2];
 
-  float3 N;
-  FetchNormal(scene, isect, N);
+  float3 Ns, Ng;
+  FetchNormal(scene, isect, Ns, Ng);
 
   // AOV
   if (depth == 0) {
+    float3 UV;
+    bool has_uv = FetchUV(scene, isect, UV);
+    if (has_uv) {
+      layer->texcoord[4 * (py * layer->width + px) + 0] = UV[0];
+      layer->texcoord[4 * (py * layer->width + px) + 1] = UV[1];
+      layer->texcoord[4 * (py * layer->width + px) + 2] = 0.0f;
+      layer->texcoord[4 * (py * layer->width + px) + 3] = 1.0f;
+    }
+
     layer->position[4 * (py * layer->width + px) + 0] = P.x();
     layer->position[4 * (py * layer->width + px) + 1] = P.y();
     layer->position[4 * (py * layer->width + px) + 2] = P.z();
@@ -390,10 +412,15 @@ static void TraceRay(const Scene& scene, nanort::Ray<float> ray, size_t px,
     layer->varycoord[4 * (py * layer->width + px) + 2] = 0.0f;
     layer->varycoord[4 * (py * layer->width + px) + 3] = 1.0f;
 
-    layer->normal[4 * (py * layer->width + px) + 0] = 0.5f * N[0] + 0.5f;
-    layer->normal[4 * (py * layer->width + px) + 1] = 0.5f * N[1] + 0.5f;
-    layer->normal[4 * (py * layer->width + px) + 2] = 0.5f * N[2] + 0.5f;
-    layer->normal[4 * (py * layer->width + px) + 3] = 1.0f;
+    layer->shading_normal[4 * (py * layer->width + px) + 0] = 0.5f * Ns[0] + 0.5f;
+    layer->shading_normal[4 * (py * layer->width + px) + 1] = 0.5f * Ns[1] + 0.5f;
+    layer->shading_normal[4 * (py * layer->width + px) + 2] = 0.5f * Ns[2] + 0.5f;
+    layer->shading_normal[4 * (py * layer->width + px) + 3] = 1.0f;
+
+    layer->geometric_normal[4 * (py * layer->width + px) + 0] = 0.5f * Ng[0] + 0.5f;
+    layer->geometric_normal[4 * (py * layer->width + px) + 1] = 0.5f * Ng[1] + 0.5f;
+    layer->geometric_normal[4 * (py * layer->width + px) + 2] = 0.5f * Ng[2] + 0.5f;
+    layer->geometric_normal[4 * (py * layer->width + px) + 3] = 1.0f;
 
     layer->depth[(py * layer->width + px)] = isect.t;
 
@@ -424,7 +451,7 @@ static void TraceRay(const Scene& scene, nanort::Ray<float> ray, size_t px,
   }
 
   const float3 D = float3(ray.dir[0], ray.dir[1], ray.dir[2]);
-  const float DDotN = vdot(D, N);
+  const float DDotN = vdot(D, Ns);
 
   col[0] = std::fabs(DDotN);
   col[1] = std::fabs(DDotN);
@@ -452,8 +479,34 @@ static int LoadTexture(const std::string& filename,
 
   std::string ext = GetFileExtension(filename);
 
-  if ((ext.compare("exr") == 0) || 
-      (ext.compare("EXR") == 0)) {
+  if ((ext.compare("exr") == 0) || (ext.compare("EXR") == 0)) {
+    int w, h;
+    float* rgba;
+    const char* err = nullptr;
+    int ret = LoadEXR(&rgba, &w, &h, filename.c_str(), &err);
+
+    if (ret == TINYEXR_SUCCESS) {
+      texture.width = w;
+      texture.height = h;
+      texture.components = 3;
+
+      size_t n_elem = size_t(w * h);
+      texture.image.resize(n_elem * 3);
+
+      // RGBA -> RGB
+      for (size_t i = 0; i < n_elem; i++) {
+        texture.image[3 * i + 0] = rgba[4 * i + 0];
+        texture.image[3 * i + 1] = rgba[4 * i + 1];
+        texture.image[3 * i + 2] = rgba[4 * i + 2];
+      }
+
+      int id = int(textures_inout->size());
+      textures_inout->push_back(texture);
+
+      free(rgba);
+
+      return id;
+    }
 
   } else {
     // assume LDR image.
@@ -491,6 +544,7 @@ static bool LoadObj(Mesh& mesh, const char* filename, float scale,
   tinyobj::attrib_t attrib;
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
+  std::string warn;
   std::string err;
 
   std::string basedir = GetBaseDir(filename) + "/";
@@ -499,8 +553,13 @@ static bool LoadObj(Mesh& mesh, const char* filename, float scale,
 
   auto t_start = std::chrono::system_clock::now();
 
-  bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename,
-                              basepath, /* triangulate */ true);
+  bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                              filename, basepath, /* triangulate */ true);
+
+  if (!warn.empty()) {
+    std::cerr << "warn : " << warn << std::endl;
+  }
+
   if (!ret) {
     std::cerr << "Failed to load .obj : " << filename << std::endl;
     if (!err.empty()) {
@@ -584,7 +643,7 @@ static bool LoadObj(Mesh& mesh, const char* filename, float scale,
         f1 = shapes[i].mesh.indices[3 * f + 1].normal_index;
         f2 = shapes[i].mesh.indices[3 * f + 2].normal_index;
 
-        if (f0 > 0 && f1 > 0 && f2 > 0) {
+        if ((f0 >= 0) && (f1 >= 0) && (f2 >= 0)) {
           float3 n0, n1, n2;
 
           n0[0] = attrib.normals[size_t(3 * f0 + 0)];
@@ -711,7 +770,7 @@ static bool LoadObj(Mesh& mesh, const char* filename, float scale,
         f1 = shapes[i].mesh.indices[3 * f + 1].texcoord_index;
         f2 = shapes[i].mesh.indices[3 * f + 2].texcoord_index;
 
-        if (f0 > 0 && f1 > 0 && f2 > 0) {
+        if ((f0 >= 0) && (f1 >= 0) && (f2 > 0)) {
           float3 n0, n1, n2;
 
           n0[0] = attrib.texcoords[size_t(2 * f0 + 0)];
@@ -775,29 +834,47 @@ bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale,
 }
 
 bool Renderer::Build(Scene& scene, RenderConfig& config) {
-  std::cout << "[Build BVH] " << std::endl;
+  bool bvh_load_ok = false;
 
-  nanort::BVHBuildOptions<float> options;  // Use default option
-  options.cache_bbox = false;
-  options.min_leaf_primitives = 16;
+  // Try to load serialized BVH if specified.
+  if (!config.bvh_filename.empty()) {
+    bvh_load_ok = scene.accel.Load(config.bvh_filename.c_str());
+  }
 
-  printf("  BVH build option:\n");
-  printf("    # of leaf primitives: %d\n", options.min_leaf_primitives);
-  printf("    SAH binsize         : %d\n", options.bin_size);
+  if (!bvh_load_ok) {
+    std::cout << "[Build BVH] " << std::endl;
 
-  nanort::TriangleMesh<float> triangle_mesh(
-      scene.mesh.vertices.data(), scene.mesh.faces.data(), sizeof(float) * 3);
-  nanort::TriangleSAHPred<float> triangle_pred(
-      scene.mesh.vertices.data(), scene.mesh.faces.data(), sizeof(float) * 3);
+    nanort::BVHBuildOptions<float> options;  // Use default option
+    options.cache_bbox = false;
+    options.min_leaf_primitives = 16;
 
-  std::cout << "# of vertices = " << scene.mesh.vertices.data() << std::endl;
-  std::cout << "# of faces = " << scene.mesh.faces.data() << std::endl;
+    printf("  BVH build option:\n");
+    printf("    # of leaf primitives: %d\n", options.min_leaf_primitives);
+    printf("    SAH binsize         : %d\n", options.bin_size);
 
-  bool ret = scene.accel.Build(uint32_t(scene.mesh.faces.size() / 3),
-                               triangle_mesh, triangle_pred, options);
+    nanort::TriangleMesh<float> triangle_mesh(
+        scene.mesh.vertices.data(), scene.mesh.faces.data(), sizeof(float) * 3);
+    nanort::TriangleSAHPred<float> triangle_pred(
+        scene.mesh.vertices.data(), scene.mesh.faces.data(), sizeof(float) * 3);
 
-  if (!ret) {
-    return false;
+    std::cout << "# of vertices = " << scene.mesh.vertices.data() << std::endl;
+    std::cout << "# of faces = " << scene.mesh.faces.data() << std::endl;
+
+    bool ret = scene.accel.Build(uint32_t(scene.mesh.faces.size() / 3),
+                                 triangle_mesh, triangle_pred, options);
+
+    if (!ret) {
+      return false;
+    }
+
+    if (!config.bvh_filename.empty()) {
+      // dump
+      if (!scene.accel.Dump(config.bvh_filename.c_str())) {
+        fprintf(stderr, "Failed to dump BVH to file [ %s ]\n",
+                config.bvh_filename.c_str());
+        // may ok
+      }
+    }
   }
 
   nanort::BVHBuildStatistics stats = scene.accel.GetStatistics();
@@ -900,8 +977,7 @@ bool Renderer::Render(const Scene& scene, float quat[4],
               ClearAOVPixel(size_t(x), size_t(y), layer);
             }
 
-            TraceRay(scene, ray, size_t(x), size_t(y), col, config, 
-                      layer);
+            TraceRay(scene, ray, size_t(x), size_t(y), col, config, layer);
 
             if (config.pass == 0) {
               layer->rgba[4 * (y * layer->width + x) + 0] = col[0];
