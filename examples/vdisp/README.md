@@ -2,8 +2,8 @@
 
 ## Features
 
-* [ ] Render mesh with vector displacement.
-* [ ] Bake vector displaced mesh to normal map using ray tracing.
+* [x] Render mesh with vector displacement.
+* [ ] TODO: Bake vector displaced mesh to normal map using ray tracing.
 
 ## Coordinates
 
@@ -65,6 +65,7 @@ RecomputeVertexNormal():
 
 ## TODO
 
+* [ ] Bake vector displaced mesh to normal map using ray tracing.
 * [ ] Fix normal seams.
 * [ ] Support quad polygon.
 * [ ] Implement better mesh smoothing algoritm for higher quality dispaced mesh generation.
