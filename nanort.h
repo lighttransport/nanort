@@ -60,6 +60,7 @@ THE SOFTWARE.
 // #define NANORT_ENABLE_PARALLEL_BUILD
 
 // Some constants
+#define kNANORT_MAX_STACK_DEPTH (512)
 #define kNANORT_MIN_PRIMITIVES_FOR_PARALLEL_BUILD (1024 * 8)
 #define kNANORT_SHALLOW_DEPTH (4)  // will create 2**N subtrees
 
@@ -2449,8 +2450,6 @@ template <typename T>
 template <class I, class H>
 bool BVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
                            const BVHTraceOptions &options) const {
-  const int kMaxStackDepth = 512;
-
   T hit_t = ray.max_t;
 
   int node_stack_index = 0;
@@ -2510,7 +2509,7 @@ bool BVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
     }
   }
 
-  assert(node_stack_index < kMaxStackDepth);
+  assert(node_stack_index < kNANORT_MAX_STACK_DEPTH);
 
   bool hit = (intersector.GetT() < ray.max_t);
   intersector.PostTraversal(ray, hit, isect);
