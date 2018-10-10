@@ -30,7 +30,7 @@ Wavefront .obj is supported.
 
 The renderer itself does not tessellate mesh(just displace vertex position for a given mesh), thus user must supply pre-tessellated mesh.
 
-For vector displacemt map, please specify `vdisp filename.exr` in .mtl. LDR texture (e.g. png) is supported.
+Specify vector displacement map by `disp filename.exr` in .mtl. LDR texture (e.g. png. color space is assumed as linear) and EXR are supported.
 Assume vector displacement is defined in world coordinate by default.
 
 if `vn` is given in .obj, the renderer computes tangents and binormals.
