@@ -29,11 +29,14 @@ struct RenderConfig {
 
   // Scene input info
   std::string obj_filename;
+  std::string eson_filename;
+  std::string bvh_filename;
   float scene_scale;
 
   // vdisp parameter.
   VDispSpace vdisp_space;
   float vdisp_scale = 1.0f;
+  bool area_weighting = true; // Consider polygon area when recomputing normals from displaced mesh.
 
 };
 

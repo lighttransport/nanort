@@ -44,6 +44,18 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
+  if (o.find("eson_filename") != o.end()) {
+    if (o["eson_filename"].is<std::string>()) {
+      config->eson_filename = o["eson_filename"].get<std::string>();
+    }
+  }
+
+  if (o.find("bvh_filename") != o.end()) {
+    if (o["bvh_filename"].is<std::string>()) {
+      config->bvh_filename = o["bvh_filename"].get<std::string>();
+    }
+  }
+
   config->scene_scale = 1.0f;
   if (o.find("scene_scale") != o.end()) {
     if (o["scene_scale"].is<double>()) {
@@ -130,6 +142,12 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
   if (o.find("vdisp_scale") != o.end()) {
     if (o["vdisp_scale"].is<double>()) {
       config->vdisp_scale = static_cast<float>(o["vdisp_scale"].get<double>());
+    }
+  }
+
+  if (o.find("area_weighting") != o.end()) {
+    if (o["area_weighting"].is<bool>()) {
+      config->area_weighting = o["area_weighting"].get<bool>();
     }
   }
 
