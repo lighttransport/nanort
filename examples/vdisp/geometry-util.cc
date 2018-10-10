@@ -15,13 +15,22 @@ inline float lerp(float x, float y, float t) {
 
 inline float AngleBetween(const float3 &a, const float3 &b)
 {
-  const float mag = vlength(a) * vlength(b);
+  const float a_len = vlength(a);
+  const float b_len = vlength(b);
+  if (a_len < 1.0e-6f) {
+    return 0.0f;
+  }
+  if (b_len < 1.0e-6f) {
+    return 0.0f;
+  }
+
+  const float mag = a_len * b_len;
   if (mag > 1.0e-6f) {
     const float cos_alpha = vdot(a, b) / mag;
 
     return std::acos(cos_alpha);
   }
-  return 1.0f;
+  return 0.0f;
 }
 
 
@@ -433,7 +442,11 @@ void ApplyVectorDispacement(const std::vector<float> &vertices,
   }
 }
 
+// Recompute vertex normal by considering triangle's area and angle.
+//
 // http://www.bytehazard.com/articles/vertnorm.html
+// https://stackoverflow.com/questions/45477806/general-method-for-calculating-smooth-vertex-normals-with-100-smoothness
+//
 void RecomputeSmoothNormals(
     const std::vector<float> &vertices,
     const std::vector<uint32_t> &faces,

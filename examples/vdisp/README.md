@@ -21,7 +21,7 @@ Right-handed coorinate, Y up, counter clock-wise normal definition.
 $ mkdir build
 $ cd build
 $ cmake ..
-$ cmake
+$ make
 ```
 
 ## Prepare mesh and material.
@@ -37,9 +37,25 @@ if `vn` is given in .obj, the renderer computes tangents and binormals.
 
 ## Usage
 
-Edit `config.json`, then
+Edit `config.json`, then go to build direcory.
 
-    $ ./bin/native/Release/vdisp
+```
+$ ./vdisp
+```
+
+Not that `../config.json` will be read by default and specify path to files(.obj, textures, etc) based on working directory.
+
+## How it works
+
+```
+Displace():
+  for each vertex:
+    sample displace value from vertex's texture coordinate.
+    displace vertex
+
+RecomputeVertexNormal():
+  compute vertex normal with considering area and angle.
+```
 
 ### Mouse operation
 
@@ -49,6 +65,12 @@ Edit `config.json`, then
 
 ## TODO
 
+* [ ] Fix normal seams.
+* [ ] Support quad polygon.
+* [ ] Implement better mesh smoothing algoritm for higher quality dispaced mesh generation.
+* [ ] Tangent space vector displacement.
 * [ ] Tessellate mesh(subdivision using OpenSubdiv)
+  * [ ] Catmark subdivision
+  * [ ] Adaptive tessellation
 * [ ] Per material control of vector displacement property
 

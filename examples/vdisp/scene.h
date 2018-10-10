@@ -21,6 +21,7 @@ typedef struct {
   std::vector<unsigned int> faces;           /// triangle x num_faces
   std::vector<unsigned int> material_ids;    /// index x num_faces
 
+  std::vector<float> original_vertices;      /// Orignal vertices. Initially this is same with `vertices`. [xyz] * num_vertices
   std::vector<float> displaced_vertices;     /// [xyz] * num_vertices
 } Mesh;
 

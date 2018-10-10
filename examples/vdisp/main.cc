@@ -138,16 +138,6 @@ example::RenderLayer gRenderLayer;
 std::mutex gMutex;
 
 std::vector<float> gDisplayRGBA;  // Accumurated image.
-// std::vector<float> gRGBA;
-// std::vector<float> gAuxRGBA;        // Auxiliary buffer
-// std::vector<int> gSampleCounts;     // Sample num counter for each pixel.
-// std::vector<float> gNormalRGBA;     // For visualizing normal
-// std::vector<float> gPositionRGBA;   // For visualizing position
-// std::vector<float> gDepthRGBA;      // For visualizing depth
-// std::vector<float> gTexCoordRGBA;   // For visualizing texcoord
-// std::vector<float> gVaryCoordRGBA;  // For visualizing varycentric coord
-// std::vector<float> gVertexColorRGBA;  // For visualizing vertex color
-// std::vector<float> gColorRGBA;      // For visualizing color
 
 int isGammaCorrection = 1;  // For Gamma Carrection
 int isGammaCorrectionButton = 1;
@@ -502,7 +492,7 @@ static bool ApplyDisplacement(example::Scene &scene, const example::RenderConfig
   }
 
   example::ApplyVectorDispacement(
-    scene.mesh.vertices,
+    scene.mesh.original_vertices,
     scene.mesh.faces,
     scene.mesh.material_ids,
     scene.mesh.facevarying_uvs,
@@ -518,7 +508,6 @@ static bool ApplyDisplacement(example::Scene &scene, const example::RenderConfig
     &scene.mesh.displaced_vertices);
 
   // swap
-  // TODO(LTE): Save original vertex somewhere
   scene.mesh.vertices.swap(scene.mesh.displaced_vertices);
 
   std::vector<float> facevarying_normals;
@@ -595,6 +584,9 @@ int main(int argc, char** argv) {
 
     }
   }
+
+  // save initial vertices to `original_vertices`.
+  gScene.mesh.original_vertices = gScene.mesh.vertices;
 
   // TODO(LTE): Regenerate ESON and BVH when displacement parameter changes.
   ApplyDisplacement(gScene, gRenderConfig);
