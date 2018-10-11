@@ -13,6 +13,22 @@ namespace example {
 inline float lerp(float x, float y, float t) {
   return x + t * (y - x); }
 
+// Building an Orthonormal Basis, Revisited
+// http://jcgt.org/published/0006/01/01/
+static void revisedONB(const float3 &n, float3 &b1, float3 &b2) {
+  if (n[2] < 0.0f) {
+    const float a = 1.0f / (1.0f - n[2]);
+    const float b = n[0] * n[1] * a;
+    b1 = float3(1.0f - n[0] * n[0] * a, -b, n[0]);
+    b2 = float3(b, n[1] * n[1] * a - 1.0f, -n[1]);
+  } else {
+    const float a = 1.0f / (1.0f + n[2]);
+    const float b = -n[0] * n[1] * a;
+    b1 = float3(1.0f - n[0] * n[0] * a, b, -n[0]);
+    b2 = float3(b, 1.0f - n[1] * n[1] * a, -n[1]);
+  }
+}
+
 inline float AngleBetween(const float3 &a, const float3 &b)
 {
   const float a_len = vlength(a);
@@ -33,7 +49,7 @@ inline float AngleBetween(const float3 &a, const float3 &b)
   return 0.0f;
 }
 
-
+#if 1
 // Sample texel with bi-linear filtering.
 static void FilterTexture(
   const std::vector<float> &image,
@@ -102,6 +118,7 @@ static void FilterTexture(
     rgb[2] = rgb[0];
   }
 }
+#endif
 
 #if 0
 // Sample texel without filtering.
@@ -142,6 +159,93 @@ static void SampleTexture(
 
 }
 #endif
+
+// Get tangent basis for each triangle's vertex
+static void GetTangentBasis(
+    const std::vector<float> &vertices,
+    const std::vector<uint32_t> &faces,
+    const std::vector<float> &facevarying_normals,
+    const std::vector<float> &facevarying_tangents,
+    const std::vector<float> &facevarying_binormals,
+    uint32_t prim_id,
+    float3 Tn[3],
+    float3 Bn[3],
+    float3 N[3]) {
+
+  if ((facevarying_normals.size() > 0) &&
+      (facevarying_tangents.size() > 0) &&
+      (facevarying_binormals.size() > 0)) {
+
+    N[0][0] = facevarying_normals[9 * prim_id + 0];
+    N[0][1] = facevarying_normals[9 * prim_id + 1];
+    N[0][2] = facevarying_normals[9 * prim_id + 2];
+
+    N[1][0] = facevarying_normals[9 * prim_id + 3];
+    N[1][1] = facevarying_normals[9 * prim_id + 4];
+    N[1][2] = facevarying_normals[9 * prim_id + 5];
+
+    N[2][0] = facevarying_normals[9 * prim_id + 6];
+    N[2][1] = facevarying_normals[9 * prim_id + 7];
+    N[2][2] = facevarying_normals[9 * prim_id + 8];
+
+    Tn[0][0] = facevarying_tangents[9 * prim_id + 0];
+    Tn[0][1] = facevarying_tangents[9 * prim_id + 1];
+    Tn[0][2] = facevarying_tangents[9 * prim_id + 2];
+
+    Tn[1][0] = facevarying_tangents[9 * prim_id + 3];
+    Tn[1][1] = facevarying_tangents[9 * prim_id + 4];
+    Tn[1][2] = facevarying_tangents[9 * prim_id + 5];
+
+    Tn[2][0] = facevarying_tangents[9 * prim_id + 6];
+    Tn[2][1] = facevarying_tangents[9 * prim_id + 7];
+    Tn[2][2] = facevarying_tangents[9 * prim_id + 8];
+
+    Bn[0][0] = facevarying_binormals[9 * prim_id + 0];
+    Bn[0][1] = facevarying_binormals[9 * prim_id + 1];
+    Bn[0][2] = facevarying_binormals[9 * prim_id + 2];
+
+    Bn[1][0] = facevarying_binormals[9 * prim_id + 3];
+    Bn[1][1] = facevarying_binormals[9 * prim_id + 4];
+    Bn[1][2] = facevarying_binormals[9 * prim_id + 5];
+
+    Bn[2][0] = facevarying_binormals[9 * prim_id + 6];
+    Bn[2][1] = facevarying_binormals[9 * prim_id + 7];
+    Bn[2][2] = facevarying_binormals[9 * prim_id + 8];
+
+  } else {
+
+    float3 Ng;
+    {
+      unsigned int f0, f1, f2;
+      f0 = faces[3 * prim_id + 0];
+      f1 = faces[3 * prim_id + 1];
+      f2 = faces[3 * prim_id + 2];
+
+      float3 v0, v1, v2;
+      v0[0] = vertices[3 * f0 + 0];
+      v0[1] = vertices[3 * f0 + 1];
+      v0[2] = vertices[3 * f0 + 2];
+      v1[0] = vertices[3 * f1 + 0];
+      v1[1] = vertices[3 * f1 + 1];
+      v1[2] = vertices[3 * f1 + 2];
+      v2[0] = vertices[3 * f2 + 0];
+      v2[1] = vertices[3 * f2 + 1];
+      v2[2] = vertices[3 * f2 + 2];
+      CalcNormal(Ng, v0, v1, v2);
+    }
+
+    // Build approximate ortho basis.
+    // This would not give correct vector displacement effect in tangent space.
+    revisedONB(Ng, Tn[0], Bn[0]);
+    Tn[1] = Tn[0];
+    Tn[2] = Tn[0];
+
+    Bn[1] = Bn[0];
+    Bn[2] = Bn[0];
+  } 
+}
+
+
 
 void GeneratePlane(
   size_t u_div,
@@ -433,9 +537,7 @@ void ApplyVectorDispacement(const std::vector<float> &vertices,
   (void)facevarying_tangents;
   (void)facevarying_binormals;
 
-  if (vdisp_space == 0) {
-    // world space
-
+  {
     size_t num_verts = vertices.size() / 3;
     size_t num_faces = faces.size() / 3;
 
@@ -483,6 +585,39 @@ void ApplyVectorDispacement(const std::vector<float> &vertices,
         FilterTexture(vdisp_image, vdisp_width, vdisp_height, uv[1][0], uv[1][1], disp1);
         FilterTexture(vdisp_image, vdisp_width, vdisp_height, uv[2][0], uv[2][1], disp2);
 
+        if (vdisp_space == example::VDISP_SPACE_TANGENT) {
+          float3 Tn[3], Bn[3], N[3];
+
+          GetTangentBasis(vertices,
+                          faces,
+            facevarying_normals,
+            facevarying_tangents,
+            facevarying_binormals,
+            uint32_t(f),
+            Tn,
+            Bn,
+            N);
+
+          float3 d0(disp0[0], disp0[1], disp0[2]);
+          float3 d1(disp1[0], disp1[1], disp1[2]);
+          float3 d2(disp2[0], disp2[1], disp2[2]);
+
+          disp0[0] = Tn[0][0] * d0[0] + Bn[0][0] * d0[0] + N[0][0] * d0[0];
+          disp0[1] = Tn[0][1] * d0[1] + Bn[0][1] * d0[1] + N[0][1] * d0[1];
+          disp0[2] = Tn[0][2] * d0[2] + Bn[0][2] * d0[2] + N[0][2] * d0[2];
+
+          disp1[0] = Tn[1][0] * d1[0] + Bn[1][0] * d1[0] + N[1][0] * d1[0];
+          disp1[1] = Tn[1][1] * d1[1] + Bn[1][1] * d1[1] + N[1][1] * d1[1];
+          disp1[2] = Tn[1][2] * d1[2] + Bn[1][2] * d1[2] + N[1][2] * d1[2];
+
+          disp2[0] = Tn[2][0] * d2[0] + Bn[2][0] * d2[0] + N[2][0] * d2[0];
+          disp2[1] = Tn[2][1] * d2[1] + Bn[2][1] * d2[1] + N[2][1] * d2[1];
+          disp2[2] = Tn[2][2] * d2[2] + Bn[2][2] * d2[2] + N[2][2] * d2[2];
+          
+        } else {
+          // Assume world
+        }
+
         displacements[3 * vidx0 + 0] += vdisp_scale * disp0[0];
         displacements[3 * vidx0 + 1] += vdisp_scale * disp0[1];
         displacements[3 * vidx0 + 2] += vdisp_scale * disp0[2];
@@ -523,12 +658,6 @@ void ApplyVectorDispacement(const std::vector<float> &vertices,
 
     }
 
-  } else {
-    (void)(facevarying_normals);
-    (void)(facevarying_tangents);
-    (void)(facevarying_binormals);
-
-    assert(0);  // TODO(LTE):
   }
 }
 

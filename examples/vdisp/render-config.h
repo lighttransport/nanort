@@ -7,11 +7,6 @@
 
 namespace example {
 
-enum VDispSpace {
-  VDISP_SPACE_WORLD = 0,
-  VDISP_SPACE_TANGENT
-};
-
 struct RenderConfig {
   // framebuffer
   int width;

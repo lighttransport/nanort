@@ -99,12 +99,14 @@ THE SOFTWARE.
 #define SHOW_BUFFER_RENDER (0)
 #define SHOW_BUFFER_SHADING_NORMAL (1)
 #define SHOW_BUFFER_GEOM_NORMAL (2)
-#define SHOW_BUFFER_POSITION (3)
-#define SHOW_BUFFER_DEPTH (4)
-#define SHOW_BUFFER_DIFFUSE (5)
-#define SHOW_BUFFER_TEXCOORD (6)
-#define SHOW_BUFFER_VARYCOORD (7)
-#define SHOW_BUFFER_VERTEXCOLOR (8)
+#define SHOW_BUFFER_TANGENT (3)
+#define SHOW_BUFFER_BINORMAL (4)
+#define SHOW_BUFFER_POSITION (5)
+#define SHOW_BUFFER_DEPTH (6)
+#define SHOW_BUFFER_DIFFUSE (7)
+#define SHOW_BUFFER_TEXCOORD (8)
+#define SHOW_BUFFER_VARYCOORD (9)
+#define SHOW_BUFFER_VERTEXCOLOR (10)
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -399,6 +401,14 @@ static void Display(int width, int height) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gRenderLayer.geometric_normal[i];
     }
+  } else if (gShowBufferMode == SHOW_BUFFER_TANGENT) {
+    for (size_t i = 0; i < buf.size(); i++) {
+      buf[i] = gRenderLayer.tangent[i];
+    }
+  } else if (gShowBufferMode == SHOW_BUFFER_BINORMAL) {
+    for (size_t i = 0; i < buf.size(); i++) {
+      buf[i] = gRenderLayer.binormal[i];
+    }
   } else if (gShowBufferMode == SHOW_BUFFER_POSITION) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gRenderLayer.position[i] * gShowPositionScale;
@@ -484,7 +494,15 @@ static void DrawVDispUI(example::RenderConfig &config) {
 
   bool rerender = false;
 
+  static const char *spaces[2] = { "world", "tangent" }; // Must match with VDispSpace enum.
+
   rerender |= ImGui::Checkbox("area_weighting", &config.area_weighting);
+
+  int space_idx = static_cast<int>(config.vdisp_space);
+  if (ImGui::Combo("space", &space_idx, spaces, 2)) {
+    config.vdisp_space = static_cast<example::VDispSpace>(space_idx);
+    rerender = true;
+  }
 
   rerender |= ImGui::InputFloat("scale", &config.vdisp_scale);
 
@@ -580,6 +598,7 @@ static bool ApplyDisplacement(example::Scene &scene,
       scene.mesh.facevarying_normals, &(scene.mesh.facevarying_tangents),
       &(scene.mesh.facevarying_binormals));
 
+  std::cout << "facevarying_tn = " << scene.mesh.facevarying_tangents.size() << std::endl;
   std::cout << "Finish applying displacements." << std::endl;
 
   return true;
@@ -756,6 +775,12 @@ int main(int argc, char **argv) {
       ImGui::RadioButton("geom normal", &gShowBufferMode,
                          SHOW_BUFFER_GEOM_NORMAL);
       ImGui::SameLine();
+      ImGui::RadioButton("tangent", &gShowBufferMode,
+                         SHOW_BUFFER_TANGENT);
+      ImGui::SameLine();
+      ImGui::RadioButton("binormal", &gShowBufferMode,
+                         SHOW_BUFFER_BINORMAL);
+
       ImGui::RadioButton("position", &gShowBufferMode, SHOW_BUFFER_POSITION);
       ImGui::SameLine();
       ImGui::RadioButton("depth", &gShowBufferMode, SHOW_BUFFER_DEPTH);

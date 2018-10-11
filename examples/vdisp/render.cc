@@ -101,6 +101,16 @@ static void ClearAOVPixel(size_t px, size_t py, RenderLayer* layer) {
   layer->geometric_normal[4 * idx + 2] = 0.0f;
   layer->geometric_normal[4 * idx + 3] = 0.0f;
 
+  layer->tangent[4 * idx + 0] = 0.0f;
+  layer->tangent[4 * idx + 1] = 0.0f;
+  layer->tangent[4 * idx + 2] = 0.0f;
+  layer->tangent[4 * idx + 3] = 0.0f;
+
+  layer->binormal[4 * idx + 0] = 0.0f;
+  layer->binormal[4 * idx + 1] = 0.0f;
+  layer->binormal[4 * idx + 2] = 0.0f;
+  layer->binormal[4 * idx + 3] = 0.0f;
+
   layer->position[4 * idx + 0] = 0.0f;
   layer->position[4 * idx + 1] = 0.0f;
   layer->position[4 * idx + 2] = 0.0f;
@@ -297,6 +307,47 @@ static void FetchNormal(const Scene& scene,
   }
 }
 
+static void FetchTangentAndBinormal(const Scene& scene,
+                        const nanort::TriangleIntersection<float>& isect,
+                        float3& Tn,
+                        float3& Bn) {
+  const Mesh& mesh = scene.mesh;
+
+  unsigned int prim_id = isect.prim_id;
+
+  if (mesh.facevarying_tangents.size() > 0) {
+    float3 n0, n1, n2;
+    n0[0] = mesh.facevarying_tangents[9 * prim_id + 0];
+    n0[1] = mesh.facevarying_tangents[9 * prim_id + 1];
+    n0[2] = mesh.facevarying_tangents[9 * prim_id + 2];
+    n1[0] = mesh.facevarying_tangents[9 * prim_id + 3];
+    n1[1] = mesh.facevarying_tangents[9 * prim_id + 4];
+    n1[2] = mesh.facevarying_tangents[9 * prim_id + 5];
+    n2[0] = mesh.facevarying_tangents[9 * prim_id + 6];
+    n2[1] = mesh.facevarying_tangents[9 * prim_id + 7];
+    n2[2] = mesh.facevarying_tangents[9 * prim_id + 8];
+    Tn = Lerp3(n0, n1, n2, isect.u, isect.v);
+  } else {
+    Tn = float3(0.0f, 0.0f, 0.0f);
+  }
+
+  if (mesh.facevarying_binormals.size() > 0) {
+    float3 n0, n1, n2;
+    n0[0] = mesh.facevarying_binormals[9 * prim_id + 0];
+    n0[1] = mesh.facevarying_binormals[9 * prim_id + 1];
+    n0[2] = mesh.facevarying_binormals[9 * prim_id + 2];
+    n1[0] = mesh.facevarying_binormals[9 * prim_id + 3];
+    n1[1] = mesh.facevarying_binormals[9 * prim_id + 4];
+    n1[2] = mesh.facevarying_binormals[9 * prim_id + 5];
+    n2[0] = mesh.facevarying_binormals[9 * prim_id + 6];
+    n2[1] = mesh.facevarying_binormals[9 * prim_id + 7];
+    n2[2] = mesh.facevarying_binormals[9 * prim_id + 8];
+    Bn = Lerp3(n0, n1, n2, isect.u, isect.v);
+  } else {
+    Bn = float3(0.0f, 0.0f, 0.0f);
+  }
+}
+
 static bool FetchUV(const Scene& scene,
                     const nanort::TriangleIntersection<float>& isect,
                     float3& UV) {
@@ -421,6 +472,19 @@ static void TraceRay(const Scene& scene, nanort::Ray<float> ray, size_t px,
     layer->geometric_normal[4 * (py * layer->width + px) + 1] = 0.5f * Ng[1] + 0.5f;
     layer->geometric_normal[4 * (py * layer->width + px) + 2] = 0.5f * Ng[2] + 0.5f;
     layer->geometric_normal[4 * (py * layer->width + px) + 3] = 1.0f;
+
+    float3 Tn, Bn;
+    FetchTangentAndBinormal(scene, isect, Tn, Bn);
+
+    layer->tangent[4 * (py * layer->width + px) + 0] = 0.5f * Tn[0] + 0.5f;
+    layer->tangent[4 * (py * layer->width + px) + 1] = 0.5f * Tn[1] + 0.5f;
+    layer->tangent[4 * (py * layer->width + px) + 2] = 0.5f * Tn[2] + 0.5f;
+    layer->tangent[4 * (py * layer->width + px) + 3] = 1.0f;
+
+    layer->binormal[4 * (py * layer->width + px) + 0] = 0.5f * Bn[0] + 0.5f;
+    layer->binormal[4 * (py * layer->width + px) + 1] = 0.5f * Bn[1] + 0.5f;
+    layer->binormal[4 * (py * layer->width + px) + 2] = 0.5f * Bn[2] + 0.5f;
+    layer->binormal[4 * (py * layer->width + px) + 3] = 1.0f;
 
     layer->depth[(py * layer->width + px)] = isect.t;
 
@@ -606,10 +670,6 @@ static bool LoadObj(Mesh& mesh, const char* filename, float scale,
   mesh.material_ids.resize(num_faces, 0);
   mesh.facevarying_normals.resize(num_faces * 3 * 3, 0.0f);
   mesh.facevarying_uvs.resize(num_faces * 3 * 2, 0.0f);
-
-  // @todo {}
-  // mesh.facevarying_tangents = NULL;
-  // mesh.facevarying_binormals = NULL;
 
   // size_t vertexIdxOffset = 0;
   size_t faceIdxOffset = 0;

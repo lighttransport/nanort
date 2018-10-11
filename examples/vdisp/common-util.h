@@ -10,6 +10,11 @@
 
 namespace example {
 
+enum VDispSpace {
+  VDISP_SPACE_WORLD = 0,
+  VDISP_SPACE_TANGENT
+};
+
 typedef nanort::real3<float> float3;
 
 // PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
