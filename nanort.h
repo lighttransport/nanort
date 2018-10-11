@@ -1863,6 +1863,9 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
 
   nodes_.clear();
   bboxes_.clear();
+#if defined(NANORT_ENABLE_PARALLEL_BUILD)
+  shallow_node_infos_.clear();
+#endif
 
   assert(options_.bin_size > 1);
 
