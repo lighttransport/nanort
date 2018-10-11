@@ -84,12 +84,12 @@ THE SOFTWARE.
 #pragma clang diagnostic pop
 #endif
 
-#include "render-config.h"
 #include "geometry-util.h"
+#include "render-config.h"
 #include "render.h"
 #include "save_img.h"
-#include "trackball.h"
 #include "serialize.h"
+#include "trackball.h"
 
 #ifdef WIN32
 #undef min
@@ -113,7 +113,7 @@ THE SOFTWARE.
 #pragma clang diagnostic ignored "-Wglobal-constructors"
 #endif
 
-b3gDefaultOpenGLWindow* window = nullptr;
+b3gDefaultOpenGLWindow *window = nullptr;
 int gWidth = 512;
 int gHeight = 512;
 int gMousePosX = -1, gMousePosY = -1;
@@ -133,6 +133,7 @@ example::Scene gScene;
 std::atomic<bool> gRenderQuit;
 std::atomic<bool> gRenderRefresh;
 std::atomic<bool> gRenderCancel;
+std::atomic<bool> gRenderFinishPass;
 example::RenderConfig gRenderConfig;
 example::RenderLayer gRenderLayer;
 std::mutex gMutex;
@@ -149,6 +150,8 @@ bool isSaveExr = false;
 #pragma clang diagnostic push
 #endif
 
+static bool ApplyDisplacement(example::Scene &scene, const example::RenderConfig &config);
+
 static void RequestRender() {
   {
     std::lock_guard<std::mutex> guard(gMutex);
@@ -157,6 +160,22 @@ static void RequestRender() {
 
   gRenderRefresh = true;
   gRenderCancel = true;
+}
+
+static void CancelRender() {
+  gRenderCancel = true;
+  gRenderRefresh = false;
+
+  while (true) {
+    if (gRenderFinishPass || (gRenderConfig.pass >= gRenderConfig.max_passes)) {
+      break;
+    } else {
+      // wait render thread
+      // Give some cycles to this thread.
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      continue;
+    }
+  }
 }
 
 static void RenderThread() {
@@ -190,6 +209,8 @@ static void RenderThread() {
     // gRenderCancel may be set to true in main loop.
     // Render() will repeatedly check this flag inside the rendering loop.
 
+    gRenderFinishPass = false;
+
     bool ret = gRenderer.Render(gScene, gCurrQuat, gRenderConfig, &gRenderLayer,
                                 gRenderCancel);
 
@@ -199,6 +220,8 @@ static void RenderThread() {
       gRenderConfig.pass++;
     }
 
+    gRenderFinishPass = true;
+
     // auto endT = std::chrono::system_clock::now();
 
     // std::chrono::duration<double, std::milli> ms = endT - startT;
@@ -207,7 +230,7 @@ static void RenderThread() {
   }
 }
 
-static void InitRender(example::RenderConfig* rc) {
+static void InitRender(example::RenderConfig *rc) {
   rc->pass = 0;
 
   gRenderLayer.Resize(size_t(rc->width), size_t(rc->height));
@@ -284,7 +307,7 @@ static void mouseButtonCallback(int button, int state, float x, float y) {
   (void)y;
   ImGui_ImplBtGui_SetMouseButtonState(button, (state == 1));
 
-  ImGuiIO& io = ImGui::GetIO();
+  ImGuiIO &io = ImGui::GetIO();
   if (io.WantCaptureMouse || io.WantCaptureKeyboard) {
     return;
   }
@@ -437,11 +460,10 @@ static void Display(int width, int height) {
 
   glRasterPos2i(-1, -1);
   glDrawPixels(width, height, GL_RGBA, GL_FLOAT,
-               static_cast<const GLvoid*>(&buf.at(0)));
+               static_cast<const GLvoid *>(&buf.at(0)));
 }
 
-
-static void DrawMaterialUI(std::vector<const char*>& material_names) {
+static void DrawMaterialUI(std::vector<const char *> &material_names) {
   static int idx = 0;
   ImGui::Begin("Material");
 
@@ -451,7 +473,34 @@ static void DrawMaterialUI(std::vector<const char*>& material_names) {
     return;
   }
 
-  ImGui::Combo("materials", &idx, material_names.data(), int(material_names.size()));
+  ImGui::Combo("materials", &idx, material_names.data(),
+               int(material_names.size()));
+
+  ImGui::End();
+}
+
+static void DrawVDispUI(example::RenderConfig &config) {
+  ImGui::Begin("VDisp");
+
+  bool rerender = false;
+
+  rerender |= ImGui::Checkbox("area_weighting", &config.area_weighting);
+
+  rerender |= ImGui::InputFloat("scale", &config.vdisp_scale);
+
+  if (rerender) {
+    // Stop an wait the render thread finishes the rendering.
+    CancelRender();
+    ApplyDisplacement(gScene, config);
+
+    bool ret = gRenderer.Build(gScene, gRenderConfig, /* fit */false);
+    if (!ret) {
+      fprintf(stderr, "Failed to build BVH\n");
+      exit(-1);
+    }
+
+    RequestRender();
+  }
 
   ImGui::End();
 }
@@ -460,17 +509,24 @@ static void DrawMaterialUI(std::vector<const char*>& material_names) {
 #pragma clang diagnostic ignored "-Wold-style-cast"
 #endif
 
-static bool ApplyDisplacement(example::Scene &scene, const example::RenderConfig &config)
-{
+static uint32_t FindVDispMaterialId(const example::Scene &scene) {
   // find displacement map id(choose the first one)
   uint32_t vdisp_material_id = static_cast<uint32_t>(-1);
   for (size_t i = 0; i < scene.materials.size(); i++) {
     if (scene.materials[i].vdisp_texid >= 0) {
       vdisp_material_id = uint32_t(i);
-      std::cout << "Found material with vector displacement : " << scene.materials[i].name << std::endl;
+      std::cout << "Found material with vector displacement : "
+                << scene.materials[i].name << std::endl;
       break;
     }
   }
+
+  return vdisp_material_id;
+}
+
+static bool ApplyDisplacement(example::Scene &scene,
+                              const example::RenderConfig &config) {
+  uint32_t vdisp_material_id = FindVDispMaterialId(scene);
 
   if (vdisp_material_id == static_cast<uint32_t>(-1)) {
     std::cerr << "No vector displacement map found." << std::endl;
@@ -484,7 +540,8 @@ static bool ApplyDisplacement(example::Scene &scene, const example::RenderConfig
   std::cout << "vdisp texid = " << vdisp_material.vdisp_texid << std::endl;
   assert(vdisp_material.vdisp_texid < int(scene.textures.size()));
 
-  const example::Texture &vdisp_texture = scene.textures[size_t(vdisp_material.vdisp_texid)];
+  const example::Texture &vdisp_texture =
+      scene.textures[size_t(vdisp_material.vdisp_texid)];
 
   if (vdisp_texture.components != 3) {
     std::cerr << "Vector displacement texture must be RGB" << std::endl;
@@ -492,20 +549,12 @@ static bool ApplyDisplacement(example::Scene &scene, const example::RenderConfig
   }
 
   example::ApplyVectorDispacement(
-    scene.mesh.original_vertices,
-    scene.mesh.faces,
-    scene.mesh.material_ids,
-    scene.mesh.facevarying_uvs,
-    scene.mesh.facevarying_normals,
-    scene.mesh.facevarying_tangents,
-    scene.mesh.facevarying_binormals,
-    vdisp_material_id,
-    vdisp_texture.image,
-    size_t(vdisp_texture.width),
-    size_t(vdisp_texture.height),
-    int(config.vdisp_space),
-    config.vdisp_scale,
-    &scene.mesh.displaced_vertices);
+      scene.mesh.original_vertices, scene.mesh.faces, scene.mesh.material_ids,
+      scene.mesh.facevarying_uvs, scene.mesh.facevarying_normals,
+      scene.mesh.facevarying_tangents, scene.mesh.facevarying_binormals,
+      vdisp_material_id, vdisp_texture.image, size_t(vdisp_texture.width),
+      size_t(vdisp_texture.height), int(config.vdisp_space), config.vdisp_scale,
+      &scene.mesh.displaced_vertices);
 
   // swap
   scene.mesh.vertices.swap(scene.mesh.displaced_vertices);
@@ -515,12 +564,10 @@ static bool ApplyDisplacement(example::Scene &scene, const example::RenderConfig
   std::cout << "Area weighting = " << config.area_weighting << std::endl;
 
   // Recompute normals
-  example::RecomputeSmoothNormals(
-    scene.mesh.vertices,
-    scene.mesh.faces,
-    /* area_weighting */config.area_weighting,
-    &facevarying_normals);
-    
+  example::RecomputeSmoothNormals(scene.mesh.vertices, scene.mesh.faces,
+                                  /* area_weighting */ config.area_weighting,
+                                  &facevarying_normals);
+
   // swap
   // TODO(LTE): Save original facevarying normals somewhere
   scene.mesh.facevarying_normals.swap(facevarying_normals);
@@ -529,19 +576,33 @@ static bool ApplyDisplacement(example::Scene &scene, const example::RenderConfig
 
   // Compute tangents and binormals from displaced mesh + recomputed normal.
   example::ComputeTangentsAndBinormals(
-    scene.mesh.vertices,
-    scene.mesh.faces,
-    scene.mesh.facevarying_uvs,
-    scene.mesh.facevarying_normals,
-    &(scene.mesh.facevarying_tangents),
-    &(scene.mesh.facevarying_binormals));
+      scene.mesh.vertices, scene.mesh.faces, scene.mesh.facevarying_uvs,
+      scene.mesh.facevarying_normals, &(scene.mesh.facevarying_tangents),
+      &(scene.mesh.facevarying_binormals));
 
   std::cout << "Finish applying displacements." << std::endl;
 
   return true;
 }
 
-int main(int argc, char** argv) {
+static void GeneratePlaneMesh(example::Mesh &mesh,
+                          const example::RenderConfig &config,
+                          const uint32_t material_id)
+{
+  example::GeneratePlane(size_t(config.u_div), size_t(config.v_div), config.plane_scale, &mesh.vertices,
+                &mesh.faces, &mesh.facevarying_normals, &mesh.facevarying_uvs);
+
+  // fill material id
+  // (assume triangle)
+  mesh.material_ids.resize(mesh.faces.size() / 3);
+  std::fill_n(mesh.material_ids.begin(), mesh.material_ids.size(), material_id);
+
+  example::ComputeTangentsAndBinormals(
+      mesh.vertices, mesh.faces, mesh.facevarying_uvs, mesh.facevarying_normals,
+      &(mesh.facevarying_tangents), &(mesh.facevarying_binormals));
+}
+
+int main(int argc, char **argv) {
   std::string config_filename = "../config.json";
 
   if (argc > 1) {
@@ -561,11 +622,10 @@ int main(int argc, char** argv) {
   bool eson_load_ok = false;
 
   if (!gRenderConfig.eson_filename.empty()) {
-    eson_load_ok =  LoadSceneFromEson(gRenderConfig.eson_filename, &gScene);
+    eson_load_ok = LoadSceneFromEson(gRenderConfig.eson_filename, &gScene);
   }
 
   if (!eson_load_ok) {
-
     // load obj
     bool obj_ret = gRenderer.LoadObjMesh(gRenderConfig.obj_filename.c_str(),
                                          gRenderConfig.scene_scale, gScene);
@@ -575,13 +635,23 @@ int main(int argc, char** argv) {
       return -1;
     }
 
+    uint32_t vdisp_material_id = FindVDispMaterialId(gScene);
+    if (vdisp_material_id == static_cast<uint32_t>(-1)) {
+      fprintf(stderr, "WARN: No displament in .mtl [ %s ]\n",
+              gRenderConfig.obj_filename.c_str());
+    }
+
+    // overwrite .obj mesh
+    if (gRenderConfig.gen_plane) {
+      GeneratePlaneMesh(gScene.mesh, gRenderConfig, vdisp_material_id);
+    }
+
     if (!gRenderConfig.eson_filename.empty()) {
       // serialize to ESON
       if (!SaveSceneToEson(gRenderConfig.eson_filename, gScene)) {
         std::cerr << "Failed to save scene to ESON." << std::endl;
         return -1;
       }
-
     }
   }
 
@@ -639,11 +709,11 @@ int main(int argc, char** argv) {
   ImGui::CreateContext();
   ImGui_ImplBtGui_Init(window);
 
-  ImGuiIO& io = ImGui::GetIO();
+  ImGuiIO &io = ImGui::GetIO();
   io.Fonts->AddFontDefault();
   // io.Fonts->AddFontFromFileTTF("./DroidSans.ttf", 15.0f);
 
-  std::vector<const char*> material_names;
+  std::vector<const char *> material_names;
   {
     for (size_t i = 0; i < gScene.materials.size(); i++) {
       if (gScene.materials[i].name.empty()) {
@@ -680,9 +750,11 @@ int main(int argc, char** argv) {
 
       ImGui::RadioButton("render", &gShowBufferMode, SHOW_BUFFER_RENDER);
       ImGui::SameLine();
-      ImGui::RadioButton("shading normal", &gShowBufferMode, SHOW_BUFFER_SHADING_NORMAL);
+      ImGui::RadioButton("shading normal", &gShowBufferMode,
+                         SHOW_BUFFER_SHADING_NORMAL);
       ImGui::SameLine();
-      ImGui::RadioButton("geom normal", &gShowBufferMode, SHOW_BUFFER_GEOM_NORMAL);
+      ImGui::RadioButton("geom normal", &gShowBufferMode,
+                         SHOW_BUFFER_GEOM_NORMAL);
       ImGui::SameLine();
       ImGui::RadioButton("position", &gShowBufferMode, SHOW_BUFFER_POSITION);
       ImGui::SameLine();
@@ -724,6 +796,7 @@ int main(int argc, char** argv) {
     ImGui::End();
 
     DrawMaterialUI(material_names);
+    DrawVDispUI(gRenderConfig);
 
     glViewport(0, 0, window->getWidth(), window->getHeight());
     glClearColor(0.0f, 0.1f, 0.2f, 1.0f);

@@ -248,9 +248,15 @@ void SaveImageRaw(const char* filename, const float* rgb, int width, int height)
 
 void SaveImage(const char* filename, const float* rgb, int width, int height) {
 
-  int ret = SaveEXR(rgb, width, height, /* RGB */3, /* fp16 */0, filename);
+  const char *err = NULL;
+  int ret = SaveEXR(rgb, width, height, /* RGB */3, /* fp16 */0, filename, &err);
   if (ret != TINYEXR_SUCCESS) {
-    fprintf(stderr, "Error: %d\n", ret);
+    if (err) {
+      fprintf(stderr, "Error: %s(%d)\n", err, ret);
+      FreeEXRErrorMessage(err);
+    } else {
+      fprintf(stderr, "Error: %d\n", ret);
+    }
   } else {
     printf("Saved image to [ %s ]\n", filename);
   }

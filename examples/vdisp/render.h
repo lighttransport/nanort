@@ -23,8 +23,9 @@ class Renderer {
 
   ///
   /// Builds BVH for a given Scene.
+  /// when `fit` was true, Fit camera to BVH's bounding box.
   ///
-  bool Build(Scene &scene, RenderConfig &config);
+  bool Build(Scene &scene, RenderConfig &config, const bool fit = true);
 
   /// Returns false when the rendering was canceled.
   bool Render(const Scene &scene, float quat[4],

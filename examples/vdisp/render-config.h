@@ -33,6 +33,12 @@ struct RenderConfig {
   std::string bvh_filename;
   float scene_scale;
 
+  // plane parameter
+  bool gen_plane = false;
+  int u_div = 128;
+  int v_div = 128;
+  float plane_scale[3] = {1.0f, 1.0f, 1.0f};
+
   // vdisp parameter.
   VDispSpace vdisp_space;
   float vdisp_scale = 1.0f;

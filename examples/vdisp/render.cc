@@ -833,7 +833,7 @@ bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale,
   return LoadObj(scene.mesh, obj_filename, scene_scale, scene);
 }
 
-bool Renderer::Build(Scene& scene, RenderConfig& config) {
+bool Renderer::Build(Scene& scene, RenderConfig& config, const bool fit) {
   bool bvh_load_ok = false;
 
   // Try to load serialized BVH if specified.
@@ -888,17 +888,19 @@ bool Renderer::Build(Scene& scene, RenderConfig& config) {
   printf("  Bmin               : %f, %f, %f\n", bmin[0], bmin[1], bmin[2]);
   printf("  Bmax               : %f, %f, %f\n", bmax[0], bmax[1], bmax[2]);
 
-  // Fit camera to mesh's bounding box.
-  config.eye[0] = (bmax[0] + bmin[0]) / 2.0f;
-  config.eye[1] = (bmax[1] + bmin[1]) / 2.0f;
-  config.eye[2] = bmax[2] + ((bmax[0] - bmin[0]) * 0.5f /
-                             std::tan(config.fov * 0.5f * kPI / 180.f));
+  if (fit) {
+    // Fit camera to mesh's bounding box.
+    config.eye[0] = (bmax[0] + bmin[0]) / 2.0f;
+    config.eye[1] = (bmax[1] + bmin[1]) / 2.0f;
+    config.eye[2] = bmax[2] + ((bmax[0] - bmin[0]) * 0.5f /
+                               std::tan(config.fov * 0.5f * kPI / 180.f));
 
-  config.look_at[0] = config.look_at[1] = 0.0f;
-  config.look_at[2] = -1.0f;
+    config.look_at[0] = config.look_at[1] = 0.0f;
+    config.look_at[2] = -1.0f;
 
-  config.up[0] = config.up[2] = 0.0f;
-  config.up[1] = 1.0f;
+    config.up[0] = config.up[2] = 0.0f;
+    config.up[1] = 1.0f;
+  }
 
   return true;
 }

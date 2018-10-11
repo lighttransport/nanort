@@ -151,6 +151,36 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
+  if (o.find("gen_plane") != o.end()) {
+    if (o["gen_plane"].is<bool>()) {
+      config->gen_plane = o["gen_plane"].get<bool>();
+    }
+  }
+
+  if (o.find("u_div") != o.end()) {
+    if (o["u_div"].is<double>()) {
+      config->u_div = static_cast<int>(o["u_div"].get<double>());
+    }
+  }
+
+  if (o.find("v_div") != o.end()) {
+    if (o["v_div"].is<double>()) {
+      config->v_div = static_cast<int>(o["v_div"].get<double>());
+    }
+  }
+
+  if (o.find("plane_scale") != o.end()) {
+    if (o["plane_scale"].is<picojson::array>()) {
+      picojson::array arr = o["plane_scale"].get<picojson::array>();
+      if (arr.size() == 3) {
+        config->plane_scale[0] = static_cast<float>(arr[0].get<double>());
+        config->plane_scale[1] = static_cast<float>(arr[1].get<double>());
+        config->plane_scale[2] = static_cast<float>(arr[2].get<double>());
+      }
+    }
+  }
+
+
   return true;
 }
 }

@@ -96,11 +96,6 @@ static void FilterTexture(
                    lerp(texel[2][i], texel[3][i], dx), dy);
   }
 
-  if (stride >= 3) {
-      // also flip read Y coordinate
-      rgb[1] = -rgb[1];
-  }
-
   if (stride == 1) {
     // mono -> RGB
     rgb[1] = rgb[0];
@@ -148,6 +143,101 @@ static void SampleTexture(
 }
 #endif
 
+void GeneratePlane(
+  size_t u_div,
+  size_t v_div,
+  const float scale[3],
+  std::vector<float> *vertices,
+  std::vector<uint32_t> *faces,
+  std::vector<float> *facevarying_normals,
+  std::vector<float> *facevarying_uvs) {
+
+  assert(u_div > 0);
+  assert(v_div > 0);
+
+  float u_step = 1.0f / float(u_div);
+  float v_step = 1.0f / float(v_div);
+
+  vertices->clear();
+  faces->clear();
+  facevarying_normals->clear();
+  facevarying_uvs->clear();
+
+  for (size_t z = 0; z <= v_div; z++) {
+    float pz = 2.0f * z * v_step - 1.0f;
+    for (size_t x = 0; x <= u_div; x++) {
+
+      float px = 2.0f * x * u_step - 1.0f;
+
+      vertices->push_back(px * scale[0]);
+      vertices->push_back(0.0f);
+      vertices->push_back(pz * scale[2]);
+    }
+  }
+
+  // generate indices and facevarying attributes.
+  //
+  // 0       3
+  // +-------+---....
+  // |      /|
+  // |     / |
+  // |    /  |
+  // |   /   |
+  // |  /    |
+  // | /     |
+  // |/      |
+  // +-------+---....
+  // 1       2
+  // |       |
+  // .       .
+  // .       .
+  //
+
+  size_t stride = u_div + 1;
+
+  for (size_t z = 0; z < v_div; z++) {
+    float tv0 = z * v_step;
+    float tv1 = (z + 1) * v_step;
+    for (size_t x = 0; x < u_div; x++) {
+      float tu0 = x * v_step;
+      float tu1 = (x + 1) * v_step;
+
+      faces->push_back(uint32_t(z * stride + x));
+      faces->push_back(uint32_t((z + 1) * stride+ x));
+      faces->push_back(uint32_t(z * stride + (x + 1)));
+
+      faces->push_back(uint32_t((z + 1) * stride + x));
+      faces->push_back(uint32_t((z + 1) * stride + (x + 1)));
+      faces->push_back(uint32_t(z * stride + (x + 1)));
+
+      for (size_t k = 0; k < 6; k++) {
+        facevarying_normals->push_back(0.0f);
+        facevarying_normals->push_back(1.0f);
+        facevarying_normals->push_back(0.0f);
+      }
+
+      // flip V
+      facevarying_uvs->push_back(tu0);
+      facevarying_uvs->push_back(1.0f - tv0);
+
+      facevarying_uvs->push_back(tu0);
+      facevarying_uvs->push_back(1.0f - tv1);
+
+      facevarying_uvs->push_back(tu1);
+      facevarying_uvs->push_back(1.0f - tv0);
+
+      facevarying_uvs->push_back(tu0);
+      facevarying_uvs->push_back(1.0f - tv1);
+
+      facevarying_uvs->push_back(tu1);
+      facevarying_uvs->push_back(1.0f - tv1);
+
+      facevarying_uvs->push_back(tu1);
+      facevarying_uvs->push_back(1.0f - tv0);
+
+    }
+  }
+}
 
 //
 // Compute facevarying tangent and facevarying binormal.

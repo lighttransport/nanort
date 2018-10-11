@@ -1,10 +1,14 @@
-{ "obj_filename" : "../vdisp/subd-plane-fine.obj",
+{ "obj_filename" : "../subd-plane-fine.obj",
   "scene_scale" : 1.0,
   "width" : 512,
   "height" : 512,
   "eye" : [-1.1757215, -30.791911, 150],
   "up" : [0, 1, 0],
   "look_at" : [0, 0, -1],
-  "vdisp_scale" : 20.0,
+  "vdisp_scale" : 10.0,
+  "gen_plane" : false,
+  "u_div" : 128,
+  "v_div" : 128,
+  "plane_scale" : [10, 10, 10],
   "dummy" : 0
 }

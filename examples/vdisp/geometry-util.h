@@ -7,6 +7,24 @@
 namespace example {
 
 ///
+/// Generate a XZ plane mesh centered at the origin.
+/// Its initial size is [-1, 1]^3 and can be scaled by `scale` parameter.
+///
+/// @param[in] scale Scaling factor.
+/// @param[in] u_div The number of division in U(X) direction
+/// @param[in] v_div The number of division in V(Z) direction
+///
+///
+void GeneratePlane(
+  size_t u_div,
+  size_t v_div,
+  const float scale[3],
+  std::vector<float> *vertices,
+  std::vector<uint32_t> *faces,
+  std::vector<float> *facevarying_normals,
+  std::vector<float> *facevarying_uvs);
+
+///
 /// Compute tangent and binormal for a given mesh.
 /// Assume all faces are triangles.
 ///

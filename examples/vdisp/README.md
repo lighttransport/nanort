@@ -35,6 +35,13 @@ Assume vector displacement is defined in world coordinate by default.
 
 if `vn` is given in .obj, the renderer computes tangents and binormals.
 
+## Generate plane mesh.
+
+Setting `gen_plane` true to generate plane mesh for debugging purpose.
+`u_div` and `v_div` control the tessellation of plane mesh.
+
+You need still to specify dummy .obj(with .mtl) to read vector displacement map setting from .mtl file.
+
 ## Usage
 
 Edit `config.json`, then go to build direcory.
@@ -66,7 +73,9 @@ RecomputeVertexNormal():
 ## TODO
 
 * [ ] Bake vector displaced mesh to normal map using ray tracing.
+* [ ] Mipmapping vector displacement map.
 * [ ] Fix normal seams.
+  * [ ] Undersampling?
 * [ ] Support quad polygon.
 * [ ] Implement better mesh smoothing algoritm for higher quality dispaced mesh generation.
 * [ ] Tangent space vector displacement.
