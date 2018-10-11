@@ -28,6 +28,8 @@ $ make
 
 Wavefront .obj is supported.
 
+You can find example vector displacement texture from Arnold document: https://docs.arnoldrenderer.com/display/A5AFMUG/Vector+Displacement
+
 The renderer itself does not tessellate mesh(just displace vertex position for a given mesh), thus user must supply pre-tessellated mesh.
 
 Specify vector displacement map by `disp filename.exr` in .mtl. LDR texture (e.g. png. color space is assumed as linear) and EXR are supported.
@@ -37,8 +39,7 @@ if `vn` is given in .obj, the renderer computes tangents and binormals.
 
 ## Generate plane mesh.
 
-Setting `gen_plane` true to generate plane mesh for debugging purpose.
-`u_div` and `v_div` control the tessellation of plane mesh.
+Setting `gen_plane` true in `config.json` to generate plane mesh for debugging purpose. `u_div` and `v_div` control the tessellation of plane mesh.
 
 You need still to specify dummy .obj(with .mtl) to read vector displacement map setting from .mtl file.
 
