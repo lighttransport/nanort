@@ -1435,7 +1435,7 @@ inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
 
   size_t num_threads =
       std::min(size_t(kNANORT_MAX_THREADS),
-               std::max(1UL, size_t(std::thread::hardware_concurrency())));
+               std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
   if (n < num_threads) {
     num_threads = n;
   }
@@ -1879,7 +1879,7 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
   {
     size_t num_threads =
         std::min(size_t(kNANORT_MAX_THREADS),
-                 std::max(1UL, size_t(std::thread::hardware_concurrency())));
+                 std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
     if (n < num_threads) {
       num_threads = n;
     }
@@ -1970,7 +1970,7 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
 
     size_t num_threads =
         std::min(size_t(kNANORT_MAX_THREADS),
-                 std::max(1UL, size_t(std::thread::hardware_concurrency())));
+                 std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
     if (shallow_node_infos_.size() < num_threads) {
       num_threads = shallow_node_infos_.size();
     }
