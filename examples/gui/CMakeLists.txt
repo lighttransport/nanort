@@ -1,3 +1,5 @@
+cmake_minimum_required(VERSION 3.5.1)
+
 set(BUILD_TARGET "gui")
 
 find_package(OpenGL REQUIRED)
@@ -29,6 +31,7 @@ set(SOURCES
     ../common/imgui/imgui.cpp
     ../common/imgui/imgui_draw.cpp
     ../common/imgui/imgui_impl_btgui.cpp
+    ../common/imgui/imgui_widgets.cpp
 )
 
 if(WIN32)
