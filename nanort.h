@@ -92,7 +92,6 @@ typedef enum {
   RAY_TYPE_REFRACTION = 0x10
 } RayType;
 
-
 #ifdef __clang__
 #pragma clang diagnostic push
 #if __has_warning("-Wzero-as-null-pointer-constant")
@@ -410,19 +409,22 @@ inline real3<T> vsafe_inverse(const real3<T> v) {
 #ifdef NANORT_USE_CPP11_FEATURE
 
   if (std::fabs(v[0]) < std::numeric_limits<T>::epsilon()) {
-    r[0] = std::numeric_limits<T>::infinity() * std::copysign(static_cast<T>(1), v[0]);
+    r[0] = std::numeric_limits<T>::infinity() *
+           std::copysign(static_cast<T>(1), v[0]);
   } else {
     r[0] = static_cast<T>(1.0) / v[0];
   }
 
   if (std::fabs(v[1]) < std::numeric_limits<T>::epsilon()) {
-    r[1] = std::numeric_limits<T>::infinity() * std::copysign(static_cast<T>(1), v[1]);
+    r[1] = std::numeric_limits<T>::infinity() *
+           std::copysign(static_cast<T>(1), v[1]);
   } else {
     r[1] = static_cast<T>(1.0) / v[1];
   }
 
   if (std::fabs(v[2]) < std::numeric_limits<T>::epsilon()) {
-    r[2] = std::numeric_limits<T>::infinity() * std::copysign(static_cast<T>(1), v[2]);
+    r[2] = std::numeric_limits<T>::infinity() *
+           std::copysign(static_cast<T>(1), v[2]);
   } else {
     r[2] = static_cast<T>(1.0) / v[2];
   }
@@ -463,7 +465,10 @@ inline const real *get_vertex_addr(const real *p, const size_t idx,
 template <typename T = float>
 class Ray {
  public:
-  Ray() : min_t(static_cast<T>(0.0)), max_t(std::numeric_limits<T>::max()), type(RAY_TYPE_NONE) {
+  Ray()
+      : min_t(static_cast<T>(0.0)),
+        max_t(std::numeric_limits<T>::max()),
+        type(RAY_TYPE_NONE) {
     org[0] = static_cast<T>(0.0);
     org[1] = static_cast<T>(0.0);
     org[2] = static_cast<T>(0.0);
@@ -1428,14 +1433,14 @@ void ComputeBoundingBoxOMP(real3<T> *bmin, real3<T> *bmax,
 #ifdef NANORT_USE_CPP11_FEATURE
 template <typename T, class P>
 inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
-                                const unsigned int *indices,
-                                unsigned int left_index,
-                                unsigned int right_index, const P &p) {
+                                       const unsigned int *indices,
+                                       unsigned int left_index,
+                                       unsigned int right_index, const P &p) {
   unsigned int n = right_index - left_index;
 
-  size_t num_threads =
-      std::min(size_t(kNANORT_MAX_THREADS),
-               std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
+  size_t num_threads = std::min(
+      size_t(kNANORT_MAX_THREADS),
+      std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
   if (n < num_threads) {
     num_threads = n;
   }
@@ -1444,8 +1449,8 @@ inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
 
   size_t ndiv = n / num_threads;
 
-  std::vector<T> local_bmins(3 * num_threads); // 3 = xyz
-  std::vector<T> local_bmaxs(3 * num_threads); // 3 = xyz
+  std::vector<T> local_bmins(3 * num_threads);  // 3 = xyz
+  std::vector<T> local_bmaxs(3 * num_threads);  // 3 = xyz
 
   for (size_t t = 0; t < num_threads; t++) {
     workers.emplace_back(std::thread([&, t]() {
@@ -1465,8 +1470,10 @@ inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
         real3<T> bbox_min, bbox_max;
         p.BoundingBox(&bbox_min, &bbox_max, idx);
         for (int k = 0; k < 3; k++) {  // xyz
-          if (local_bmins[3 * t + k] > bbox_min[k]) local_bmins[3 * t + k] = bbox_min[k];
-          if (local_bmaxs[3 * t + k] < bbox_max[k]) local_bmaxs[3 * t + k] = bbox_max[k];
+          if (local_bmins[3 * t + k] > bbox_min[k])
+            local_bmins[3 * t + k] = bbox_min[k];
+          if (local_bmaxs[3 * t + k] < bbox_max[k])
+            local_bmaxs[3 * t + k] = bbox_max[k];
         }
       }
     }));
@@ -1877,9 +1884,9 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
 
 #if defined(NANORT_USE_CPP11_FEATURE)
   {
-    size_t num_threads =
-        std::min(size_t(kNANORT_MAX_THREADS),
-                 std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
+    size_t num_threads = std::min(
+        size_t(kNANORT_MAX_THREADS),
+        std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
     if (n < num_threads) {
       num_threads = n;
     }
@@ -1968,9 +1975,9 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
         shallow_node_infos_.size());
     std::vector<BVHBuildStatistics> local_stats(shallow_node_infos_.size());
 
-    size_t num_threads =
-        std::min(size_t(kNANORT_MAX_THREADS),
-                 std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
+    size_t num_threads = std::min(
+        size_t(kNANORT_MAX_THREADS),
+        std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
     if (shallow_node_infos_.size() < num_threads) {
       num_threads = shallow_node_infos_.size();
     }
@@ -1982,14 +1989,13 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
       workers.emplace_back(std::thread([&, t]() {
         uint32_t idx = 0;
         while ((idx = (i++)) < shallow_node_infos_.size()) {
-
           // Create thread-local copy of Pred since some mutable variables are
           // modified during SAH computation.
           const Pred local_pred = pred;
           unsigned int left_idx = shallow_node_infos_[size_t(idx)].left_idx;
           unsigned int right_idx = shallow_node_infos_[size_t(idx)].right_idx;
-          BuildTree(&(local_stats[size_t(idx)]), &(local_nodes[size_t(idx)]), left_idx, right_idx,
-                    options.shallow_depth, p, local_pred);
+          BuildTree(&(local_stats[size_t(idx)]), &(local_nodes[size_t(idx)]),
+                    left_idx, right_idx, options.shallow_depth, p, local_pred);
         }
       }));
     }
@@ -1999,32 +2005,32 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
     }
 
     // Join local nodes
-    for (size_t i = 0; i < local_nodes.size(); i++) {
-      assert(!local_nodes[i].empty());
+    for (size_t ii = 0; ii < local_nodes.size(); ii++) {
+      assert(!local_nodes[ii].empty());
       size_t offset = nodes_.size();
 
       // Add offset to child index(for branch node).
-      for (size_t j = 0; j < local_nodes[i].size(); j++) {
-        if (local_nodes[i][j].flag == 0) {  // branch
-          local_nodes[i][j].data[0] += offset - 1;
-          local_nodes[i][j].data[1] += offset - 1;
+      for (size_t j = 0; j < local_nodes[ii].size(); j++) {
+        if (local_nodes[ii][j].flag == 0) {  // branch
+          local_nodes[ii][j].data[0] += offset - 1;
+          local_nodes[ii][j].data[1] += offset - 1;
         }
       }
 
       // replace
-      nodes_[shallow_node_infos_[i].offset] = local_nodes[i][0];
+      nodes_[shallow_node_infos_[ii].offset] = local_nodes[ii][0];
 
       // Skip root element of the local node.
-      nodes_.insert(nodes_.end(), local_nodes[i].begin() + 1,
-                    local_nodes[i].end());
+      nodes_.insert(nodes_.end(), local_nodes[ii].begin() + 1,
+                    local_nodes[ii].end());
     }
 
     // Join statistics
-    for (size_t i = 0; i < local_nodes.size(); i++) {
+    for (size_t ii = 0; ii < local_nodes.size(); ii++) {
       stats_.max_tree_depth =
-          std::max(stats_.max_tree_depth, local_stats[i].max_tree_depth);
-      stats_.num_leaf_nodes += local_stats[i].num_leaf_nodes;
-      stats_.num_branch_nodes += local_stats[i].num_branch_nodes;
+          std::max(stats_.max_tree_depth, local_stats[ii].max_tree_depth);
+      stats_.num_leaf_nodes += local_stats[ii].num_leaf_nodes;
+      stats_.num_branch_nodes += local_stats[ii].num_branch_nodes;
     }
 
   } else {
@@ -2235,7 +2241,6 @@ bool BVHAccel<T>::Load(FILE *fp) {
   return true;
 }
 #endif
-
 
 template <typename T>
 inline bool IntersectRayAABB(T *tminOut,  // [out]
