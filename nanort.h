@@ -2452,6 +2452,7 @@ template <class I, class H>
 bool BVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
                            const BVHTraceOptions &options) const {
   const int kMaxStackDepth = 512;
+  (void)kMaxStackDepth;
 
   T hit_t = ray.max_t;
 
