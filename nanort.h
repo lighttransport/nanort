@@ -1469,11 +1469,11 @@ inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
 
         real3<T> bbox_min, bbox_max;
         p.BoundingBox(&bbox_min, &bbox_max, idx);
-        for (int k = 0; k < 3; k++) {  // xyz
-          if (local_bmins[3 * t + k] > bbox_min[k])
-            local_bmins[3 * t + k] = bbox_min[k];
-          if (local_bmaxs[3 * t + k] < bbox_max[k])
-            local_bmaxs[3 * t + k] = bbox_max[k];
+        for (size_t k = 0; k < 3; k++) {  // xyz
+          if (local_bmins[3 * t + k] > bbox_min[int(k)])
+            local_bmins[3 * t + k] = bbox_min[int(k)];
+          if (local_bmaxs[3 * t + k] < bbox_max[int(k)])
+            local_bmaxs[3 * t + k] = bbox_max[int(k)];
         }
       }
     }));
@@ -1484,19 +1484,19 @@ inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
   }
 
   // merge bbox
-  for (int k = 0; k < 3; k++) {
-    (*bmin)[k] = local_bmins[k];
-    (*bmax)[k] = local_bmaxs[k];
+  for (size_t k = 0; k < 3; k++) {
+    (*bmin)[int(k)] = local_bmins[k];
+    (*bmax)[int(k)] = local_bmaxs[k];
   }
 
   for (size_t t = 1; t < num_threads; t++) {
-    for (int k = 0; k < 3; k++) {
-      if (local_bmins[3 * t + k] < (*bmin)[k]) {
-        (*bmin)[k] = local_bmins[3 * t + k];
+    for (size_t k = 0; k < 3; k++) {
+      if (local_bmins[3 * t + k] < (*bmin)[int(k)]) {
+        (*bmin)[int(k)] = local_bmins[3 * t + k];
       }
 
-      if (local_bmaxs[3 * t + k] > (*bmax)[k]) {
-        (*bmax)[k] = local_bmaxs[3 * t + k];
+      if (local_bmaxs[3 * t + k] > (*bmax)[int(k)]) {
+        (*bmax)[int(k)] = local_bmaxs[3 * t + k];
       }
     }
   }
@@ -1986,7 +1986,7 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
     std::atomic<uint32_t> i(0);
 
     for (size_t t = 0; t < num_threads; t++) {
-      workers.emplace_back(std::thread([&, t]() {
+      workers.emplace_back(std::thread([&]() {
         uint32_t idx = 0;
         while ((idx = (i++)) < shallow_node_infos_.size()) {
           // Create thread-local copy of Pred since some mutable variables are
@@ -2452,6 +2452,7 @@ template <class I, class H>
 bool BVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
                            const BVHTraceOptions &options) const {
   const int kMaxStackDepth = 512;
+  (void)kMaxStackDepth;
 
   T hit_t = ray.max_t;
 
