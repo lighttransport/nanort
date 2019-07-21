@@ -1,7 +1,12 @@
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Weverything"
+#endif
+
 #include "MacOpenGLWindow.h"
 
 #define GL_DO_NOT_WARN_IF_MULTI_GL_VERSION_HEADERS_INCLUDED
 #import <Cocoa/Cocoa.h>
+
 #include "OpenGLInclude.h"
 
 

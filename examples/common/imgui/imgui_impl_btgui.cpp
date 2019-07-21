@@ -1,5 +1,9 @@
 // ImGui BtGui binding with OpenGL based on Imgui Glfw binding.
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Weverything"
+#endif
+
 #include "imgui_impl_btgui.h"
 
 #ifdef _MSC_VER
