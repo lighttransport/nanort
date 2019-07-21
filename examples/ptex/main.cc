@@ -82,6 +82,7 @@ THE SOFTWARE.
 #define SHOW_BUFFER_TEXCOORD (4)
 #define SHOW_BUFFER_VARYCOORD (5)
 #define SHOW_BUFFER_VERTEXCOLOR (6)
+#define SHOW_BUFFER_FACEID (7)
 
 b3gDefaultOpenGLWindow* window = 0;
 int gWidth = 512;
@@ -115,6 +116,7 @@ std::vector<float> gDepthRGBA;        // For visualizing depth
 std::vector<float> gTexCoordRGBA;     // For visualizing texcoord
 std::vector<float> gVaryCoordRGBA;    // For visualizing varycentric coord
 std::vector<float> gVertexColorRGBA;  // For visualizing vertex color
+std::vector<int> gFaceID;              // For visualizing face id
 
 void RequestRender() {
   {
@@ -209,12 +211,16 @@ void InitRender(example::RenderConfig* rc) {
   gVertexColorRGBA.resize(rc->width * rc->height * 4);
   std::fill(gVertexColorRGBA.begin(), gVertexColorRGBA.end(), 0.0);
 
+  gFaceID.resize(rc->width * rc->height);
+  std::fill(gFaceID.begin(), gFaceID.end(), -1);
+
   rc->normalImage = &gNormalRGBA.at(0);
   rc->positionImage = &gPositionRGBA.at(0);
   rc->depthImage = &gDepthRGBA.at(0);
   rc->texcoordImage = &gTexCoordRGBA.at(0);
   rc->varycoordImage = &gVaryCoordRGBA.at(0);
   rc->vertexColorImage = &gVertexColorRGBA.at(0);
+  rc->faceIdImage = &gFaceID.at(0);
 
   trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
@@ -315,6 +321,22 @@ void resizeCallback(float width, float height) {
   gHeight = static_cast<int>(height);
 }
 
+static inline void IDToColor(int id, float col[3]) {
+  const float table[][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}, {1, 1, 0},
+                            {0, 1, 1}, {1, 0, 1}, {1, 1, 1}};
+
+  if (id < 0) {
+    col[0] = col[1] = col[2] = 0.0f;
+    return;
+  }
+
+  int idx = (id % 7);
+
+  col[0] = table[idx][0];
+  col[1] = table[idx][1];
+  col[2] = table[idx][2];
+}
+
 inline float pesudoColor(float v, int ch) {
   if (ch == 0) {  // red
     if (v <= 0.5f)
@@ -390,6 +412,15 @@ void Display(int width, int height) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gVertexColorRGBA[i];
     }
+  } else if (gShowBufferMode == SHOW_BUFFER_FACEID) {
+    for (size_t i = 0; i < buf.size() / 4; i++) {
+      float col[3];
+      IDToColor(gFaceID[i], col);
+      buf[4 * i + 0] = col[0];
+      buf[4 * i + 1] = col[1];
+      buf[4 * i + 2] = col[2];
+      buf[4 * i + 3] = 1.0f;
+    }
   }
 
   glRasterPos2i(-1, -1);
@@ -408,7 +439,17 @@ int main(int argc, char** argv) {
     bool ret =
         example::LoadRenderConfig(&gRenderConfig, config_filename.c_str());
     if (!ret) {
-      fprintf(stderr, "Failed to load [ %s ]\n", config_filename.c_str());
+      fprintf(stderr, "Failed to load config [ %s ]\n", config_filename.c_str());
+      return -1;
+    }
+  }
+
+  {
+    // load ptex
+    bool ptex_ret = gRenderer.LoadPtex(gRenderConfig.ptex_filename);
+    if (!ptex_ret) {
+      fprintf(stderr, "Failed to load ptex [ %s ]\n",
+              gRenderConfig.ptex_filename.c_str());
       return -1;
     }
   }
@@ -418,7 +459,7 @@ int main(int argc, char** argv) {
     bool obj_ret = gRenderer.LoadObjMesh(gRenderConfig.obj_filename.c_str(),
                                          gRenderConfig.scene_scale);
     if (!obj_ret) {
-      fprintf(stderr, "Failed to load [ %s ]\n",
+      fprintf(stderr, "Failed to load .obj [ %s ]\n",
               gRenderConfig.obj_filename.c_str());
       return -1;
     }
@@ -515,6 +556,8 @@ int main(int argc, char** argv) {
       ImGui::SameLine();
       ImGui::RadioButton("vertex col", &gShowBufferMode,
                          SHOW_BUFFER_VERTEXCOLOR);
+
+      ImGui::RadioButton("face id", &gShowBufferMode, SHOW_BUFFER_FACEID);
 
       ImGui::InputFloat("show pos scale", &gShowPositionScale);
 

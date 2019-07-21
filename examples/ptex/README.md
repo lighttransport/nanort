@@ -44,9 +44,14 @@ Open `.sln` and build it with Visual Studio 2017.
 
 ## Usage
 
+Download some ptex scene for example from http://ptex.us/samples.html
+
 Edit `config.json`, then
 
-    $ ./bin/native/Release/view
+```
+$ cd build
+$ ./ptexrt
+```
 
 ### Mouse operation
 
