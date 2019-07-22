@@ -358,11 +358,26 @@ typedef struct {
 
   std::vector<unsigned int> material_ids;  /// index x num_triangle_faces
 
-  // List of triangle vertex indices.
-  std::vector<unsigned int> indices;  /// 3(triangle) x num_triangle_faces
+  // List of triangle vertex indices. For NanoRT BVH
+  std::vector<unsigned int>
+      triangulated_indices;  /// 3(triangle) x num_triangle_faces
+
+  // List of original vertex indices. For UV interpolation
+  std::vector<unsigned int>
+      face_indices;  /// length = sum(for each face_num_verts[i])
+
+  // Offset to `face_indices` for a given face_id.
+  std::vector<unsigned int>
+      face_index_offsets;  /// length = face_num_verts.size()
+
+  std::vector<unsigned char> face_num_verts;  /// # of vertices per face
 
   // face ID for each triangle. For ptex textureing.
   std::vector<unsigned int> face_ids;  /// index x num_triangle_faces
+
+  // Triangule ID of a face(e.g. 0 for triangle primitive. 0 or 1 for quad
+  // primitive(tessellated into two-triangles)
+  std::vector<uint8_t> face_triangle_ids;  /// index x num_triangle_faces
 
 } Mesh;
 
@@ -439,6 +454,148 @@ inline void CalcNormal(float3& N, float3 v0, float3 v1, float3 v2) {
 
   N = vcross(v20, v10);
   N = vnormalize(N);
+}
+
+// Find intersection and compute varycentric coordinates of ray-quad.
+//
+// Assume plane is the convex planar.
+//
+// http://graphics.cs.kuleuven.be/publications/LD05ERQIT/LD05ERQIT_paper.pdf
+//
+// v01-----v11
+//  |\      |
+//  | \     |
+//  |  \    |
+//  |   \   |
+//  |    \  |
+//  |     \ |
+// v00 ----v10
+//
+bool RayQuadIntersection(const float3& rayorg, const float3& raydir,
+                         const float3& v00, const float3& v10,
+                         const float3& v11, const float3& v01, float tuv[3]) {
+  // Reject rays using the barycentric coordinates of the intersection point
+  // with respect to `t`.
+  const float3 e01 = v10 - v00;
+  const float3 e03 = v01 - v00;
+  const float3 p = vcross(raydir, e03);
+  const float det = vdot(e01, p);
+
+  if (std::fabs(det) < std::numeric_limits<float>::epsilon()) {
+    return false;
+  }
+
+  const float3 T = rayorg - v00;
+  const float a = vdot(T, p) / det;
+  if (a < 0.0f) {
+    return false;
+  }
+  // uncomment if you can reorder vertices(see the paper for details.
+  // if (a > 1.0f) {
+  //  return false;
+  //}
+
+  const float3 Q = vcross(T, e01);
+  const float b = vdot(raydir, Q) / det;
+  if (b < 0.0f) {
+    return false;
+  }
+  // uncomment if you can reorder vertices(see the paper for details.
+  // if (b > 1.0f) {
+  //  return false;
+  //}
+
+  // reject rays using the barycentric coordinates of
+  // the intersection point with respect to `tt`
+  if ((a + b) > 1.0f) {
+    const float3 e23 = v01 - v11;
+    const float3 e21 = v10 - v11;
+    const float3 pp = vcross(raydir, e21);
+    const float dett = vdot(e23, pp);
+
+    if (std::fabs(dett) < std::numeric_limits<float>::epsilon()) {
+      return false;
+    }
+
+    const float3 TT = rayorg - v11;
+    const float aa = vdot(TT, pp) / dett;
+    if (aa < 0.0f) {
+      std::cerr << "aa = " << std::to_string(aa) << "\n";
+      return false;
+    }
+
+    const float3 QQ = vcross(TT, e23);
+    const float bb = vdot(raydir, QQ) / dett;
+    if (bb < 0.0f) {
+      std::cerr << "bb = " << std::to_string(bb) << "\n";
+      return false;
+    }
+  }
+
+  // Compute the ray parameter of the intersection point
+  const float t = vdot(e03, Q) / det;
+  if (t < 0.0f) {
+    std::cerr << "t = " << std::to_string(t) << "\n";
+    return false;
+  }
+
+  // Compute the barycentric coordinate of v11
+  const float3 e02 = v11 - v00;
+  const float3 n = vcross(e01, e03);
+
+  const float abs_nx = std::fabs(n[0]);
+  const float abs_ny = std::fabs(n[1]);
+  const float abs_nz = std::fabs(n[2]);
+
+  float a11;
+  float b11;
+
+  if ((abs_nx >= abs_ny) && (abs_nx >= abs_nz)) {
+    a11 = (e02[1] * e03[2] - e02[2] * e03[1]) / n[0];
+    b11 = (e01[1] * e02[2] - e01[2] * e02[1]) / n[0];
+  } else if ((abs_ny >= abs_nx) && (abs_ny >= abs_nz)) {
+    a11 = (e02[1] * e03[0] - e02[0] * e03[2]) / n[1];
+    b11 = (e01[1] * e02[0] - e01[0] * e02[2]) / n[1];
+  } else {
+    a11 = (e02[0] * e03[1] - e02[1] * e03[0]) / n[2];
+    b11 = (e01[0] * e02[1] - e01[1] * e02[0]) / n[2];
+  }
+
+  // Compute the barycentric coordinate of the intersection point.
+  float u = 0.0f;
+  float v = 0.0f;
+  if (std::fabs(a11 - 1.0f) < std::numeric_limits<float>::epsilon()) {
+    u = a;
+    if (std::fabs(b11 - 1.0f) < std::numeric_limits<float>::epsilon()) {
+      v = b;
+    } else {
+      v = b / (u * (b11 - 1.0f) + 1.0f);
+    }
+  } else if (std::fabs(b11 - 1.0f) < std::numeric_limits<float>::epsilon()) {
+    v = b;
+    u = a / (v * (a11 - 1.0f) + 1.0f);
+  } else {
+    const float A = -(b11 - 1.0f);
+    const float B = a * (b11 - 1.0f) - b * (a11 - 1.0f) - 1.0f;
+    const float C = a;
+    const float Delta = B * B - 4.0f * A * C;
+    const float Q =
+        -0.5f *
+        (B + (std::signbit(B) ? -1.0f : 1.0f) *
+                 std::sqrt(std::max(std::numeric_limits<float>::min(), Delta)));
+
+    u = Q / A;
+    if ((u < 0.0f) || (u > 1.0f)) {
+      u = C / Q;
+    }
+
+    v = b / (u * (b11 - 1.0f) + 1.0f);
+  }
+
+  tuv[0] = t;
+  tuv[1] = u;
+  tuv[2] = v;
+  return true;
 }
 
 void BuildCameraFrame(float3* origin, float3* corner, float3* u, float3* v,
@@ -683,8 +840,12 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
     mesh.vertex_colors.push_back(attrib.colors[i]);
   }
 
-  mesh.indices.clear();
+  mesh.triangulated_indices.clear();
+  mesh.face_indices.clear();
+  mesh.face_index_offsets.clear();
+  mesh.face_num_verts.clear();
   mesh.face_ids.clear();
+  mesh.face_triangle_ids.clear();
   mesh.material_ids.clear();
   mesh.facevarying_normals.clear();
   mesh.facevarying_uvs.clear();
@@ -692,23 +853,58 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   // Flattened indices for easy facevarying normal/uv setup
   std::vector<tinyobj::index_t> triangulated_indices;
 
+  size_t face_id_offset = 0;
   for (size_t i = 0; i < shapes.size(); i++) {
     size_t offset = 0;
     for (size_t f = 0; f < shapes[i].mesh.num_face_vertices.size(); f++) {
       int npoly = shapes[i].mesh.num_face_vertices[f];
 
+      mesh.face_num_verts.push_back(npoly);
+      mesh.face_index_offsets.push_back(mesh.face_indices.size());
+
       if (npoly == 4) {
+        //
         // triangulate
-        mesh.indices.push_back(shapes[i].mesh.indices[offset + 0].vertex_index);
-        mesh.indices.push_back(shapes[i].mesh.indices[offset + 1].vertex_index);
-        mesh.indices.push_back(shapes[i].mesh.indices[offset + 2].vertex_index);
+        // For easier UV coordinate calculation, use (p0, p1, p2), (p2, p3, p0)
+        // split
+        //
+        // p0------p3
+        // | \      |
+        // |  \     |
+        // |   \    |
+        // |    \   |
+        // |     \  |
+        // |      \ |
+        // p1 ---- p2
+        //
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 0].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 1].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 2].vertex_index);
 
-        mesh.indices.push_back(shapes[i].mesh.indices[offset + 0].vertex_index);
-        mesh.indices.push_back(shapes[i].mesh.indices[offset + 2].vertex_index);
-        mesh.indices.push_back(shapes[i].mesh.indices[offset + 3].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 2].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 3].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 0].vertex_index);
 
-        mesh.face_ids.push_back(f);
-        mesh.face_ids.push_back(f);
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 0].vertex_index);
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 1].vertex_index);
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 2].vertex_index);
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 3].vertex_index);
+
+        mesh.face_ids.push_back(face_id_offset + f);
+        mesh.face_ids.push_back(face_id_offset + f);
+
+        mesh.face_triangle_ids.push_back(0);
+        mesh.face_triangle_ids.push_back(1);
 
         mesh.material_ids.push_back(shapes[i].mesh.material_ids[offset]);
         mesh.material_ids.push_back(shapes[i].mesh.material_ids[offset]);
@@ -718,27 +914,39 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
         triangulated_indices.push_back(shapes[i].mesh.indices[offset + 1]);
         triangulated_indices.push_back(shapes[i].mesh.indices[offset + 2]);
 
-        triangulated_indices.push_back(shapes[i].mesh.indices[offset + 0]);
         triangulated_indices.push_back(shapes[i].mesh.indices[offset + 2]);
         triangulated_indices.push_back(shapes[i].mesh.indices[offset + 3]);
+        triangulated_indices.push_back(shapes[i].mesh.indices[offset + 0]);
 
       } else {
-        mesh.indices.push_back(shapes[i].mesh.indices[offset + 0].vertex_index);
-        mesh.indices.push_back(shapes[i].mesh.indices[offset + 1].vertex_index);
-        mesh.indices.push_back(shapes[i].mesh.indices[offset + 2].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 0].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 1].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 2].vertex_index);
 
-        mesh.face_ids.push_back(f);
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 0].vertex_index);
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 1].vertex_index);
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 2].vertex_index);
+
+        mesh.face_ids.push_back(face_id_offset + f);
+        mesh.face_triangle_ids.push_back(0);
         mesh.material_ids.push_back(shapes[i].mesh.material_ids[f]);
 
         // for computing normal/uv in the later stage
         triangulated_indices.push_back(shapes[i].mesh.indices[offset + 0]);
         triangulated_indices.push_back(shapes[i].mesh.indices[offset + 1]);
         triangulated_indices.push_back(shapes[i].mesh.indices[offset + 2]);
-
       }
 
       offset += npoly;
     }
+
+    face_id_offset += shapes[i].mesh.num_face_vertices.size();
   }
 
   // Setup normal/uv
@@ -810,7 +1018,6 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
         mesh.facevarying_normals.push_back(N[0]);
         mesh.facevarying_normals.push_back(N[1]);
         mesh.facevarying_normals.push_back(N[2]);
-
       }
     }
   } else {
@@ -881,7 +1088,6 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
 
         mesh.facevarying_uvs.push_back(n2[0]);
         mesh.facevarying_uvs.push_back(n2[1]);
-
       }
     }
   }
@@ -912,7 +1118,7 @@ bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale) {
   return LoadObj(gMesh, obj_filename, scene_scale);
 }
 
-bool Renderer::LoadPtex(const std::string& ptex_filename) {
+bool Renderer::LoadPtex(const std::string& ptex_filename, const bool dump) {
   Ptex::String error;
   _ptex.reset(Ptex::PtexTexture::open(ptex_filename.c_str(), error));
   // Ptex::PtexPtr<Ptex::PtexTexture> r(
@@ -965,24 +1171,26 @@ bool Renderer::LoadPtex(const std::string& ptex_filename) {
     if (dumpmeta && meta->numKeys()) DumpMetaData(meta);
   }
 
-  if (dumpfaceinfo || dumpdata || dumptiling) {
-    uint64_t texels = 0;
-    for (int i = 0; i < _ptex->numFaces(); i++) {
-      std::cout << "face " << i << ":";
-      const Ptex::FaceInfo& f = _ptex->getFaceInfo(i);
-      DumpFaceInfo(f);
-      texels += f.res.size();
+  if (dump) {
+    if (dumpfaceinfo || dumpdata || dumptiling) {
+      uint64_t texels = 0;
+      for (int i = 0; i < _ptex->numFaces(); i++) {
+        std::cout << "face " << i << ":";
+        const Ptex::FaceInfo& f = _ptex->getFaceInfo(i);
+        DumpFaceInfo(f);
+        texels += f.res.size();
 
-      if (dumptiling) {
-        PtexPtr<PtexFaceData> dh(_ptex->getData(i, f.res));
-        DumpTiling(dh);
+        if (dumptiling) {
+          PtexPtr<PtexFaceData> dh(_ptex->getData(i, f.res));
+          DumpTiling(dh);
+        }
+        if (dumpdata) DumpData(_ptex, i, dumpalldata);
       }
-      if (dumpdata) DumpData(_ptex, i, dumpalldata);
+      std::cout << "texels: " << texels << std::endl;
     }
-    std::cout << "texels: " << texels << std::endl;
-  }
 
-  if (dumpinternal) DumpInternal(_ptex);
+    if (dumpinternal) DumpInternal(_ptex);
+  }
 
   return true;
 }
@@ -999,15 +1207,17 @@ bool Renderer::BuildBVH() {
 
   auto t_start = std::chrono::system_clock::now();
 
-  nanort::TriangleMesh<float> triangle_mesh(
-      gMesh.vertices.data(), gMesh.indices.data(), sizeof(float) * 3);
+  nanort::TriangleMesh<float> triangle_mesh(gMesh.vertices.data(),
+                                            gMesh.triangulated_indices.data(),
+                                            sizeof(float) * 3);
   nanort::TriangleSAHPred<float> triangle_pred(
-      gMesh.vertices.data(), gMesh.indices.data(), sizeof(float) * 3);
+      gMesh.vertices.data(), gMesh.triangulated_indices.data(),
+      sizeof(float) * 3);
 
-  printf("num_triangles = %lu\n", gMesh.indices.size() / 3);
+  printf("num_triangles = %lu\n", gMesh.triangulated_indices.size() / 3);
 
-  bool ret = gAccel.Build(gMesh.indices.size() / 3, triangle_mesh, triangle_pred,
-                          build_options);
+  bool ret = gAccel.Build(gMesh.triangulated_indices.size() / 3, triangle_mesh,
+                          triangle_pred, build_options);
   assert(ret);
 
   auto t_end = std::chrono::system_clock::now();
@@ -1029,12 +1239,11 @@ bool Renderer::BuildBVH() {
   return true;
 }
 
-void Renderer::ShadePtex(
-  int face_id,
-  float u,
-  float v,
-  float rgba[4])
-{
+void Renderer::ShadePtex(int filter, bool lerp, float sharpness,
+                         bool noedgeblend, int start_channel, int channels,
+                         int face_id, float u, float v, float uw1, float vw1,
+                         float uw2, float vw2, float width, float blur,
+                         float rgba[4]) {
   if (!_ptex) {
     rgba[0] = 0.5f;
     rgba[1] = 0.0f;
@@ -1052,20 +1261,51 @@ void Renderer::ShadePtex(
     return;
   }
 
+  channels = std::max(0, channels);
+  start_channel = std::max(0, start_channel);
 
+  int max_channels = _ptex->numChannels();
+  if (start_channel >= max_channels) {
+    start_channel = max_channels;
+  }
+
+  if ((start_channel + channels) >= max_channels) {
+    channels = max_channels - start_channel;
+  }
+
+  Ptex::PtexFilter::FilterType ftype = Ptex::PtexFilter::f_bicubic;
+  if (filter == 0) {
+    ftype = Ptex::PtexFilter::f_point;
+  } else if (filter == 1) {
+    ftype = Ptex::PtexFilter::f_bilinear;
+  } else if (filter == 2) {
+    ftype = Ptex::PtexFilter::f_box;
+  } else if (filter == 3) {
+    ftype = Ptex::PtexFilter::f_gaussian;
+  } else if (filter == 4) {
+    ftype = Ptex::PtexFilter::f_bicubic;
+  } else if (filter == 5) {
+    ftype = Ptex::PtexFilter::f_bspline;
+  } else if (filter == 6) {
+    ftype = Ptex::PtexFilter::f_catmullrom;
+  } else if (filter == 7) {
+    ftype = Ptex::PtexFilter::f_mitchell;
+  }
 
   // TODO(LTE): Do not creat filter every time `ShadePtex` was called.
-  Ptex::PtexFilter::Options opts(Ptex::PtexFilter::f_bicubic, 0, 1.0);
-  Ptex::PtexPtr<PtexFilter> f ( Ptex::PtexFilter::getFilter(_ptex, opts) );
+  Ptex::PtexFilter::Options opts(ftype, lerp, sharpness, noedgeblend);
+  Ptex::PtexPtr<PtexFilter> f(Ptex::PtexFilter::getFilter(_ptex, opts));
 
-  // TODO(LTE) U/V filter width: uw, vw;
-  float uw = 0.125f;
-  float vw = 0.125f;
+  f->eval(rgba, /* first channel*/ start_channel, /* nchannels */ channels,
+          face_id, u, v, uw1, vw1, uw2, vw2, width, blur);
 
-  // no alpha evaluation at the moment
-  f->eval(rgba, /* first channel*/0, /* nchannels */3, face_id, u, v, /* uv1*/ uw, /* vw1*/0, /* uw2 */0, /* vw2 */vw);
+  if (_ptex->numChannels() == 1) {
+    // grayscale to rgb
+    rgba[1] = rgba[0];
+    rgba[2] = rgba[0];
+  }
+
   rgba[3] = 1.0f;
-
 }
 
 bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
@@ -1147,7 +1387,8 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           ray.max_t = kFar;
 
           nanort::TriangleIntersector<> triangle_intersector(
-              gMesh.vertices.data(), gMesh.indices.data(), sizeof(float) * 3);
+              gMesh.vertices.data(), gMesh.triangulated_indices.data(),
+              sizeof(float) * 3);
           nanort::TriangleIntersection<float> isect;
           bool hit = gAccel.Traverse(ray, triangle_intersector, &isect);
           if (hit) {
@@ -1161,15 +1402,98 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             config.positionImage[4 * (y * config.width + x) + 2] = p.z();
             config.positionImage[4 * (y * config.width + x) + 3] = 1.0f;
 
-            config.varycoordImage[4 * (y * config.width + x) + 0] = isect.u;
-            config.varycoordImage[4 * (y * config.width + x) + 1] = isect.v;
-            config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
-            config.varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
-
             unsigned int prim_id = isect.prim_id;
 
             int face_id = gMesh.face_ids[prim_id];
             config.faceIdImage[(y * config.width + x)] = face_id;
+
+            // compute varicentric UV coord.
+            float baryUV[2] = {0.0f, 0.0f};
+
+            uint32_t npolys = gMesh.face_num_verts[face_id];
+            if (npolys == 3) {
+              std::cout << "triangle\n";
+              baryUV[0] = isect.u;
+              baryUV[1] = isect.v;
+            } else if (npolys == 4) {
+              size_t face_offset_idx = gMesh.face_index_offsets[face_id];
+
+              size_t i00 = gMesh.face_indices[face_offset_idx + 0];
+              size_t i10 = gMesh.face_indices[face_offset_idx + 1];
+              size_t i11 = gMesh.face_indices[face_offset_idx + 2];
+              size_t i01 = gMesh.face_indices[face_offset_idx + 3];
+
+              float3 v00, v10, v11, v01;
+              v00[0] = gMesh.vertices[3 * i00 + 0];
+              v00[1] = gMesh.vertices[3 * i00 + 1];
+              v00[2] = gMesh.vertices[3 * i00 + 2];
+
+              v10[0] = gMesh.vertices[3 * i10 + 0];
+              v10[1] = gMesh.vertices[3 * i10 + 1];
+              v10[2] = gMesh.vertices[3 * i10 + 2];
+
+              v11[0] = gMesh.vertices[3 * i11 + 0];
+              v11[1] = gMesh.vertices[3 * i11 + 1];
+              v11[2] = gMesh.vertices[3 * i11 + 2];
+
+              v01[0] = gMesh.vertices[3 * i01 + 0];
+              v01[1] = gMesh.vertices[3 * i01 + 1];
+              v01[2] = gMesh.vertices[3 * i01 + 2];
+
+              float3 rayorg, raydir;
+              rayorg[0] = ray.org[0];
+              rayorg[1] = ray.org[1];
+              rayorg[2] = ray.org[2];
+
+              raydir[0] = ray.dir[0];
+              raydir[1] = ray.dir[1];
+              raydir[2] = ray.dir[2];
+
+              // raydir must be normalized
+              raydir = vnormalize(raydir);
+
+              // Compute ray intersection again is a bit redundant.
+              float quad_tuv[3];
+              if (!RayQuadIntersection(rayorg, raydir, v00, v10, v11, v01,
+                                       quad_tuv)) {
+                // Uusually this should not be happen.
+                // std::cerr << "Warning. Ray-Quad intersection failed.\n";
+
+                // Still continue to shading as if we hit a triangle.
+                baryUV[0] = isect.u;
+                baryUV[1] = isect.v;
+
+              } else {
+                baryUV[0] = quad_tuv[1];
+                baryUV[1] = quad_tuv[2];
+              }
+
+#if 0  // to be removed.
+              int triangle_id = gMesh.face_triangle_ids[prim_id];
+              if (triangle_id == 0) {
+                baryUV[0] = isect.u;
+                baryUV[1] = isect.v;
+              } else {  // assume 1.
+                // baryUV[0] = 1.0f-isect.u;
+                baryUV[0] = 0.0f;
+                baryUV[1] = 1.0f - isect.v;
+              }
+#endif
+
+            } else {
+              // ???
+              std::cerr << "???\n";
+            }
+
+            config.tri_varycoordImage[4 * (y * config.width + x) + 0] = isect.u;
+            config.tri_varycoordImage[4 * (y * config.width + x) + 1] = isect.v;
+            config.tri_varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
+            config.tri_varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
+
+            config.varycoordImage[4 * (y * config.width + x) + 0] = baryUV[0];
+            config.varycoordImage[4 * (y * config.width + x) + 1] = baryUV[1];
+            config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
+            config.varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             float3 N;
             if (gMesh.facevarying_normals.size() > 0) {
@@ -1186,9 +1510,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               N = Lerp3(n0, n1, n2, isect.u, isect.v);
             } else {
               unsigned int f0, f1, f2;
-              f0 = gMesh.indices[3 * prim_id + 0];
-              f1 = gMesh.indices[3 * prim_id + 1];
-              f2 = gMesh.indices[3 * prim_id + 2];
+              f0 = gMesh.triangulated_indices[3 * prim_id + 0];
+              f1 = gMesh.triangulated_indices[3 * prim_id + 1];
+              f2 = gMesh.triangulated_indices[3 * prim_id + 2];
 
               float3 v0, v1, v2;
               v0[0] = gMesh.vertices[3 * f0 + 0];
@@ -1219,9 +1543,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             float3 vcol(1.0f, 1.0f, 1.0f);
             if (gMesh.vertex_colors.size() > 0) {
               unsigned int f0, f1, f2;
-              f0 = gMesh.indices[3 * prim_id + 0];
-              f1 = gMesh.indices[3 * prim_id + 1];
-              f2 = gMesh.indices[3 * prim_id + 2];
+              f0 = gMesh.triangulated_indices[3 * prim_id + 0];
+              f1 = gMesh.triangulated_indices[3 * prim_id + 1];
+              f2 = gMesh.triangulated_indices[3 * prim_id + 2];
 
               float3 c0, c1, c2;
               c0[0] = gMesh.vertex_colors[3 * f0 + 0];
@@ -1241,7 +1565,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               config.vertexColorImage[4 * (y * config.width + x) + 2] = vcol[2];
             }
 
-            float3 UV;
+            float3 texUV;
             if (gMesh.facevarying_uvs.size() > 0) {
               float3 uv0, uv1, uv2;
               uv0[0] = gMesh.facevarying_uvs[6 * prim_id + 0];
@@ -1251,14 +1575,25 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               uv2[0] = gMesh.facevarying_uvs[6 * prim_id + 4];
               uv2[1] = gMesh.facevarying_uvs[6 * prim_id + 5];
 
-              UV = Lerp3(uv0, uv1, uv2, isect.u, isect.v);
+              texUV = Lerp3(uv0, uv1, uv2, isect.u, isect.v);
 
-              config.texcoordImage[4 * (y * config.width + x) + 0] = UV[0];
-              config.texcoordImage[4 * (y * config.width + x) + 1] = UV[1];
+              config.texcoordImage[4 * (y * config.width + x) + 0] = texUV[0];
+              config.texcoordImage[4 * (y * config.width + x) + 1] = texUV[1];
             }
 
-            float ptexcol[4];
-            ShadePtex(face_id, isect.u, isect.v, ptexcol);
+            float uu = baryUV[0];
+            float vv = baryUV[1];
+
+            float ptexcol[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+            // TODO(LTE): Support per-object/per-texture filtering parameters.
+            // TODO(LTE): Compute filtering parameters based on pixel
+            // footprints(e.g. use ray differentials)
+            ShadePtex(config.ptex_filter, config.ptex_lerp,
+                      config.ptex_sharpness, config.ptex_noedgeblend,
+                      config.ptex_start_channel, config.ptex_channels, face_id,
+                      uu, vv, config.ptex_uw1, config.ptex_vw1, config.ptex_uw2,
+                      config.ptex_vw2, config.ptex_width, config.ptex_blur,
+                      ptexcol);
 
             if (config.pass == 0) {
               rgba[4 * (y * config.width + x) + 0] = ptexcol[0];
@@ -1274,51 +1609,6 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               rgba[4 * (y * config.width + x) + 3] += 1.0f;
               sample_counts[y * config.width + x]++;
             }
-#if 0
-            float NdotV = fabsf(vdot(N, dir));
-
-            // Fetch material & texture
-            unsigned int material_id = gMesh.material_ids[isect.prim_id];
-
-            float diffuse_col[3] = {0.5f, 0.5f, 0.5f};
-            float specular_col[3] = {0.0f, 0.0f, 0.0f};
-
-            if (material_id < gMaterials.size()) {
-              int diffuse_texid = gMaterials[material_id].diffuse_texid;
-              if (diffuse_texid >= 0) {
-                FetchTexture(diffuse_texid, UV[0], UV[1], diffuse_col);
-              } else {
-                diffuse_col[0] = gMaterials[material_id].diffuse[0];
-                diffuse_col[1] = gMaterials[material_id].diffuse[1];
-                diffuse_col[2] = gMaterials[material_id].diffuse[2];
-              }
-
-              int specular_texid = gMaterials[material_id].specular_texid;
-              if (specular_texid >= 0) {
-                FetchTexture(specular_texid, UV[0], UV[1], specular_col);
-              } else {
-                specular_col[0] = gMaterials[material_id].specular[0];
-                specular_col[1] = gMaterials[material_id].specular[1];
-                specular_col[2] = gMaterials[material_id].specular[2];
-              }
-            }
-
-            if (config.pass == 0) {
-              rgba[4 * (y * config.width + x) + 0] = NdotV * diffuse_col[0];
-              rgba[4 * (y * config.width + x) + 1] = NdotV * diffuse_col[1];
-              rgba[4 * (y * config.width + x) + 2] = NdotV * diffuse_col[2];
-              rgba[4 * (y * config.width + x) + 3] = 1.0f;
-              sample_counts[y * config.width + x] =
-                  1;  // Set 1 for the first pass
-            } else {  // additive.
-              rgba[4 * (y * config.width + x) + 0] += NdotV * diffuse_col[0];
-              rgba[4 * (y * config.width + x) + 1] += NdotV * diffuse_col[1];
-              rgba[4 * (y * config.width + x) + 2] += NdotV * diffuse_col[2];
-              rgba[4 * (y * config.width + x) + 3] += 1.0f;
-              sample_counts[y * config.width + x]++;
-            }
-#endif
-
           } else {
             {
               if (config.pass == 0) {
@@ -1358,6 +1648,10 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               config.varycoordImage[4 * (y * config.width + x) + 1] = 0.0f;
               config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
               config.varycoordImage[4 * (y * config.width + x) + 3] = 0.0f;
+              config.tri_varycoordImage[4 * (y * config.width + x) + 0] = 0.0f;
+              config.tri_varycoordImage[4 * (y * config.width + x) + 1] = 0.0f;
+              config.tri_varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
+              config.tri_varycoordImage[4 * (y * config.width + x) + 3] = 0.0f;
               config.vertexColorImage[4 * (y * config.width + x) + 0] = 1.0f;
               config.vertexColorImage[4 * (y * config.width + x) + 1] = 1.0f;
               config.vertexColorImage[4 * (y * config.width + x) + 2] = 1.0f;

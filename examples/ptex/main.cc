@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2015 - 2016 Light Transport Entertainment, Inc.
+Copyright (c) 2015 - 2019 Light Transport Entertainment, Inc.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -81,8 +81,9 @@ THE SOFTWARE.
 #define SHOW_BUFFER_DEPTH (3)
 #define SHOW_BUFFER_TEXCOORD (4)
 #define SHOW_BUFFER_VARYCOORD (5)
-#define SHOW_BUFFER_VERTEXCOLOR (6)
-#define SHOW_BUFFER_FACEID (7)
+#define SHOW_BUFFER_TRI_VARYCOORD (6)
+#define SHOW_BUFFER_VERTEXCOLOR (7)
+#define SHOW_BUFFER_FACEID (8)
 
 b3gDefaultOpenGLWindow* window = 0;
 int gWidth = 512;
@@ -108,14 +109,15 @@ std::mutex gMutex;
 
 std::vector<float> gDisplayRGBA;  // Accumurated image.
 std::vector<float> gRGBA;
-std::vector<float> gAuxRGBA;          // Auxiliary buffer
-std::vector<int> gSampleCounts;       // Sample num counter for each pixel.
-std::vector<float> gNormalRGBA;       // For visualizing normal
-std::vector<float> gPositionRGBA;     // For visualizing position
-std::vector<float> gDepthRGBA;        // For visualizing depth
-std::vector<float> gTexCoordRGBA;     // For visualizing texcoord
-std::vector<float> gVaryCoordRGBA;    // For visualizing varycentric coord
-std::vector<float> gVertexColorRGBA;  // For visualizing vertex color
+std::vector<float> gAuxRGBA;           // Auxiliary buffer
+std::vector<int> gSampleCounts;        // Sample num counter for each pixel.
+std::vector<float> gNormalRGBA;        // For visualizing normal
+std::vector<float> gPositionRGBA;      // For visualizing position
+std::vector<float> gDepthRGBA;         // For visualizing depth
+std::vector<float> gTexCoordRGBA;      // For visualizing texcoord
+std::vector<float> gVaryCoordRGBA;     // For visualizing varycentric coord
+std::vector<float> gTriVaryCoordRGBA;  // For visualizing varycentric coord
+std::vector<float> gVertexColorRGBA;   // For visualizing vertex color
 std::vector<int> gFaceID;              // For visualizing face id
 
 void RequestRender() {
@@ -208,6 +210,9 @@ void InitRender(example::RenderConfig* rc) {
   gVaryCoordRGBA.resize(rc->width * rc->height * 4);
   std::fill(gVaryCoordRGBA.begin(), gVaryCoordRGBA.end(), 0.0);
 
+  gTriVaryCoordRGBA.resize(rc->width * rc->height * 4);
+  std::fill(gTriVaryCoordRGBA.begin(), gTriVaryCoordRGBA.end(), 0.0);
+
   gVertexColorRGBA.resize(rc->width * rc->height * 4);
   std::fill(gVertexColorRGBA.begin(), gVertexColorRGBA.end(), 0.0);
 
@@ -219,6 +224,7 @@ void InitRender(example::RenderConfig* rc) {
   rc->depthImage = &gDepthRGBA.at(0);
   rc->texcoordImage = &gTexCoordRGBA.at(0);
   rc->varycoordImage = &gVaryCoordRGBA.at(0);
+  rc->tri_varycoordImage = &gTriVaryCoordRGBA.at(0);
   rc->vertexColorImage = &gVertexColorRGBA.at(0);
   rc->faceIdImage = &gFaceID.at(0);
 
@@ -408,6 +414,10 @@ void Display(int width, int height) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gVaryCoordRGBA[i];
     }
+  } else if (gShowBufferMode == SHOW_BUFFER_TRI_VARYCOORD) {
+    for (size_t i = 0; i < buf.size(); i++) {
+      buf[i] = gTriVaryCoordRGBA[i];
+    }
   } else if (gShowBufferMode == SHOW_BUFFER_VERTEXCOLOR) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gVertexColorRGBA[i];
@@ -439,14 +449,16 @@ int main(int argc, char** argv) {
     bool ret =
         example::LoadRenderConfig(&gRenderConfig, config_filename.c_str());
     if (!ret) {
-      fprintf(stderr, "Failed to load config [ %s ]\n", config_filename.c_str());
+      fprintf(stderr, "Failed to load config [ %s ]\n",
+              config_filename.c_str());
       return -1;
     }
   }
 
   {
     // load ptex
-    bool ptex_ret = gRenderer.LoadPtex(gRenderConfig.ptex_filename);
+    bool ptex_ret = gRenderer.LoadPtex(gRenderConfig.ptex_filename,
+                                       gRenderConfig.dump_ptex);
     if (!ptex_ret) {
       fprintf(stderr, "Failed to load ptex [ %s ]\n",
               gRenderConfig.ptex_filename.c_str());
@@ -526,21 +538,11 @@ int main(int argc, char** argv) {
     ImGui_ImplBtGui_NewFrame(gMousePosX, gMousePosY);
     ImGui::Begin("UI");
     {
-      static float col[3] = {0, 0, 0};
-      static float f = 0.0f;
-      // if (ImGui::ColorEdit3("color", col)) {
-      //  RequestRender();
-      //}
-      // ImGui::InputFloat("intensity", &f);
-      if (ImGui::InputFloat3("eye", gRenderConfig.eye)) {
-        RequestRender();
-      }
-      if (ImGui::InputFloat3("up", gRenderConfig.up)) {
-        RequestRender();
-      }
-      if (ImGui::InputFloat3("look_at", gRenderConfig.look_at)) {
-        RequestRender();
-      }
+      bool rerender = false;
+
+      rerender |= ImGui::InputFloat3("eye", gRenderConfig.eye);
+      rerender |= ImGui::InputFloat3("up", gRenderConfig.up);
+      rerender |= ImGui::InputFloat3("look_at", gRenderConfig.look_at);
 
       ImGui::RadioButton("color", &gShowBufferMode, SHOW_BUFFER_COLOR);
       ImGui::SameLine();
@@ -554,6 +556,9 @@ int main(int argc, char** argv) {
       ImGui::SameLine();
       ImGui::RadioButton("varycoord", &gShowBufferMode, SHOW_BUFFER_VARYCOORD);
       ImGui::SameLine();
+      ImGui::RadioButton("triangle varycoord", &gShowBufferMode,
+                         SHOW_BUFFER_TRI_VARYCOORD);
+      ImGui::SameLine();
       ImGui::RadioButton("vertex col", &gShowBufferMode,
                          SHOW_BUFFER_VERTEXCOLOR);
 
@@ -563,6 +568,50 @@ int main(int argc, char** argv) {
 
       ImGui::InputFloat2("show depth range", gShowDepthRange);
       ImGui::Checkbox("show depth pesudo color", &gShowDepthPeseudoColor);
+
+      ImGui::Separator();
+      ImGui::Text("Ptex filtering options");
+
+      // ptex option
+      static const char* filter_items[] = {
+          "point",       // 0
+          "bilinear",    // 1
+          "box",         // 2
+          "gaussian",    // 3
+          "bicubic",     // 4
+          "bspline",     // 5
+          "catmullrom",  // 6
+          "mitchell",    // 7
+      };
+      rerender |=
+          ImGui::Combo("filter", &gRenderConfig.ptex_filter, filter_items, 8);
+      rerender |= ImGui::Checkbox("lerp(between mipmap levels)",
+                                  &gRenderConfig.ptex_lerp);
+      rerender |= ImGui::SliderFloat("sharpness", &gRenderConfig.ptex_sharpness,
+                                     0.0f, 1.0f);
+      rerender |=
+          ImGui::Checkbox("nodedgeblend", &gRenderConfig.ptex_noedgeblend);
+      ImGui::Separator();
+      rerender |= ImGui::DragInt("start channel idx",
+                                 &gRenderConfig.ptex_start_channel, 1.0f, 0, 4);
+      rerender |=
+          ImGui::SliderInt("channels", &gRenderConfig.ptex_channels, 0, 4);
+      ImGui::Separator();
+      rerender |= ImGui::SliderFloat("U filter width 1",
+                                     &gRenderConfig.ptex_uw1, 0.0f, 1.0f);
+      rerender |= ImGui::SliderFloat("U filter width 2",
+                                     &gRenderConfig.ptex_uw2, 0.0f, 1.0f);
+      rerender |= ImGui::SliderFloat("V filter width 1",
+                                     &gRenderConfig.ptex_vw1, 0.0f, 1.0f);
+      rerender |= ImGui::SliderFloat("V filter width 2",
+                                     &gRenderConfig.ptex_vw2, 0.0f, 1.0f);
+      rerender |= ImGui::SliderFloat("ptex width", &gRenderConfig.ptex_width,
+                                     0.0f, 10.0f);
+      rerender |=
+          ImGui::SliderFloat("ptex blur", &gRenderConfig.ptex_blur, 0.0f, 1.0f);
+      if (rerender) {
+        RequestRender();
+      }
     }
 
     ImGui::End();

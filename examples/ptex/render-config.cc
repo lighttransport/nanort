@@ -111,6 +111,18 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
+  if (o.find("ptex_filter") != o.end()) {
+    if (o["ptex_filter"].is<double>()) {
+      config->ptex_filter = static_cast<int>(o["ptex_filter"].get<double>());
+    }
+  }
+
+  if (o.find("dump_ptex") != o.end()) {
+    if (o["dump_ptex"].is<bool>()) {
+      config->dump_ptex = o["dump_ptex"].get<bool>();
+    }
+  }
+
   return true;
 }
 }

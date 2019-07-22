@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5.1)
 
 project(ptexrt)
 
-set(BUILD_TARGET "ptex")
+set(BUILD_TARGET "ptexrt")
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD 11)
