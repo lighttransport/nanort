@@ -520,14 +520,14 @@ bool RayQuadIntersection(const float3& rayorg, const float3& raydir,
     const float3 TT = rayorg - v11;
     const float aa = vdot(TT, pp) / dett;
     if (aa < 0.0f) {
-      std::cerr << "aa = " << std::to_string(aa) << "\n";
+      // std::cerr << "aa = " << std::to_string(aa) << "\n";
       return false;
     }
 
     const float3 QQ = vcross(TT, e23);
     const float bb = vdot(raydir, QQ) / dett;
     if (bb < 0.0f) {
-      std::cerr << "bb = " << std::to_string(bb) << "\n";
+      // std::cerr << "bb = " << std::to_string(bb) << "\n";
       return false;
     }
   }
@@ -535,7 +535,7 @@ bool RayQuadIntersection(const float3& rayorg, const float3& raydir,
   // Compute the ray parameter of the intersection point
   const float t = vdot(e03, Q) / det;
   if (t < 0.0f) {
-    std::cerr << "t = " << std::to_string(t) << "\n";
+    // std::cerr << "t = " << std::to_string(t) << "\n";
     return false;
   }
 
@@ -554,8 +554,8 @@ bool RayQuadIntersection(const float3& rayorg, const float3& raydir,
     a11 = (e02[1] * e03[2] - e02[2] * e03[1]) / n[0];
     b11 = (e01[1] * e02[2] - e01[2] * e02[1]) / n[0];
   } else if ((abs_ny >= abs_nx) && (abs_ny >= abs_nz)) {
-    a11 = (e02[1] * e03[0] - e02[0] * e03[2]) / n[1];
-    b11 = (e01[1] * e02[0] - e01[0] * e02[2]) / n[1];
+    a11 = (e02[2] * e03[0] - e02[0] * e03[2]) / n[1];
+    b11 = (e01[2] * e02[0] - e01[0] * e02[2]) / n[1];
   } else {
     a11 = (e02[0] * e03[1] - e02[1] * e03[0]) / n[2];
     b11 = (e01[0] * e02[1] - e01[1] * e02[0]) / n[2];
@@ -587,9 +587,18 @@ bool RayQuadIntersection(const float3& rayorg, const float3& raydir,
     u = Q / A;
     if ((u < 0.0f) || (u > 1.0f)) {
       u = C / Q;
+
+      if ((u < 0.0f) || (u > 1.0f)) {
+        // std::cout << "C = " << C << ", Q = " << Q << ", u = " << u <<
+        // std::endl;
+      }
     }
 
     v = b / (u * (b11 - 1.0f) + 1.0f);
+    if ((v < 0.0f) || (v > 1.0f)) {
+      // std::cout << "beta = " << b << ", u = " << u << ", b11 = " << b11 << ",
+      // v = " << v << std::endl;
+    }
   }
 
   tuv[0] = t;
@@ -1391,6 +1400,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               sizeof(float) * 3);
           nanort::TriangleIntersection<float> isect;
           bool hit = gAccel.Traverse(ray, triangle_intersector, &isect);
+
           if (hit) {
             float3 p;
             p[0] = ray.org[0] + isect.t * ray.dir[0];
@@ -1490,8 +1500,10 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             config.tri_varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
             config.tri_varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
 
-            config.varycoordImage[4 * (y * config.width + x) + 0] = baryUV[0];
-            config.varycoordImage[4 * (y * config.width + x) + 1] = baryUV[1];
+            config.varycoordImage[4 * (y * config.width + x) + 0] =
+                std::max(0.0f, std::min(1.0f, baryUV[0]));
+            config.varycoordImage[4 * (y * config.width + x) + 1] =
+                std::max(0.0f, std::min(1.0f, baryUV[1]));
             config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
             config.varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
 
