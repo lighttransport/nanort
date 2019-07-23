@@ -75,9 +75,7 @@ To compute correct UV, we store
 
 ## TODO
 
-* [ ] Fix varycentric coord calculation in some quad face(e.g. the cap of teapot)
 * [ ] Support Quad primitive in ray traversal. http://graphics.cs.kuleuven.be/publications/LD05ERQIT/index.html
-  * [ ] Correct barycentric UV calculation for quad primitive.
 
 ### Mouse operation
 
