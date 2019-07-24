@@ -57,6 +57,10 @@
 #pragma warning(disable : 4305)
 #endif
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Weverything"
+#endif
+
 /*
  * This size should really be based on the distance from the center of
  * rotation to the point on the object underneath the mouse.  That
@@ -115,7 +119,7 @@ static void vscale(float *v, float div) {
   v[2] *= div;
 }
 
-static void vnormal(float *v) { vscale(v, 1.0 / vlength(v)); }
+static void vnormal(float *v) { vscale(v, 1.0f / vlength(v)); }
 
 static float vdot(const float *v1, const float *v2) {
   return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2];
