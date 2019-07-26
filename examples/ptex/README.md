@@ -75,6 +75,7 @@ To compute correct UV, we store
 
 ## TODO
 
+* [ ] Read vertex/index information from .ptx so that we can render pentagon example(its represented as 5 quads in .ptx, but .obj uses single face with 5 verties)
 * [ ] Support Quad primitive in ray traversal. http://graphics.cs.kuleuven.be/publications/LD05ERQIT/index.html
 
 ### Mouse operation
