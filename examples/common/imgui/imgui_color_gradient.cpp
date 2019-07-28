@@ -12,7 +12,7 @@
 
 static const float GRADIENT_BAR_WIDGET_HEIGHT = 25;
 static const float GRADIENT_BAR_EDITOR_HEIGHT = 40;
-static const float GRADIENT_MARK_DELETE_DIFFY = 40;
+static const float GRADIENT_MARK_DELETE_DIFFY = -50;
 
 ImGradient::ImGradient()
 {
@@ -363,7 +363,7 @@ namespace ImGui
             
             float diffY = ImGui::GetIO().MousePos.y - barBottom;
             
-            if(diffY >= GRADIENT_MARK_DELETE_DIFFY)
+            if(diffY <= GRADIENT_MARK_DELETE_DIFFY)
             {
                 gradient->removeMark(draggingMark);
                 draggingMark = nullptr;

@@ -65,6 +65,7 @@ THE SOFTWARE.
 
 #include "imgui.h"
 #include "imgui_impl_btgui.h"
+#include "imgui_color_gradient.h"
 
 #include "render-config.h"
 #include "render.h"
@@ -477,6 +478,12 @@ int main(int argc, char** argv) {
   // Trigger initial rendering request
   RequestRender();
 
+  ImGradient gradient;
+
+  static ImGradientMark* draggingMark = nullptr;
+  static ImGradientMark* selectedMark = nullptr;
+
+
   while (!window->requestedExit()) {
     window->startRendering();
 
@@ -519,6 +526,11 @@ int main(int argc, char** argv) {
 
       ImGui::InputFloat2("show depth range", gShowDepthRange);
       ImGui::Checkbox("show depth pesudo color", &gShowDepthPeseudoColor);
+
+      ImGui::Separator();
+
+        bool updated = ImGui::GradientEditor(&gradient, draggingMark, selectedMark);
+      
     }
 
     ImGui::End();
