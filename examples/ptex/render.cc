@@ -770,7 +770,8 @@ int LoadTexture(const std::string& filename) {
   return -1;
 }
 
-bool LoadObj(Mesh& mesh, const char* filename, float scale) {
+
+static bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   tinyobj::attrib_t attrib;
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
@@ -1125,6 +1126,284 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
 
 bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale) {
   return LoadObj(gMesh, obj_filename, scene_scale);
+}
+
+bool Renderer::LoadMeshFromPtex()
+{
+  if (!_ptex) {
+    std::cerr << "ptex scene is not loaded.\n";
+    return false;
+  }
+
+  PtexMetaData* meta = _ptex->getMetaData();
+
+  if (meta->numKeys() < 3) {
+    std::cerr << "Geometry data does not exist in .ptx\n";
+    return false;
+  }
+
+  float const * vp;
+  int const *vi, *vc;
+  int nvp, nvi, nvc;
+
+  meta->getValue("PtexFaceVertCounts", vc, nvc);
+  if (nvc == 0) {
+    std::cerr << "PtexFaceVertCounts metadata does not exist in .ptx\n";
+    return false;
+  }
+  meta->getValue("PtexVertPositions", vp, nvp);
+  if (nvp == 0) {
+    std::cerr << "PtexVertPositions metadata does not exist in .ptx\n";
+    return false;
+  }
+  meta->getValue("PtexFaceVertIndices", vi, nvi);
+  if (nvi == 0) {
+    std::cerr << "PtexFaceVertIndices metadata does not exist in .ptx\n";
+    return false;
+  }
+
+  std::cout << "PtexVertPositions    = " << nvp << "\n";
+  std::cout << "PtexFaceVertIndicess = " << nvi << "\n";
+  std::cout << "PtexFaceVertCounts   = " << nvc << "\n";
+
+  size_t num_vertices = size_t(nvp);
+
+  // Ptex geom -> Mesh
+  Mesh &mesh = gMesh;
+
+  mesh.vertices.resize(num_vertices * 3, 0.0f);
+  mesh.vertex_colors.resize(num_vertices * 3, 1.0f);
+
+  size_t faceIdxOffset = 0;
+
+  mesh.vertices.clear();
+  for (size_t i = 0; i < num_vertices; i++) {
+    mesh.vertices.push_back(vp[i]);
+  }
+
+  mesh.vertex_colors.clear();
+  mesh.triangulated_indices.clear();
+  mesh.face_indices.clear();
+  mesh.face_index_offsets.clear();
+  mesh.face_num_verts.clear();
+  mesh.face_ids.clear();
+  mesh.face_triangle_ids.clear();
+  mesh.material_ids.clear();
+  mesh.facevarying_normals.clear();
+  mesh.facevarying_uvs.clear();
+
+#if 0 // TODO
+  // Flattened indices for easy facevarying normal/uv setup
+  std::vector<tinyobj::index_t> triangulated_indices;
+
+    size_t offset = 0;
+    for (size_t f = 0; f < shapes[i].mesh.num_face_vertices.size(); f++) {
+      int npoly = shapes[i].mesh.num_face_vertices[f];
+
+      mesh.face_num_verts.push_back(npoly);
+      mesh.face_index_offsets.push_back(mesh.face_indices.size());
+
+      if (npoly == 4) {
+        //
+        // triangulate
+        // For easier UV coordinate calculation, use (p0, p1, p2), (p2, p3, p0)
+        // split
+        //
+        // p0------p3
+        // | \      |
+        // |  \     |
+        // |   \    |
+        // |    \   |
+        // |     \  |
+        // |      \ |
+        // p1 ---- p2
+        //
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 0].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 1].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 2].vertex_index);
+
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 2].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 3].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 0].vertex_index);
+
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 0].vertex_index);
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 1].vertex_index);
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 2].vertex_index);
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 3].vertex_index);
+
+        mesh.face_ids.push_back(face_id_offset + f);
+        mesh.face_ids.push_back(face_id_offset + f);
+
+        mesh.face_triangle_ids.push_back(0);
+        mesh.face_triangle_ids.push_back(1);
+
+        mesh.material_ids.push_back(shapes[i].mesh.material_ids[offset]);
+        mesh.material_ids.push_back(shapes[i].mesh.material_ids[offset]);
+
+        // for computing normal/uv in the later stage
+        triangulated_indices.push_back(shapes[i].mesh.indices[offset + 0]);
+        triangulated_indices.push_back(shapes[i].mesh.indices[offset + 1]);
+        triangulated_indices.push_back(shapes[i].mesh.indices[offset + 2]);
+
+        triangulated_indices.push_back(shapes[i].mesh.indices[offset + 2]);
+        triangulated_indices.push_back(shapes[i].mesh.indices[offset + 3]);
+        triangulated_indices.push_back(shapes[i].mesh.indices[offset + 0]);
+
+      } else {
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 0].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 1].vertex_index);
+        mesh.triangulated_indices.push_back(
+            shapes[i].mesh.indices[offset + 2].vertex_index);
+
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 0].vertex_index);
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 1].vertex_index);
+        mesh.face_indices.push_back(
+            shapes[i].mesh.indices[offset + 2].vertex_index);
+
+        mesh.face_ids.push_back(face_id_offset + f);
+        mesh.face_triangle_ids.push_back(0);
+        mesh.material_ids.push_back(shapes[i].mesh.material_ids[f]);
+
+        // for computing normal/uv in the later stage
+        triangulated_indices.push_back(shapes[i].mesh.indices[offset + 0]);
+        triangulated_indices.push_back(shapes[i].mesh.indices[offset + 1]);
+        triangulated_indices.push_back(shapes[i].mesh.indices[offset + 2]);
+      }
+
+      offset += npoly;
+    }
+
+
+  // Setup normal/uv
+  if (attrib.normals.size() > 0) {
+    for (size_t f = 0; f < triangulated_indices.size() / 3; f++) {
+      int f0, f1, f2;
+
+      f0 = triangulated_indices[3 * f + 0].normal_index;
+      f1 = triangulated_indices[3 * f + 1].normal_index;
+      f2 = triangulated_indices[3 * f + 2].normal_index;
+
+      if (f0 > 0 && f1 > 0 && f2 > 0) {
+        float3 n0, n1, n2;
+
+        n0[0] = attrib.normals[3 * f0 + 0];
+        n0[1] = attrib.normals[3 * f0 + 1];
+        n0[2] = attrib.normals[3 * f0 + 2];
+
+        n1[0] = attrib.normals[3 * f1 + 0];
+        n1[1] = attrib.normals[3 * f1 + 1];
+        n1[2] = attrib.normals[3 * f1 + 2];
+
+        n2[0] = attrib.normals[3 * f2 + 0];
+        n2[1] = attrib.normals[3 * f2 + 1];
+        n2[2] = attrib.normals[3 * f2 + 2];
+
+        mesh.facevarying_normals.push_back(n0[0]);
+        mesh.facevarying_normals.push_back(n0[1]);
+        mesh.facevarying_normals.push_back(n0[2]);
+
+        mesh.facevarying_normals.push_back(n1[0]);
+        mesh.facevarying_normals.push_back(n1[1]);
+        mesh.facevarying_normals.push_back(n1[2]);
+
+        mesh.facevarying_normals.push_back(n2[0]);
+        mesh.facevarying_normals.push_back(n2[1]);
+        mesh.facevarying_normals.push_back(n2[2]);
+
+      } else {  // face contains invalid normal index. calc geometric normal.
+        f0 = triangulated_indices[3 * f + 0].vertex_index;
+        f1 = triangulated_indices[3 * f + 1].vertex_index;
+        f2 = triangulated_indices[3 * f + 2].vertex_index;
+
+        float3 v0, v1, v2;
+
+        v0[0] = attrib.vertices[3 * f0 + 0];
+        v0[1] = attrib.vertices[3 * f0 + 1];
+        v0[2] = attrib.vertices[3 * f0 + 2];
+
+        v1[0] = attrib.vertices[3 * f1 + 0];
+        v1[1] = attrib.vertices[3 * f1 + 1];
+        v1[2] = attrib.vertices[3 * f1 + 2];
+
+        v2[0] = attrib.vertices[3 * f2 + 0];
+        v2[1] = attrib.vertices[3 * f2 + 1];
+        v2[2] = attrib.vertices[3 * f2 + 2];
+
+        float3 N;
+        CalcNormal(N, v0, v1, v2);
+
+        mesh.facevarying_normals.push_back(N[0]);
+        mesh.facevarying_normals.push_back(N[1]);
+        mesh.facevarying_normals.push_back(N[2]);
+
+        mesh.facevarying_normals.push_back(N[0]);
+        mesh.facevarying_normals.push_back(N[1]);
+        mesh.facevarying_normals.push_back(N[2]);
+
+        mesh.facevarying_normals.push_back(N[0]);
+        mesh.facevarying_normals.push_back(N[1]);
+        mesh.facevarying_normals.push_back(N[2]);
+      }
+    }
+  } else {
+    // calc geometric normal
+    for (size_t f = 0; f < triangulated_indices.size() / 3; f++) {
+      int f0, f1, f2;
+
+      f0 = triangulated_indices[3 * f + 0].vertex_index;
+      f1 = triangulated_indices[3 * f + 1].vertex_index;
+      f2 = triangulated_indices[3 * f + 2].vertex_index;
+
+      float3 v0, v1, v2;
+
+      v0[0] = attrib.vertices[3 * f0 + 0];
+      v0[1] = attrib.vertices[3 * f0 + 1];
+      v0[2] = attrib.vertices[3 * f0 + 2];
+
+      v1[0] = attrib.vertices[3 * f1 + 0];
+      v1[1] = attrib.vertices[3 * f1 + 1];
+      v1[2] = attrib.vertices[3 * f1 + 2];
+
+      v2[0] = attrib.vertices[3 * f2 + 0];
+      v2[1] = attrib.vertices[3 * f2 + 1];
+      v2[2] = attrib.vertices[3 * f2 + 2];
+
+      float3 N;
+      CalcNormal(N, v0, v1, v2);
+
+      mesh.facevarying_normals.push_back(N[0]);
+      mesh.facevarying_normals.push_back(N[1]);
+      mesh.facevarying_normals.push_back(N[2]);
+
+      mesh.facevarying_normals.push_back(N[0]);
+      mesh.facevarying_normals.push_back(N[1]);
+      mesh.facevarying_normals.push_back(N[2]);
+
+      mesh.facevarying_normals.push_back(N[0]);
+      mesh.facevarying_normals.push_back(N[1]);
+      mesh.facevarying_normals.push_back(N[2]);
+    }
+  }
+#endif
+
+  gMaterials.resize(0);
+  gTextures.resize(0);
+
+  return true;
 }
 
 bool Renderer::LoadPtex(const std::string& ptex_filename, const bool dump) {
@@ -1492,7 +1771,8 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 
             } else {
               // ???
-              std::cerr << "???\n";
+              std::cerr << "Unsupported n-gons found : " << npolys << "\n";
+              exit(-1);
             }
 
             config.tri_varycoordImage[4 * (y * config.width + x) + 0] = isect.u;

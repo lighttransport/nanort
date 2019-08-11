@@ -21,6 +21,11 @@ class Renderer {
   /// Loads Ptex.
   bool LoadPtex(const std::string& ptex_filename, const bool dump = false);
 
+  ///
+  /// Build mesh from Ptex geom meta.
+  /// Valid after `LoadPtex`
+  bool LoadMeshFromPtex();
+
   /// Builds bvh.
   bool BuildBVH();
 

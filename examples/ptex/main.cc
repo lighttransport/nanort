@@ -466,13 +466,21 @@ int main(int argc, char** argv) {
     }
   }
 
-  {
+  if (!gRenderConfig.obj_filename.empty()) {
     // load obj
     bool obj_ret = gRenderer.LoadObjMesh(gRenderConfig.obj_filename.c_str(),
                                          gRenderConfig.scene_scale);
     if (!obj_ret) {
       fprintf(stderr, "Failed to load .obj [ %s ]\n",
               gRenderConfig.obj_filename.c_str());
+      return -1;
+    }
+  } else {
+    // load mesh data from ptex.
+    bool ret = gRenderer.LoadMeshFromPtex();
+    if (!ret) {
+      fprintf(stderr, "Failed to load mesh from ptex [ %s ]\n",
+              gRenderConfig.ptex_filename.c_str());
       return -1;
     }
   }
