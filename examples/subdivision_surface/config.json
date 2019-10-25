@@ -1,0 +1,17 @@
+{ "0ptex_filename" : "../triangle/triangle.ptx",
+  "0obj_filename" : "../triangle/triangle.obj",
+  "aptex_filename" : "../envcube/envcube.ptx",
+  "aobj_filename" : "../envcube/envcube.obj",
+  "ptex_filename" : "../teapot/teapot.ptx",
+  "obj_filename" : "../teapot/teapot.obj",
+  "2ptex_filename" : "../bunny/bunny.ptx",
+  "2obj_filename" : "../bunny/bunny.obj",
+  "dump_ptex" : true,
+  "scene_scale" : 1.0,
+  "width" : 512,
+  "height" : 512,
+  "eye" : [0, 0.5, 5],
+  "up" : [0, 1, 0],
+  "look_at" : [0, 0, 0],
+  "dummy" : 0
+}
