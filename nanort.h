@@ -481,8 +481,6 @@ class Ray {
   T dir[3];           // must set
   T min_t;            // minimum ray hit distance.
   T max_t;            // maximum ray hit distance.
-  T inv_dir[3];       // filled internally
-  int dir_sign[3];    // filled internally
   unsigned int type;  // ray type
 
   // TODO(LTE): Align sizeof(Ray)

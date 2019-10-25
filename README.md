@@ -64,14 +64,13 @@ class {
   T dir[3];        // [in] must set
   T min_t;         // [in] must set
   T max_t;         // [in] must set
-  T inv_dir[3];    // filled internally
-  int dir_sign[3]; // filled internally
+  unsigned int type;  // optional. ray type.
 } Ray;
 
 class BVHTraceOptions {
   // Trace rays only in face ids range. faceIdsRange[0] < faceIdsRange[1]
   // default: 0 to 0x3FFFFFFF(2G faces)
-  unsigned int prim_ids_range[2]; 
+  unsigned int prim_ids_range[2];
   bool cull_back_face; // default: false
 };
 
@@ -80,7 +79,7 @@ nanort::BVHBuildOptions build_options; // BVH build option(optional)
 const float *vertices = ...;
 const unsigned int *faces = ...;
 
-// Need to specify stride bytes for `vertices`. 
+// Need to specify stride bytes for `vertices`.
 // When vertex is stored XYZXYZXYZ... in float type, stride become 12(= sizeof(float) * 3).
 nanort::TriangleMesh<float> triangle_mesh(vertices, faces, /* stride */sizeof(float) * 3);
 nanort::TriangleSAHPred<float> triangle_pred(vertices, faces, /* stride */sizeof(float) * 3);
@@ -141,7 +140,7 @@ const float tFar = 1.0e+30f;
 for (int y = 0; y < height; y++) {
   for (int x = 0; x < width; x++) {
     BVHTraceOptions trace_options;
-    // Simple camera. change eye pos and direction fit to .obj model. 
+    // Simple camera. change eye pos and direction fit to .obj model.
     nanort::Ray<float> ray;
     ray.min_t = 0.0f;
     ray.max_t = tFar;
@@ -156,7 +155,7 @@ for (int y = 0; y < height; y++) {
     ray.dir[0] = dir[0];
     ray.dir[1] = dir[1];
     ray.dir[2] = dir[2];
-    
+
     nanort::TriangleIntersector<> triangle_intersecter(mesh.vertices, mesh.faces, /* stride */sizeof(float) * 3);
     bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
     if (hit) {
@@ -186,23 +185,24 @@ NANORT_ENABLE_PARALLEL_BUILD : Enable parallel BVH build(OpenMP version is not y
 
 See `examples` directory for example renderer using `NanoRT`.
 
-* [x] [examples/path_tracer](examples/path_tracer) Path tracer example by https://github.com/daseyb 
+* [x] [examples/path_tracer](examples/path_tracer) Path tracer example by https://github.com/daseyb
   * [x] Better ortho basis generation: Building an Orthonormal Basis, Revisited http://jcgt.org/published/0006/01/01/
 * [x] [examples/bidir_path_tracer](examples/bidir_path_tracer) Bi-directional path tracer example by https://github.com/tatsy
 * [x] [examples/gui](examples/gui) Simple renderer with GUI(using ImGui)
-* [x] [examples/vrcamera](examples/vrcamera) Stereo VR Camera 
+* [x] [examples/vrcamera](examples/vrcamera) Stereo VR Camera
 * [x] [examples/objrender](examples/objrender) Render wavefront .obj model using NanoRT.
 * [x] [examples/par_msquare](examples/par_msquare) Render heightfield by converting it to meshes using par_msquare(marching squares)
 * [x] [examples/las](examples/las) Visualize LiDAR(LAS) point cloud as sphere geometry.
 * [x] [examples/double_precision](examples/double_precision) Double precision triangle geometry and BVH.
 * [x] [examples/embree-api](examples/embree-api) NanoRT implementation of Embree API.
+* [x] [examples/ptex](examples/ptex) Ptex texturing.
 
 ### Custom geometry
 
 Here is an example of custom geometry.
- 
+
 * [x] Spheres(particles) `examples/particle_primitive/`
-* Cubic Bezier Curves 
+* Cubic Bezier Curves
   * [x] Approximate as lines `examples/curves_primitive/`
   * [ ] Recursive Ray-Bezier intersection.
 * [x] Cylinders `examples/cylinder_primitive/`
@@ -238,7 +238,7 @@ PR are always welcome!
   * [ ] Instancing support.
 * [ ] Fix multi-hit ray traversal.
 * [ ] Optimize Multi-hit ray traversal for BVH.
-  * [ ] http://jcgt.org/published/0004/04/04/ 
+  * [ ] http://jcgt.org/published/0004/04/04/
 * [ ] Ray traversal option.
   * [x] FaceID range.
   * [x] Double sided on/off.
@@ -252,6 +252,6 @@ PR are always welcome!
 * [ ] Motion blur
   * [ ] STBVH: A Spatial-Temporal BVH for Efficient Multi-Segment Motion Blur http://www.highperformancegraphics.org/2017/program/
 * [ ] Fast, Accurate ray curve intersection
-  * [ ] Phantom Ray-Hair Intersector 
+  * [ ] Phantom Ray-Hair Intersector
 * [x] Example bi-directional path tracing renderer by @tatsy.
 
