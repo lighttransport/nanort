@@ -874,33 +874,24 @@ class TriangleMesh {
   /// This function is called for each primitive in BVH build.
   void BoundingBox(real3<T> *bmin, real3<T> *bmax,
                    unsigned int prim_index) const {
-    (*bmin)[0] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
-                                 vertex_stride_bytes_)[0];
-    (*bmin)[1] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
-                                 vertex_stride_bytes_)[1];
-    (*bmin)[2] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
-                                 vertex_stride_bytes_)[2];
-    (*bmax)[0] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
-                                 vertex_stride_bytes_)[0];
-    (*bmax)[1] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
-                                 vertex_stride_bytes_)[1];
-    (*bmax)[2] = get_vertex_addr(vertices_, faces_[3 * prim_index + 0],
-                                 vertex_stride_bytes_)[2];
+    unsigned vertex = faces_[3 * prim_index + 0];
 
+    (*bmin)[0] = get_vertex_addr(vertices_, vertex, vertex_stride_bytes_)[0];
+    (*bmin)[1] = get_vertex_addr(vertices_, vertex, vertex_stride_bytes_)[1];
+    (*bmin)[2] = get_vertex_addr(vertices_, vertex, vertex_stride_bytes_)[2];
+    (*bmax)[0] = get_vertex_addr(vertices_, vertex, vertex_stride_bytes_)[0];
+    (*bmax)[1] = get_vertex_addr(vertices_, vertex, vertex_stride_bytes_)[1];
+    (*bmax)[2] = get_vertex_addr(vertices_, vertex, vertex_stride_bytes_)[2];
+
+    // remaining two vertices of the primitive
     for (unsigned int i = 1; i < 3; i++) {
+      // xyz
       for (unsigned int k = 0; k < 3; k++) {
-        if ((*bmin)[static_cast<int>(k)] >
-            get_vertex_addr<T>(vertices_, faces_[3 * prim_index + i],
-                               vertex_stride_bytes_)[k]) {
-          (*bmin)[static_cast<int>(k)] = get_vertex_addr<T>(
-              vertices_, faces_[3 * prim_index + i], vertex_stride_bytes_)[k];
-        }
-        if ((*bmax)[static_cast<int>(k)] <
-            get_vertex_addr<T>(vertices_, faces_[3 * prim_index + i],
-                               vertex_stride_bytes_)[k]) {
-          (*bmax)[static_cast<int>(k)] = get_vertex_addr<T>(
-              vertices_, faces_[3 * prim_index + i], vertex_stride_bytes_)[k];
-        }
+        T coord = get_vertex_addr<T>(vertices_, faces_[3 * prim_index + i],
+                                     vertex_stride_bytes_)[k];
+
+        (*bmin)[k] = std::min((*bmin)[k], coord);
+        (*bmax)[k] = std::max((*bmax)[k], coord);
       }
     }
   }
