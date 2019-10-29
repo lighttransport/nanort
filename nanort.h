@@ -1205,6 +1205,7 @@ inline void ContributeBinBuffer(BinBuffer *bins,  // [out]
   // Calculate extent
   real3<T> scene_size, scene_inv_size;
   scene_size = scene_max - scene_min;
+
   for (int i = 0; i < 3; ++i) {
     assert(scene_size[i] >= static_cast<T>(0.0));
 
@@ -1249,11 +1250,9 @@ inline void ContributeBinBuffer(BinBuffer *bins,  // [out]
 
       if (idx_bmin[j] >= bin_size)
         idx_bmin[j] = static_cast<unsigned int>(bin_size) - 1;
+
       if (idx_bmax[j] >= bin_size)
         idx_bmax[j] = static_cast<unsigned int>(bin_size) - 1;
-
-      assert(idx_bmin[j] < bin_size);
-      assert(idx_bmax[j] < bin_size);
 
       // Increment bin counter
       bins->bin[0 * (bins->bin_size * 3) +
@@ -1349,6 +1348,7 @@ inline bool FindCutFromBinBuffer(T *cut_pos,        // [out] xyz
 
       T cost =
           SAH(left, saLeft, right, saRight, invSaTotal, costTaabb, costTtri);
+
       if (cost < minCost[j]) {
         //
         // Update the min cost
@@ -1368,6 +1368,7 @@ inline bool FindCutFromBinBuffer(T *cut_pos,        // [out] xyz
   // Find min cost axis
   T cost = minCost[0];
   (*minCostAxis) = 0;
+
   if (cost > minCost[1]) {
     (*minCostAxis) = 1;
     cost = minCost[1];
@@ -1395,31 +1396,26 @@ void ComputeBoundingBoxOMP(real3<T> *bmin, real3<T> *bmax,
 #pragma omp parallel firstprivate(local_bmin, local_bmax) if (n > (1024 * 128))
   {
 #pragma omp parallel for
-    for (int i = int(left_index); i < int(right_index); i++) {  // for each face
+    // for each face
+    for (int i = int(left_index); i < int(right_index); i++) {
       unsigned int idx = indices[i];
 
       real3<T> bbox_min, bbox_max;
+
       p.BoundingBox(&bbox_min, &bbox_max, idx);
-      for (int k = 0; k < 3; k++) {  // xyz
-        if ((*bmin)[k] > bbox_min[k]) (*bmin)[k] = bbox_min[k];
-        if ((*bmax)[k] < bbox_max[k]) (*bmax)[k] = bbox_max[k];
+
+      // xyz
+      for (int k = 0; k < 3; k++) {
+        (*bmin)[k] = std::min((*bmin)[k], bbox_min[k]);
+        (*bmax)[k] = std::max((*bmax)[k], bbox_max[k]);
       }
     }
 
 #pragma omp critical
     {
       for (int k = 0; k < 3; k++) {
-        if (local_bmin[k] < (*bmin)[k]) {
-          {
-            if (local_bmin[k] < (*bmin)[k]) (*bmin)[k] = local_bmin[k];
-          }
-        }
-
-        if (local_bmax[k] > (*bmax)[k]) {
-          {
-            if (local_bmax[k] > (*bmax)[k]) (*bmax)[k] = local_bmax[k];
-          }
-        }
+        (*bmin)[k] = std::min((*bmin)[k], local_bmin[k]);
+        (*bmax)[k] = std::max((*bmax)[k], local_bmax[k]);
       }
     }
   }
@@ -1437,6 +1433,7 @@ inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
   size_t num_threads = std::min(
       size_t(kNANORT_MAX_THREADS),
       std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
+
   if (n < num_threads) {
     num_threads = n;
   }
@@ -1460,16 +1457,19 @@ inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
       local_bmaxs[3 * t + 1] = -std::numeric_limits<T>::infinity();
       local_bmaxs[3 * t + 2] = -std::numeric_limits<T>::infinity();
 
-      for (size_t i = si; i < ei; i++) {  // for each face
+      // for each face
+      for (size_t i = si; i < ei; i++) {
         unsigned int idx = indices[i];
 
         real3<T> bbox_min, bbox_max;
         p.BoundingBox(&bbox_min, &bbox_max, idx);
-        for (size_t k = 0; k < 3; k++) {  // xyz
-          if (local_bmins[3 * t + k] > bbox_min[int(k)])
-            local_bmins[3 * t + k] = bbox_min[int(k)];
-          if (local_bmaxs[3 * t + k] < bbox_max[int(k)])
-            local_bmaxs[3 * t + k] = bbox_max[int(k)];
+
+        // xyz
+        for (size_t k = 0; k < 3; k++) {
+          local_bmins[3 * t + k] =
+              std::min(local_bmins[3 * t + k], bbox_min[int(k)]);
+          local_bmaxs[3 * t + k] =
+              std::max(local_bmaxs[3 * t + k], bbox_max[int(k)]);
         }
       }
     }));
@@ -1487,13 +1487,8 @@ inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
 
   for (size_t t = 1; t < num_threads; t++) {
     for (size_t k = 0; k < 3; k++) {
-      if (local_bmins[3 * t + k] < (*bmin)[int(k)]) {
-        (*bmin)[int(k)] = local_bmins[3 * t + k];
-      }
-
-      if (local_bmaxs[3 * t + k] > (*bmax)[int(k)]) {
-        (*bmax)[int(k)] = local_bmaxs[3 * t + k];
-      }
+      (*bmin)[int(k)] = std::min((*bmin)[int(k)], local_bmins[3 * t + k]);
+      (*bmax)[int(k)] = std::max((*bmax)[int(k)], local_bmaxs[3 * t + k]);
     }
   }
 }
@@ -1504,20 +1499,20 @@ inline void ComputeBoundingBox(real3<T> *bmin, real3<T> *bmax,
                                const unsigned int *indices,
                                unsigned int left_index,
                                unsigned int right_index, const P &p) {
-  {
-    unsigned int idx = indices[left_index];
-    p.BoundingBox(bmin, bmax, idx);
-  }
+  unsigned int idx = indices[left_index];
+  p.BoundingBox(bmin, bmax, idx);
 
   {
-    for (unsigned int i = left_index + 1; i < right_index;
-         i++) {  // for each primitives
+    // for each primitive
+    for (unsigned int i = left_index + 1; i < right_index; i++) {
       unsigned int idx = indices[i];
       real3<T> bbox_min, bbox_max;
       p.BoundingBox(&bbox_min, &bbox_max, idx);
-      for (int k = 0; k < 3; k++) {  // xyz
-        if ((*bmin)[k] > bbox_min[k]) (*bmin)[k] = bbox_min[k];
-        if ((*bmax)[k] < bbox_max[k]) (*bmax)[k] = bbox_max[k];
+
+      // xyz
+      for (int k = 0; k < 3; k++) {
+        (*bmin)[k] = std::min((*bmin)[k], bbox_min[k]);
+        (*bmax)[k] = std::max((*bmax)[k], bbox_max[k]);
       }
     }
   }
@@ -1528,35 +1523,24 @@ inline void GetBoundingBox(real3<T> *bmin, real3<T> *bmax,
                            const std::vector<BBox<T> > &bboxes,
                            unsigned int *indices, unsigned int left_index,
                            unsigned int right_index) {
-  {
-    unsigned int i = left_index;
-    unsigned int idx = indices[i];
-    (*bmin)[0] = bboxes[idx].bmin[0];
-    (*bmin)[1] = bboxes[idx].bmin[1];
-    (*bmin)[2] = bboxes[idx].bmin[2];
-    (*bmax)[0] = bboxes[idx].bmax[0];
-    (*bmax)[1] = bboxes[idx].bmax[1];
-    (*bmax)[2] = bboxes[idx].bmax[2];
-  }
+  unsigned int i = left_index;
+  unsigned int idx = indices[i];
 
-  T local_bmin[3] = {(*bmin)[0], (*bmin)[1], (*bmin)[2]};
-  T local_bmax[3] = {(*bmax)[0], (*bmax)[1], (*bmax)[2]};
+  (*bmin)[0] = bboxes[idx].bmin[0];
+  (*bmin)[1] = bboxes[idx].bmin[1];
+  (*bmin)[2] = bboxes[idx].bmin[2];
+  (*bmax)[0] = bboxes[idx].bmax[0];
+  (*bmax)[1] = bboxes[idx].bmax[1];
+  (*bmax)[2] = bboxes[idx].bmax[2];
 
-  {
-    for (unsigned int i = left_index; i < right_index; i++) {  // for each face
-      unsigned int idx = indices[i];
+  // for each face
+  for (i = left_index + 1; i < right_index; i++) {
+    idx = indices[i];
 
-      for (int k = 0; k < 3; k++) {  // xyz
-        T minval = bboxes[idx].bmin[k];
-        T maxval = bboxes[idx].bmax[k];
-        if (local_bmin[k] > minval) local_bmin[k] = minval;
-        if (local_bmax[k] < maxval) local_bmax[k] = maxval;
-      }
-    }
-
+    // xyz
     for (int k = 0; k < 3; k++) {
-      (*bmin)[k] = local_bmin[k];
-      (*bmax)[k] = local_bmax[k];
+      (*bmin)[k] = std::min((*bmin)[k], bboxes[idx].bmin[k]);
+      (*bmax)[k] = std::max((*bmax)[k], bboxes[idx].bmax[k]);
     }
   }
 }
@@ -1583,6 +1567,7 @@ unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
   }
 
   real3<T> bmin, bmax;
+
 #if defined(NANORT_USE_CPP11_FEATURE) && defined(NANORT_ENABLE_PARALLEL_BUILD)
   ComputeBoundingBoxThreaded(&bmin, &bmax, &indices_.at(0), left_idx, right_idx,
                              p);
@@ -1657,10 +1642,11 @@ unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
     // Try all 3 axis until good cut position avaiable.
     unsigned int mid_idx = left_idx;
     int cut_axis = min_cut_axis;
+
     for (int axis_try = 0; axis_try < 3; axis_try++) {
       unsigned int *begin = &indices_[left_idx];
       unsigned int *end =
-          &indices_[right_idx - 1] + 1;  // mimics end() iterator.
+          &indices_[right_idx - 1] + 1;  // mimics end() iterator
       unsigned int *mid = 0;
 
       // try min_cut_axis first.
@@ -1676,6 +1662,7 @@ unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
       mid = std::partition(begin, end, pred);
 
       mid_idx = left_idx + static_cast<unsigned int>((mid - begin));
+
       if ((mid_idx == left_idx) || (mid_idx == right_idx)) {
         // Can't split well.
         // Switch to object median(which may create unoptimized tree, but
@@ -1791,6 +1778,7 @@ unsigned int BVHAccel<T>::BuildTree(BVHBuildStatistics *out_stat,
   // Try all 3 axis until good cut position avaiable.
   unsigned int mid_idx = left_idx;
   int cut_axis = min_cut_axis;
+
   for (int axis_try = 0; axis_try < 3; axis_try++) {
     unsigned int *begin = &indices_[left_idx];
     unsigned int *end = &indices_[right_idx - 1] + 1;  // mimics end() iterator.
@@ -1808,6 +1796,7 @@ unsigned int BVHAccel<T>::BuildTree(BVHBuildStatistics *out_stat,
     mid = std::partition(begin, end, pred);
 
     mid_idx = left_idx + static_cast<unsigned int>((mid - begin));
+
     if ((mid_idx == left_idx) || (mid_idx == right_idx)) {
       // Can't split well.
       // Switch to object median(which may create unoptimized tree, but
@@ -1883,6 +1872,7 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
     size_t num_threads = std::min(
         size_t(kNANORT_MAX_THREADS),
         std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
+
     if (n < num_threads) {
       num_threads = n;
     }
@@ -1921,25 +1911,24 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
   // 2. Compute bounding box (optional).
   //
   real3<T> bmin, bmax;
+
   if (options.cache_bbox) {
     bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<T>::max();
     bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<T>::max();
 
     bboxes_.resize(n);
-    for (size_t i = 0; i < n; i++) {  // for each primitived
+
+    for (size_t i = 0; i < n; i++) {  // for each primitive
       unsigned int idx = indices_[i];
 
       BBox<T> bbox;
       p.BoundingBox(&(bbox.bmin), &(bbox.bmax), static_cast<unsigned int>(i));
       bboxes_[idx] = bbox;
 
-      for (int k = 0; k < 3; k++) {  // xyz
-        if (bmin[k] > bbox.bmin[k]) {
-          bmin[k] = bbox.bmin[k];
-        }
-        if (bmax[k] < bbox.bmax[k]) {
-          bmax[k] = bbox.bmax[k];
-        }
+      // xyz
+      for (int k = 0; k < 3; k++) {
+        bmin[k] = std::min(bmin[k], bbox.bmin[k]);
+        bmax[k] = std::max(bmax[k], bbox.bmax[k]);
       }
     }
 
@@ -2401,10 +2390,14 @@ bool BVHAccel<T>::MultiHitTestLeafNode(
     unsigned int prim_idx = indices_[i + offset];
 
     T local_t = t, u = 0.0f, v = 0.0f;
-    if (intersector.Intersect(&local_t, &u, &v, prim_idx)) {
+
+    if (intersector.Intersect(&local_t, &u, &v, prim_idx))
+    {
       // Update isect state
-      if ((local_t > ray.min_t)) {
-        if (isect_pq->size() < static_cast<size_t>(max_intersections)) {
+      if ((local_t > ray.min_t))
+      {
+        if (isect_pq->size() < static_cast<size_t>(max_intersections))
+        {
           H isect;
           t = local_t;
           isect.t = t;
@@ -2417,23 +2410,23 @@ bool BVHAccel<T>::MultiHitTestLeafNode(
           t = ray.max_t;
 
           hit = true;
-        } else {
-          if (local_t < isect_pq->top().t) {
-            // delete furthest intersection and add new intersection.
-            isect_pq->pop();
+        }
+        else if (local_t < isect_pq->top().t)
+        {
+          // delete furthest intersection and add new intersection.
+          isect_pq->pop();
 
-            H hit;
-            hit.t = local_t;
-            hit.u = u;
-            hit.v = v;
-            hit.prim_id = prim_idx;
-            isect_pq->push(hit);
+          H hit;
+          hit.t = local_t;
+          hit.u = u;
+          hit.v = v;
+          hit.prim_id = prim_idx;
+          isect_pq->push(hit);
 
-            // Update furthest hit distance
-            t = isect_pq->top().t;
+          // Update furthest hit distance
+          t = isect_pq->top().t;
 
-            hit = true;
-          }
+          hit = true;
         }
       }
     }
@@ -2491,20 +2484,17 @@ bool BVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
     bool hit = IntersectRayAABB(&min_t, &max_t, ray.min_t, hit_t, node.bmin,
                                 node.bmax, ray_org, ray_inv_dir, dir_sign);
 
-    if (node.flag == 0) {  // branch node
-      if (hit) {
+    if (hit) {
+      // Branch node
+      if (node.flag == 0) {
         int order_near = dir_sign[node.axis];
         int order_far = 1 - order_near;
 
         // Traverse near first.
         node_stack[++node_stack_index] = node.data[order_far];
         node_stack[++node_stack_index] = node.data[order_near];
-      }
-    } else {  // leaf node
-      if (hit) {
-        if (TestLeafNode(node, ray, intersector)) {
-          hit_t = intersector.GetT();
-        }
+      } else if (TestLeafNode(node, ray, intersector)) {  // Leaf node
+        hit_t = intersector.GetT();
       }
     }
   }
@@ -2545,6 +2535,7 @@ inline bool BVHAccel<T>::TestLeafNodeIntersections(
     unsigned int prim_idx = indices_[i + offset];
 
     T min_t, max_t;
+
     if (intersector.Intersect(&min_t, &max_t, prim_idx)) {
       // Always add to isect lists.
       NodeHit<T> isect;
@@ -2554,14 +2545,11 @@ inline bool BVHAccel<T>::TestLeafNodeIntersections(
 
       if (isect_pq->size() < static_cast<size_t>(max_intersections)) {
         isect_pq->push(isect);
+      } else if (min_t < isect_pq->top().t_min) {
+        // delete the furthest intersection and add a new intersection.
+        isect_pq->pop();
 
-      } else {
-        if (min_t < isect_pq->top().t_min) {
-          // delete the furthest intersection and add a new intersection.
-          isect_pq->pop();
-
-          isect_pq->push(isect);
-        }
+        isect_pq->push(isect);
       }
     }
   }
@@ -2609,6 +2597,7 @@ bool BVHAccel<T>::ListNodeIntersections(
   ray_org[2] = ray.org[2];
 
   T min_t, max_t;
+
   while (node_stack_index >= 0) {
     unsigned int index = node_stack[node_stack_index];
     const BVHNode<T> &node = nodes_[static_cast<size_t>(index)];
@@ -2618,18 +2607,16 @@ bool BVHAccel<T>::ListNodeIntersections(
     bool hit = IntersectRayAABB(&min_t, &max_t, ray.min_t, hit_t, node.bmin,
                                 node.bmax, ray_org, ray_inv_dir, dir_sign);
 
-    if (node.flag == 0) {  // branch node
-      if (hit) {
+    if (hit) {
+      // Branch node
+      if (node.flag == 0) {
         int order_near = dir_sign[node.axis];
         int order_far = 1 - order_near;
 
         // Traverse near first.
         node_stack[++node_stack_index] = node.data[order_far];
         node_stack[++node_stack_index] = node.data[order_near];
-      }
-
-    } else {  // leaf node
-      if (hit) {
+      } else {  // Leaf node
         TestLeafNodeIntersections(node, ray, max_intersections, intersector,
                                   &isect_pq);
       }
@@ -2643,6 +2630,7 @@ bool BVHAccel<T>::ListNodeIntersections(
     // Store intesection in reverse order (make it frontmost order)
     size_t n = isect_pq.size();
     (*hits)->resize(n);
+
     for (size_t i = 0; i < n; i++) {
       const NodeHit<T> &isect = isect_pq.top();
       (*hits)[n - i - 1] = isect;
@@ -2700,7 +2688,9 @@ bool BVHAccel<T>::MultiHitTraverse(const Ray<T> &ray,
   ray_org[2] = ray.org[2];
 
   T min_t, max_t;
-  while (node_stack_index >= 0) {
+
+  while (node_stack_index >= 0)
+  {
     unsigned int index = node_stack[node_stack_index];
     const BVHNode<T> &node = nodes_[static_cast<size_t>(index)];
 
@@ -2709,8 +2699,11 @@ bool BVHAccel<T>::MultiHitTraverse(const Ray<T> &ray,
     bool hit = IntersectRayAABB(&min_t, &max_t, ray.min_t, hit_t, node.bmin,
                                 node.bmax, ray_org, ray_inv_dir, dir_sign);
 
-    if (node.flag == 0) {  // branch node
-      if (hit) {
+    // branch node
+    if(hit)
+    {
+      if (node.flag == 0)
+      {
         int order_near = dir_sign[node.axis];
         int order_far = 1 - order_near;
 
@@ -2718,12 +2711,13 @@ bool BVHAccel<T>::MultiHitTraverse(const Ray<T> &ray,
         node_stack[++node_stack_index] = node.data[order_far];
         node_stack[++node_stack_index] = node.data[order_near];
       }
-
-    } else {  // leaf node
-      if (hit) {
-        if (MultiHitTestLeafNode(&isect_pq, max_intersections, node, ray, intersector)) {
+      else
+      {
+        if (MultiHitTestLeafNode(&isect_pq, max_intersections, node, ray, intersector))
+        {
           // Only update `hit_t` when queue is full.
-          if (isect_pq.size() >= static_cast<size_t>(max_intersections)) {
+          if (isect_pq.size() >= static_cast<size_t>(max_intersections))
+          {
             hit_t = isect_pq.top().t;
           }
         }
@@ -2734,11 +2728,14 @@ bool BVHAccel<T>::MultiHitTraverse(const Ray<T> &ray,
   assert(node_stack_index < kMaxStackDepth);
   (void)kMaxStackDepth;
 
-  if (!isect_pq.empty()) {
+  if (!isect_pq.empty())
+  {
     // Store intesection in reverse order (make it frontmost order)
     size_t n = isect_pq.size();
     (*hits)->resize(n);
-    for (size_t i = 0; i < n; i++) {
+
+    for (size_t i = 0; i < n; i++)
+    {
       const H &isect = isect_pq.top();
       (*hits)[n - i - 1] = isect;
       isect_pq.pop();
