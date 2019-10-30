@@ -11,7 +11,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2015 - 2018 Light Transport Entertainment, Inc.
+Copyright (c) 2015 - 2019 Light Transport Entertainment, Inc.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -65,7 +65,7 @@ THE SOFTWARE.
 
 #ifdef NANORT_USE_CPP11_FEATURE
 // Assume C++11 compiler has thread support.
-// In some situation(e.g. embedded system, JIT compilation), thread feature
+// In some situation (e.g. embedded system, JIT compilation), thread feature
 // may not be available though...
 #include <atomic>
 #include <mutex>
@@ -357,7 +357,7 @@ class real3 {
   T &operator[](int i) { return v[i]; }
 
   T v[3];
-  // T pad;  // for alignment(when T = float)
+  // T pad;  // for alignment (when T = float)
 };
 
 template <typename T>
@@ -992,13 +992,9 @@ class TriangleIntersector {
       W = static_cast<T>(BxAy - ByAx);
     }
 
-    if (trace_options_.cull_back_face) {
-      if (U < static_cast<T>(0.0) || V < static_cast<T>(0.0) ||
-          W < static_cast<T>(0.0))
-        return false;
-    } else {
-      if ((U < static_cast<T>(0.0) || V < static_cast<T>(0.0) ||
-           W < static_cast<T>(0.0)) &&
+    if (U < static_cast<T>(0.0) || V < static_cast<T>(0.0) ||
+        W < static_cast<T>(0.0)) {
+      if (trace_options_.cull_back_face ||
           (U > static_cast<T>(0.0) || V > static_cast<T>(0.0) ||
            W > static_cast<T>(0.0))) {
         return false;
@@ -1029,7 +1025,7 @@ class TriangleIntersector {
     }
 
     (*t_inout) = tt;
-    // Use Thomas-Mueller style barycentric coord.
+    // Use Möller-Trumbore style barycentric coordinates
     // U + V + W = 1.0 and interp(p) = U * p0 + V * p1 + W * p2
     // We want interp(p) = (1 - u - v) * p0 + u * v1 + v * p2;
     // => u = V, v = W.
@@ -1496,7 +1492,7 @@ inline void ComputeBoundingBox(real3<T> *bmin, real3<T> *bmax,
   {
     // for each primitive
     for (unsigned int i = left_index + 1; i < right_index; i++) {
-      unsigned int idx = indices[i];
+      idx = indices[i];
       real3<T> bbox_min, bbox_max;
       p.BoundingBox(&bbox_min, &bbox_max, idx);
 
@@ -1643,8 +1639,6 @@ unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
       // try min_cut_axis first.
       cut_axis = (min_cut_axis + axis_try) % 3;
 
-      // @fixme { We want something like: std::partition(begin, end,
-      // pred(cut_axis, cut_pos[cut_axis])); }
       pred.Set(cut_axis, cut_pos[cut_axis]);
       //
       // Split at (cut_axis, cut_pos)
@@ -1656,7 +1650,7 @@ unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
 
       if ((mid_idx == left_idx) || (mid_idx == right_idx)) {
         // Can't split well.
-        // Switch to object median(which may create unoptimized tree, but
+        // Switch to object median (which may create unoptimized tree, but
         // stable)
         mid_idx = left_idx + (n >> 1);
 
