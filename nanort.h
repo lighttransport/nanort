@@ -886,7 +886,7 @@ class TriangleMesh {
     // remaining two vertices of the primitive
     for (unsigned int i = 1; i < 3; i++) {
       // xyz
-      for (unsigned int k = 0; k < 3; k++) {
+      for (int k = 0; k < 3; k++) {
         T coord = get_vertex_addr<T>(vertices_, faces_[3 * prim_index + i],
                                      vertex_stride_bytes_)[k];
 

@@ -1,5 +1,5 @@
 all:
-	clang++ -Werror -Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic nanort.cc
+	clang++ -Werror -Weverything -Wno-padded -Wno-c++98-compat -Wno-c++98-compat-pedantic nanort.cc
 
 lint:
 	./cpplint.py nanort.h
