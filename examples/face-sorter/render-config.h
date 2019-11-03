@@ -41,7 +41,7 @@ typedef struct {
   int max_passes;
 
   // Scene input info
-  std::string las_filename;
+  std::string obj_filename;
   float scene_scale;
 
 } RenderConfig;

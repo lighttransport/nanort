@@ -29,9 +29,9 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
 
   picojson::object o = v.get<picojson::object>();
 
-  if (o.find("las_filename") != o.end()) {
-    if (o["las_filename"].is<std::string>()) {
-      config->las_filename = o["las_filename"].get<std::string>();
+  if (o.find("obj_filename") != o.end()) {
+    if (o["obj_filename"].is<std::string>()) {
+      config->obj_filename = o["obj_filename"].get<std::string>();
     }
   }
 
