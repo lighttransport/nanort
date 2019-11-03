@@ -1975,9 +1975,8 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
       }));
     }
 
-      for (auto &t : workers) {
-        t.join();
-      }
+    for (auto &t : workers) {
+      t.join();
     }
 
     // Join local nodes
