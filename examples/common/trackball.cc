@@ -49,7 +49,11 @@
  * Much mucking with by:
  * Gavin Bell
  */
-#include <math.h>
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Weverything"
+#endif
+
+#include <cmath>
 #include "trackball.h"
 
 #ifdef _MSC_VER
@@ -110,7 +114,7 @@ static void vcross(const float *v1, const float *v2, float *cross) {
 }
 
 static float vlength(const float *v) {
-  return sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+  return std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 
 static void vscale(float *v, float div) {

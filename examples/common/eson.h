@@ -111,7 +111,7 @@ class Value {
     object_ = Object(o);
     size_ = ComputeObjectSize();
   }
-  ~Value() {}
+  //~Value() {}
 
   /// Compute size of array element.
   uint64_t ComputeArraySize() const {

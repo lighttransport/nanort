@@ -60,6 +60,7 @@ THE SOFTWARE.
 // #define NANORT_ENABLE_PARALLEL_BUILD
 
 // Some constants
+#define kNANORT_MAX_STACK_DEPTH (512)
 #define kNANORT_MIN_PRIMITIVES_FOR_PARALLEL_BUILD (1024 * 8)
 #define kNANORT_SHALLOW_DEPTH (4)  // will create 2**N subtrees
 
@@ -1435,7 +1436,7 @@ inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
   for (size_t t = 0; t < num_threads; t++) {
     workers.emplace_back(std::thread([&, t]() {
       size_t si = left_index + t * ndiv;
-      size_t ei = std::min(left_index + (t + 1) * ndiv, size_t(right_index));
+      size_t ei = (t == (num_threads - 1)) ? size_t(right_index) : std::min(left_index + (t + 1) * ndiv, size_t(right_index));
 
       local_bmins[3 * t + 0] = std::numeric_limits<T>::infinity();
       local_bmins[3 * t + 1] = std::numeric_limits<T>::infinity();
@@ -1677,6 +1678,7 @@ unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
     right_child_index = BuildShallowTree(out_nodes, mid_idx, right_idx,
                                          depth + 1, max_shallow_depth, p, pred);
 
+    //std::cout << "shallow[" << offset << "] l and r = " << left_child_index << ", " << right_child_index << std::endl;
     (*out_nodes)[offset].data[0] = left_child_index;
     (*out_nodes)[offset].data[1] = right_child_index;
 
@@ -1838,6 +1840,9 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
 
   nodes_.clear();
   bboxes_.clear();
+#if defined(NANORT_ENABLE_PARALLEL_BUILD)
+  shallow_node_infos_.clear();
+#endif
 
   assert(options_.bin_size > 1);
 
@@ -1869,7 +1874,7 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
     for (size_t t = 0; t < num_threads; t++) {
       workers.emplace_back(std::thread([&, t]() {
         size_t si = t * ndiv;
-        size_t ei = std::min((t + 1) * ndiv, size_t(n));
+        size_t ei = (t == (num_threads - 1)) ? n : std::min((t + 1) * ndiv, size_t(n));
 
         for (size_t k = si; k < ei; k++) {
           indices_[k] = static_cast<unsigned int>(k);
@@ -1970,8 +1975,9 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
       }));
     }
 
-    for (auto &t : workers) {
-      t.join();
+      for (auto &t : workers) {
+        t.join();
+      }
     }
 
     // Join local nodes
@@ -2484,7 +2490,7 @@ bool BVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
     }
   }
 
-  assert(node_stack_index < kMaxStackDepth);
+  assert(node_stack_index < kNANORT_MAX_STACK_DEPTH);
 
   bool hit = (intersector.GetT() < ray.max_t);
   intersector.PostTraversal(ray, hit, isect);

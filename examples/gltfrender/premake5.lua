@@ -6,6 +6,7 @@ sources = {
    "../common/matrix.cc",
    "../common/imgui/imgui.cpp",
    "../common/imgui/imgui_draw.cpp",
+   "../common/imgui/imgui_widgets.cpp",
    "../common/imgui/imgui_impl_btgui.cpp",
    }
 
