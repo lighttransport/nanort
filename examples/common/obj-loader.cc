@@ -6,7 +6,26 @@
 
 #ifdef __clang__
 #pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Weverything"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wreserved-id-macro"
+#pragma clang diagnostic ignored "-Wc++98-compat-pedantic"
+#pragma clang diagnostic ignored "-Wcast-align"
+#pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wvariadic-macros"
+#pragma clang diagnostic ignored "-Wc++11-extensions"
+#pragma clang diagnostic ignored "-Wdisabled-macro-expansion"
+#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
+#if __has_warning("-Wdouble-promotion")
+#pragma clang diagnostic ignored "-Wdouble-promotion"
+#endif
+#if __has_warning("-Wcomma")
+#pragma clang diagnostic ignored "-Wcomma"
+#endif
+#if __has_warning("-Wcast-qual")
+#pragma clang diagnostic ignored "-Wcast-qual"
+#endif
 #endif
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -51,7 +70,7 @@ inline void CalcNormal(float3 &N, float3 v0, float3 v1, float3 v2) {
   float3 v10 = v1 - v0;
   float3 v20 = v2 - v0;
 
-  N = vcross(v10, v20);
+  N = vcross(v10, v20); // CCW
   N = vnormalize(N);
 }
 
@@ -132,7 +151,7 @@ bool LoadObj(const std::string &filename, float scale,
   tinyobj::attrib_t attrib;
   std::vector<tinyobj::shape_t> shapes;
   std::vector<tinyobj::material_t> materials;
-  std::string warn, err;
+  std::string err;
 
   std::string basedir = GetBaseDir(filename) + "/";
   const char *basepath = (basedir.compare("/") == 0) ? NULL : basedir.c_str();
@@ -140,15 +159,11 @@ bool LoadObj(const std::string &filename, float scale,
   // auto t_start = std::chrono::system_clock::now();
 
   bool ret =
-      tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filename.c_str(),
+      tinyobj::LoadObj(&attrib, &shapes, &materials, &err, filename.c_str(),
                        basepath, /* triangulate */ true);
 
   // auto t_end = std::chrono::system_clock::now();
   // std::chrono::duration<double, std::milli> ms = t_end - t_start;
-
-  if (!warn.empty()) {
-    std::cout << warn << std::endl;
-  }
 
   if (!err.empty()) {
     std::cerr << err << std::endl;

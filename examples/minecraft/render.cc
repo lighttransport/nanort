@@ -311,7 +311,7 @@ inline void CalcNormal(float3& N, float3 v0, float3 v1, float3 v2) {
   float3 v10 = v1 - v0;
   float3 v20 = v2 - v0;
 
-  N = vcross(v20, v10);
+  N = vcross(v10, v20);
   N = vnormalize(N);
 }
 
