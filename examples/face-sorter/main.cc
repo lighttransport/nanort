@@ -557,7 +557,7 @@ int main(int argc, char** argv) {
         RequestSortPolygon();
       }
 
-      if (ImGui::DragInt("Draw range[0]", &gRenderConfig.draw_primitive_range[0])) {
+      if (ImGui::DragInt("Draw range[0]", &gRenderConfig.draw_primitive_range[0], /* speed */15.0f)) {
         RequestRender();
       }
       // TODO

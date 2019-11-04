@@ -2,6 +2,8 @@
 
 Sort polygon faces by ray's origin and direction.
 
+![](img/face-sort.gif)
+
 ## Requirement
 
 * C++11
