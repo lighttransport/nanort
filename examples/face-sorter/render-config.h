@@ -36,6 +36,10 @@ typedef struct {
   float look_at[3];
   float fov;  // vertical fov in degree.
 
+  // draw primitive range(up to # of triangles in the scene)
+  // -1 = draw all
+  int draw_primitive_range[2] = {0, -1};
+
   // render pass
   int pass;
   int max_passes;

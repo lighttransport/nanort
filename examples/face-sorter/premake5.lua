@@ -56,6 +56,8 @@ solution "FaceSorterRenderSolution"
             "../common/OpenGLWindow/X11OpenGLWindow.cpp",
             "../common/OpenGLWindow/X11OpenGLWindows.h"
             }
+         -- buildoptions { "-fsanitize=address" }
+         -- linkoptions { "-fsanitize=address" }
          links {"X11", "pthread", "dl"}
       end
       if os.is("MacOSX") then

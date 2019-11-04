@@ -24,17 +24,20 @@ THE SOFTWARE.
 
 #include "render.h"
 
+#include <algorithm>
 #include <chrono>  // C++11
 #include <sstream>
 #include <thread>  // C++11
 #include <vector>
-#include <algorithm>
 
 #include <iostream>
 
 #include "../../nanort.h"
 #include "matrix.h"
 
+#include "../common/obj-loader.h"
+
+#include "face-sorter.hh"
 #include "trackball.h"
 
 namespace example {
@@ -70,222 +73,20 @@ void pcg32_srandom(pcg32_state_t* rng, uint64_t initstate, uint64_t initseq) {
 
 const float kPI = 3.141592f;
 
-typedef struct {
-  std::vector<float> vertices;
-  std::vector<float> colors;
-  std::vector<float> radiuss;
-} Particles;
-
 typedef nanort::real3<float> float3;
 
-// Predefined SAH predicator for sphere.
-class SpherePred {
- public:
-  SpherePred(const float *vertices)
-      : axis_(0), pos_(0.0f), vertices_(vertices) {}
-
-  void Set(int axis, float pos) const {
-    axis_ = axis;
-    pos_ = pos;
-  }
-
-  bool operator()(unsigned int i) const {
-    int axis = axis_;
-    float pos = pos_;
-
-    float3 p0(&vertices_[3 * i]);
-
-    float center = p0[axis];
-
-    return (center < pos);
-  }
-
- private:
-  mutable int axis_;
-  mutable float pos_;
-  const float *vertices_;
-};
-
-class SphereGeometry {
- public:
-  SphereGeometry(const float *vertices, const float *radiuss)
-      : vertices_(vertices), radiuss_(radiuss) {}
-
-  /// Compute bounding box for `prim_index`th sphere.
-  /// This function is called for each primitive in BVH build.
-  void BoundingBox(float3 *bmin, float3 *bmax, unsigned int prim_index) const {
-    (*bmin)[0] = vertices_[3 * prim_index + 0] - radiuss_[prim_index];
-    (*bmin)[1] = vertices_[3 * prim_index + 1] - radiuss_[prim_index];
-    (*bmin)[2] = vertices_[3 * prim_index + 2] - radiuss_[prim_index];
-    (*bmax)[0] = vertices_[3 * prim_index + 0] + radiuss_[prim_index];
-    (*bmax)[1] = vertices_[3 * prim_index + 1] + radiuss_[prim_index];
-    (*bmax)[2] = vertices_[3 * prim_index + 2] + radiuss_[prim_index];
-  }
-
-  const float *vertices_;
-  const float *radiuss_;
-  mutable float3 ray_org_;
-  mutable float3 ray_dir_;
-  mutable nanort::BVHTraceOptions trace_options_;
-};
-
-class SphereIntersection
-{
- public:
-  SphereIntersection() {}
-
-	float u;
-	float v;
-
-  // Required member variables.
-	float t;
-	unsigned int prim_id;
-};
-
-template<class I>
-class SphereIntersector
-{
- public:
-  SphereIntersector(const float *vertices, const float *radiuss)
-      : vertices_(vertices), radiuss_(radiuss) {}
-
-
-  /// Do ray interesection stuff for `prim_index` th primitive and return hit
-  /// distance `t`,
-  /// varycentric coordinate `u` and `v`.
-  /// Returns true if there's intersection.
-  bool Intersect(float *t_inout, unsigned int prim_index) const {
-    if ((prim_index < trace_options_.prim_ids_range[0]) ||
-        (prim_index >= trace_options_.prim_ids_range[1])) {
-      return false;
-    }
-
-    // http://wiki.cgsociety.org/index.php/Ray_Sphere_Intersection
-
-    const float3 center(&vertices_[3 * prim_index]);
-    const float radius = radiuss_[prim_index];
-
-    float3 oc = ray_org_ - center;
-
-    float a = vdot(ray_dir_, ray_dir_);
-    float b = 2.0 * vdot(ray_dir_, oc);
-    float c = vdot(oc, oc) - radius * radius;
-
-    float disc = b * b - 4.0 * a * c;
-
-    float t0, t1;
-
-    if (disc < 0.0) { // no roots
-      return false;
-    } else if (disc == 0.0) {
-      t0 = t1 = -0.5 * (b / a);
-    } else {
-      // compute q as described above
-      float distSqrt = sqrt(disc);
-      float q;
-      if (b < 0)
-        q = (-b - distSqrt) / 2.0;
-      else
-        q = (-b + distSqrt) / 2.0;
-
-      // compute t0 and t1
-      t0 = q / a;
-      t1 = c / q;
-    }
-
-    // make sure t0 is smaller than t1
-    if (t0 > t1) {
-      // if t0 is bigger than t1 swap them around
-      float temp = t0;
-      t0 = t1;
-      t1 = temp;
-    }
-
-    // if t1 is less than zero, the object is in the ray's negative direction
-    // and consequently the ray misses the sphere
-    if (t1 < 0) {
-      return false;
-    }
-
-    float t;
-    if (t0 < 0) {
-      t = t1;
-    } else {
-      t = t0;
-    }
-
-    if (t > (*t_inout)) {
-      return false;
-    }
-
-    (*t_inout) = t;
-
-    return true;
-  }
-
-	/// Returns the nearest hit distance.
-	float GetT() const {
-		return t_;
-	}
-
-	/// Update is called when a nearest hit is found.
-	void Update(float t, unsigned int prim_idx) const {
-    t_ = t;
-    prim_id_ = prim_idx;
-	}
-
-  /// Prepare BVH traversal(e.g. compute inverse ray direction)
-  /// This function is called only once in BVH traversal.
-  void PrepareTraversal(const nanort::Ray<float> &ray,
-                        const nanort::BVHTraceOptions &trace_options) const {
-    ray_org_[0] = ray.org[0];
-    ray_org_[1] = ray.org[1];
-    ray_org_[2] = ray.org[2];
-
-    ray_dir_[0] = ray.dir[0];
-    ray_dir_[1] = ray.dir[1];
-    ray_dir_[2] = ray.dir[2];
-
-    trace_options_ = trace_options;
-  }
-
-
-  /// Post BVH traversal stuff(e.g. compute intersection point information)
-  /// This function is called only once in BVH traversal.
-  /// `hit` = true if there is something hit.
-  void PostTraversal(const nanort::Ray<float> &ray, bool hit, SphereIntersection *isect) const {
-    if (hit) {
-      float3 hitP = ray_org_ + t_ * ray_dir_;
-      float3 center = float3(&vertices_[3*prim_id_]);
-      float3 n = vnormalize(hitP - center);
-      isect->t = t_;
-      isect->prim_id = prim_id_;
-      isect->u = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
-      isect->v = acos(n[1]) / M_PI;
-    }
-  }
-
-  const float *vertices_;
-  const float *radiuss_;
-  mutable float3 ray_org_;
-  mutable float3 ray_dir_;
-  mutable nanort::BVHTraceOptions trace_options_;
-
-  mutable float t_;
-  mutable unsigned int prim_id_;
-};
-
 // @fixme { Do not defined as global variable }
-Particles gParticles;
+std::vector<float> gVertices;
+std::vector<uint32_t> gIndices;        // input
+std::vector<uint32_t> gSortedIndices;  // indices sorted by z position
+
 nanort::BVHAccel<float> gAccel;
 
-inline float3 Lerp3(float3 v0, float3 v1,
-                            float3 v2, float u, float v) {
+inline float3 Lerp3(float3 v0, float3 v1, float3 v2, float u, float v) {
   return (1.0f - u - v) * v0 + u * v1 + v * v2;
 }
 
-inline void CalcNormal(float3& N, float3 v0, float3 v1,
-                       float3 v2) {
+inline void CalcNormal(float3& N, float3 v0, float3 v1, float3 v2) {
   float3 v10 = v1 - v0;
   float3 v20 = v2 - v0;
 
@@ -293,10 +94,9 @@ inline void CalcNormal(float3& N, float3 v0, float3 v1,
   N = vnormalize(N);
 }
 
-void BuildCameraFrame(float3* origin, float3* corner,
-                      float3* u, float3* v, float quat[4],
-                      float eye[3], float lookat[3], float up[3], float fov,
-                      int width, int height) {
+void BuildCameraFrame(float3* origin, float3* corner, float3* u, float3* v,
+                      float quat[4], float eye[3], float lookat[3], float up[3],
+                      float fov, int width, int height) {
   float e[4][4];
 
   Matrix::LookAt(e, eye, lookat, up);
@@ -392,9 +192,9 @@ void BuildCameraFrame(float3* origin, float3* corner,
   }
 }
 
-nanort::Ray<float> GenerateRay(const float3& origin,
-                        const float3& corner, const float3& du,
-                        const float3& dv, float u, float v) {
+nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
+                               const float3& du, const float3& dv, float u,
+                               float v) {
   float3 dir;
 
   dir[0] = (corner[0] + u * du[0] + v * dv[0]) - origin[0];
@@ -420,8 +220,8 @@ static std::string GetFilePathExtension(const std::string& FileName) {
 }
 
 bool Renderer::BuildBVH() {
-  if (gParticles.radiuss.size() < 1) {
-    std::cout << "num_points == 0" << std::endl;
+  if (gVertices.empty() || gIndices.empty()) {
+    std::cerr << ".obj mesh is not loaded or .obj has empty mesh\n";
     return false;
   }
 
@@ -436,10 +236,15 @@ bool Renderer::BuildBVH() {
 
   auto t_start = std::chrono::system_clock::now();
 
-  SphereGeometry sphere_geom(&gParticles.vertices.at(0), &gParticles.radiuss.at(0));
-  SpherePred sphere_pred(&gParticles.vertices.at(0));
-  bool ret = gAccel.Build(gParticles.radiuss.size(), sphere_geom,
-                          sphere_pred, build_options);
+  nanort::TriangleMesh<float> triangle_mesh(
+      gVertices.data(), gSortedIndices.data(), sizeof(float) * 3);
+  nanort::TriangleSAHPred<float> triangle_pred(
+      gVertices.data(), gSortedIndices.data(), sizeof(float) * 3);
+
+  size_t num_triangles = gSortedIndices.size() / 3;
+
+  bool ret = gAccel.Build(num_triangles, triangle_mesh, triangle_pred,
+                          build_options);
   assert(ret);
 
   auto t_end = std::chrono::system_clock::now();
@@ -489,10 +294,33 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
 
   auto startT = std::chrono::system_clock::now();
 
-  // Initialize RNG.
+
+  size_t num_triangles = gSortedIndices.size() / 3;
+
+  nanort::BVHTraceOptions trace_options;
+
+  // TODO(LTE): critical session
+  {
+    if ((config.draw_primitive_range[0] >= 0) &&
+        (config.draw_primitive_range[0] < num_triangles)) {
+      trace_options.prim_ids_range[0] = config.draw_primitive_range[0];
+    }
+
+    if ((config.draw_primitive_range[1] >= 0) &&
+        (config.draw_primitive_range[1] < num_triangles)) {
+      trace_options.prim_ids_range[1] = config.draw_primitive_range[1];
+    }
+
+    if (trace_options.prim_ids_range[0] > trace_options.prim_ids_range[1]) {
+      std::swap(trace_options.prim_ids_range[0], trace_options.prim_ids_range[1]);
+    }
+  }
+
 
   for (auto t = 0; t < num_threads; t++) {
     workers.emplace_back(std::thread([&, t]() {
+
+      // Initialize RNG.
       pcg32_state_t rng;
       pcg32_srandom(&rng, config.pass,
                     t);  // seed = combination of render pass + thread no.
@@ -530,47 +358,52 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
           ray.min_t = 0.0f;
           ray.max_t = kFar;
 
-          SphereIntersector<SphereIntersection> sphere_intersector(
-              reinterpret_cast<const float*>(gParticles.vertices.data()), gParticles.radiuss.data());
-          SphereIntersection isect;
-          bool hit = gAccel.Traverse(ray, sphere_intersector, &isect);
+          nanort::TriangleIntersector<> triangle_intersector(
+              reinterpret_cast<const float*>(gVertices.data()),
+              gSortedIndices.data(), /* vertex stride */ 3 * sizeof(float));
+          nanort::TriangleIntersection<> isect;
+
+          bool hit = gAccel.Traverse(ray, triangle_intersector, &isect, trace_options);
           if (hit) {
             float3 p;
-            p[0] =
-                ray.org[0] + isect.t * ray.dir[0];
-            p[1] =
-                ray.org[1] + isect.t * ray.dir[1];
-            p[2] =
-                ray.org[2] + isect.t * ray.dir[2];
+            p[0] = ray.org[0] + isect.t * ray.dir[0];
+            p[1] = ray.org[1] + isect.t * ray.dir[1];
+            p[2] = ray.org[2] + isect.t * ray.dir[2];
 
             layer->position[4 * (y * config.width + x) + 0] = p.x();
             layer->position[4 * (y * config.width + x) + 1] = p.y();
             layer->position[4 * (y * config.width + x) + 2] = p.z();
             layer->position[4 * (y * config.width + x) + 3] = 1.0f;
 
-            layer->varycoord[4 * (y * config.width + x) + 0] =
-                isect.u;
-            layer->varycoord[4 * (y * config.width + x) + 1] =
-                isect.v;
+            layer->varycoord[4 * (y * config.width + x) + 0] = isect.u;
+            layer->varycoord[4 * (y * config.width + x) + 1] = isect.v;
             layer->varycoord[4 * (y * config.width + x) + 2] = 0.0f;
             layer->varycoord[4 * (y * config.width + x) + 3] = 1.0f;
 
             unsigned int prim_id = isect.prim_id;
 
-            float3 sphere_center(&gParticles.vertices[3*prim_id]);
-            float3 N = vnormalize(p - sphere_center);
+            // Calculate geometric normal.
+            float3 N;
+            {
+              uint32_t i0 = gSortedIndices[3 * prim_id + 0];
+              uint32_t i1 = gSortedIndices[3 * prim_id + 1];
+              uint32_t i2 = gSortedIndices[3 * prim_id + 2];
+
+              float3 v0, v1, v2;
+              v0 = float3(&gVertices[3 * i0 + 0]);
+              v1 = float3(&gVertices[3 * i1 + 0]);
+              v2 = float3(&gVertices[3 * i2 + 0]);
+              CalcNormal(N, v0, v1, v2);
+            }
 
             layer->normal[4 * (y * config.width + x) + 0] = 0.5 * N[0] + 0.5;
             layer->normal[4 * (y * config.width + x) + 1] = 0.5 * N[1] + 0.5;
             layer->normal[4 * (y * config.width + x) + 2] = 0.5 * N[2] + 0.5;
             layer->normal[4 * (y * config.width + x) + 3] = 1.0f;
 
-            layer->depth[4 * (y * config.width + x) + 0] =
-                isect.t;
-            layer->depth[4 * (y * config.width + x) + 1] =
-                isect.t;
-            layer->depth[4 * (y * config.width + x) + 2] =
-                isect.t;
+            layer->depth[4 * (y * config.width + x) + 0] = isect.t;
+            layer->depth[4 * (y * config.width + x) + 1] = isect.t;
+            layer->depth[4 * (y * config.width + x) + 2] = isect.t;
             layer->depth[4 * (y * config.width + x) + 3] = 1.0f;
 
             // @todo { material }
@@ -649,5 +482,86 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
 
   return (!cancelFlag);
 };
+
+bool Renderer::LoadObjMesh(const std::string& obj_filename, float scene_scale) {
+  std::vector<Mesh<float> > meshes;
+  std::vector<Material> materials;  // not used.
+  std::vector<Texture> textures;    // not used.
+
+  bool ret = LoadObj(obj_filename, scene_scale, &meshes, &materials, &textures);
+  if (!ret) {
+    std::cerr << "failed to load .obj\n";
+    return false;
+  }
+
+  // Combine mesh
+  gVertices.clear();
+  gIndices.clear();
+
+  size_t num_vertices = 0;
+  for (size_t i = 0; i < meshes.size(); i++) {
+    num_vertices += meshes[i].vertices.size() / 3;
+  }
+
+  size_t vertexIdxOffset = 0;
+  for (size_t i = 0; i < meshes.size(); i++) {
+    // common/obj-loader translate each object with its bounding box.
+    // remove pivot translation to get world position of the vertex.
+    std::cout << "pivot " << meshes[i].pivot_xform[3][0] << ", "
+              << meshes[i].pivot_xform[3][1] << ", "
+              << meshes[i].pivot_xform[3][2] << "\n";
+    for (size_t v = 0; v < meshes[i].vertices.size() / 3; v++) {
+      gVertices.push_back(meshes[i].vertices[3 * v + 0] +
+                          meshes[i].pivot_xform[3][0]);
+      gVertices.push_back(meshes[i].vertices[3 * v + 1] +
+                          meshes[i].pivot_xform[3][1]);
+      gVertices.push_back(meshes[i].vertices[3 * v + 2] +
+                          meshes[i].pivot_xform[3][2]);
+      // gVertices.push_back(meshes[i].vertices[3 * v + 0]);
+      // gVertices.push_back(meshes[i].vertices[3 * v + 1]);
+      // gVertices.push_back(meshes[i].vertices[3 * v + 2]);
+
+      // std::cout << "vert " << gVertices[-2] << ", " << gVertices[-1] << ", "
+      // << gVertices[0] << "\n";
+    }
+
+    // add offset and append it
+    std::transform(meshes[i].faces.begin(), meshes[i].faces.end(),
+                   std::back_inserter(gIndices),
+                   [&vertexIdxOffset, num_vertices](uint32_t i) -> uint32_t {
+                     assert((i + vertexIdxOffset) < int(num_vertices));
+                     return i + vertexIdxOffset;
+                   });
+
+    vertexIdxOffset += meshes[i].vertices.size() / 3;
+  }
+
+  gSortedIndices = gIndices;
+
+  return true;
+}
+
+bool Renderer::Sort(const float ray_org[3], const float ray_dir[3]) {
+  size_t num_triangles = gIndices.size() / 3;
+
+  face_sorter::TriangleFaceCenterAccessor<float> fa(
+      gVertices.data(), gIndices.data(), num_triangles);
+
+  std::vector<uint32_t> sorted_face_indices;
+  face_sorter::SortByBarycentricZ<float>(num_triangles, ray_org, ray_dir, fa,
+                                         &sorted_face_indices);
+
+  assert(num_triangles == sorted_face_indices.size());
+
+  gSortedIndices.resize(gIndices.size());
+
+  for (size_t i = 0; i < num_triangles; i++) {
+    size_t face_idx = sorted_face_indices[i];
+
+    gSortedIndices[3 * i + 0] = gIndices[3 * face_idx + 0];
+    gSortedIndices[3 * i + 1] = gIndices[3 * face_idx + 1];
+    gSortedIndices[3 * i + 2] = gIndices[3 * face_idx + 2];
+  }
+}
 
 }  // namespace example

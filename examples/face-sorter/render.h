@@ -12,6 +12,14 @@ class Renderer {
   Renderer() {}
   ~Renderer() {}
 
+  /// Loads wavefront .obj mesh.
+  bool LoadObjMesh(const std::string &obj_filename, float scene_scale);
+
+  ///
+  /// Sort polygons of loaded .obj mesh.
+  ///
+  bool Sort(const float ray_org[3], const float ray_dir[3]);
+
   /// Builds bvh.
   bool BuildBVH();
 

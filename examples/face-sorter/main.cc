@@ -70,6 +70,8 @@ THE SOFTWARE.
 #include "render.h"
 #include "trackball.h"
 
+#include "face-sorter.hh"
+
 #define SHOW_BUFFER_COLOR (0)
 #define SHOW_BUFFER_NORMAL (1)
 #define SHOW_BUFFER_POSITION (2)
@@ -123,9 +125,13 @@ float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
 example::Renderer gRenderer;
 
+static float gRayOrgForSort[3] = {0.0f, 0.0f, 10.0f};
+static float gRayDirForSort[3] = {0.0f, 0.0f, -1.0f};
+
 std::atomic<bool> gRenderQuit;
 std::atomic<bool> gRenderRefresh;
 std::atomic<bool> gRenderCancel;
+std::atomic<bool> gRenderSortPolygon;
 example::RenderConfig gRenderConfig;
 example::RenderLayer gRenderLayer;
 std::mutex gMutex;
@@ -140,6 +146,13 @@ void RequestRender() {
 
   gRenderRefresh = true;
   gRenderCancel = true;
+}
+
+void RequestSortPolygon() {
+  std::lock_guard<std::mutex> guard(gMutex);
+
+  gRenderConfig.pass = 0;
+  gRenderSortPolygon = true;
 }
 
 void RenderThread() {
@@ -165,6 +178,16 @@ void RenderThread() {
       std::lock_guard<std::mutex> guard(gMutex);
       if (gRenderConfig.pass == 0) {
         initial_pass = true;
+
+        if (gRenderSortPolygon) {
+          std::cout << "sort!\n";
+          gRenderer.Sort(gRayOrgForSort, gRayDirForSort);
+
+          // Rebuild BVH
+          gRenderer.BuildBVH();
+
+          gRenderSortPolygon = false;
+        }
       }
     }
 
@@ -417,6 +440,11 @@ int main(int argc, char** argv) {
       return -1;
     }
 
+    if (!gRenderer.LoadObjMesh(gRenderConfig.obj_filename, gRenderConfig.scene_scale)) {
+      std::cerr << "Failed to load .obj\n";
+      return EXIT_FAILURE;
+    }
+
   }
 
   gRenderer.BuildBVH();
@@ -464,8 +492,8 @@ int main(int argc, char** argv) {
   ImGui_ImplBtGui_Init(window);
 
   ImGuiIO& io = ImGui::GetIO();
-  // io.Fonts->AddFontDefault();
-  io.Fonts->AddFontFromFileTTF("./Inconsolata-Regular.ttf", 15.0f);
+  io.Fonts->AddFontDefault();
+  ///io.Fonts->AddFontFromFileTTF("./Inconsolata-Regular.ttf", 15.0f);
 
   std::thread renderThread(RenderThread);
 
@@ -519,6 +547,21 @@ int main(int argc, char** argv) {
       ImGui::InputFloat2("show depth range", gUIParam.depth_range);
       ImGui::Checkbox("show depth pseudo color",
                       &gUIParam.depth_show_pseudo_color);
+
+      // sorter
+      ImGui::Separator();
+      ImGui::InputFloat3("ray org(for sort)", gRayOrgForSort);
+      ImGui::InputFloat3("ray dir(for sort)", gRayDirForSort);
+
+      if (ImGui::Button("Sort")) {
+        RequestSortPolygon();
+      }
+
+      if (ImGui::DragInt("Draw range[0]", &gRenderConfig.draw_primitive_range[0])) {
+        RequestRender();
+      }
+      // TODO
+      // ImGui::DragInt("Draw range[1]", &gRenderConfig.draw_primitive_range[1]);
     }
 
     ImGui::End();
