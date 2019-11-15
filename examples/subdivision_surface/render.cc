@@ -486,14 +486,15 @@ bool RayQuadIntersection(const float3& rayorg, const float3& raydir,
     const float aa = vdot(TT, pp) / dett;
     if (aa < 0.0f) {
       // Usually this should not happen.
-      std::cerr << "aa = " << std::to_string(aa) << "\n";
+      //std::cerr << "aa = " << aa << "\n";
       return false;
     }
 
     const float3 QQ = vcross(TT, e23);
     const float bb = vdot(raydir, QQ) / dett;
     if (bb < 0.0f) {
-      std::cerr << "bb = " << std::to_string(bb) << "\n";
+      // Usually this should not happen.
+      //std::cerr << "bb = " << bb << "\n";
       return false;
     }
   }
@@ -501,7 +502,8 @@ bool RayQuadIntersection(const float3& rayorg, const float3& raydir,
   // Compute the ray parameter of the intersection point
   const float t = vdot(e03, Q) / det;
   if (t < 0.0f) {
-    std::cerr << "t = " << std::to_string(t) << "\n";
+    // Usually this should not happen.
+    //std::cerr << "t = " << std::to_string(t) << "\n";
     return false;
   }
 
@@ -1410,7 +1412,6 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 
             uint32_t npolys = gMesh.face_num_verts[face_id];
             if (npolys == 3) {
-              std::cout << "triangle\n";
               baryUV[0] = isect.u;
               baryUV[1] = isect.v;
             } else if (npolys == 4) {

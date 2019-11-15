@@ -4,18 +4,38 @@
 
 #include "subdiv.hh"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+#endif
+
 #include <opensubdiv/far/primvarRefiner.h>
 #include <opensubdiv/far/topologyDescriptor.h>
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 using namespace OpenSubdiv;
 
 namespace example {
 
-void subdivide(int level, const ControlQuadMesh &in_mesh, Mesh *out_mesh, bool dump) {
+void subdivide(int subd_level, const ControlQuadMesh &in_mesh, Mesh *out_mesh, bool dump) {
+
+  if (subd_level < 0) {
+    subd_level = 0;
+  }
+
+  std::cout << "SubD: level = " << subd_level << "\n";
 
   const auto start_t = std::chrono::system_clock::now();
 
-  constexpr int maxlevel = 3;
+  int maxlevel = subd_level;
+
+  if (maxlevel > 8) {
+    maxlevel = 8;
+    std::cout << "SubD: limit subd level to " << maxlevel << "\n";
+  }
 
   typedef Far::TopologyDescriptor Descriptor;
 
@@ -132,6 +152,8 @@ void subdivide(int level, const ControlQuadMesh &in_mesh, Mesh *out_mesh, bool d
     // int nuvs   = refLastLevel.GetNumFVarValues(channelUV);
     // int ncolors= refLastLevel.GetNumFVarValues(channelColor);
     int nfaces = refLastLevel.GetNumFaces();
+
+    std::cout << "nverts = " << nverts << ", nfaces = " << nfaces << "\n";
 
     // Print vertex positions
     int firstOfLastVerts = refiner->GetNumVerticesTotal() - nverts;

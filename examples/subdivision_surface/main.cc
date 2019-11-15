@@ -101,9 +101,10 @@ float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
 example::Renderer gRenderer;
 
-std::atomic<bool> gRenderQuit;
-std::atomic<bool> gRenderRefresh;
-std::atomic<bool> gRenderCancel;
+std::atomic<bool> gRenderQuit{false};
+std::atomic<bool> gRenderRefresh{false};
+std::atomic<bool> gRenderCancel{false};
+std::atomic<bool> gRenderSubdAndRebuild{false};
 example::RenderConfig gRenderConfig;
 std::mutex gMutex;
 
@@ -124,6 +125,17 @@ void RequestRender() {
   {
     std::lock_guard<std::mutex> guard(gMutex);
     gRenderConfig.pass = 0;
+  }
+
+  gRenderRefresh = true;
+  gRenderCancel = true;
+}
+
+void RequestSubdivision() {
+  {
+    std::lock_guard<std::mutex> guard(gMutex);
+    gRenderConfig.pass = 0;
+    gRenderSubdAndRebuild = true;
   }
 
   gRenderRefresh = true;
@@ -153,6 +165,14 @@ void RenderThread() {
       std::lock_guard<std::mutex> guard(gMutex);
       if (gRenderConfig.pass == 0) {
         initial_pass = true;
+
+        if (gRenderSubdAndRebuild) {
+          gRenderer.Subdivide(gRenderConfig.subd_level, gRenderConfig.dump_subd);
+
+          gRenderer.BuildBVH();
+
+          gRenderSubdAndRebuild = false;
+        }
       }
     }
 
@@ -569,6 +589,14 @@ int main(int argc, char** argv) {
 
       ImGui::InputFloat2("show depth range", gShowDepthRange);
       ImGui::Checkbox("show depth pesudo color", &gShowDepthPeseudoColor);
+
+      ImGui::Separator();
+      ImGui::Text("SubD options");
+
+      if (ImGui::InputInt("level", &gRenderConfig.subd_level, 1, 1)) {
+        RequestSubdivision();
+      }
+      ImGui::Checkbox("Dump subdivided mesh as .obj", &gRenderConfig.dump_subd);
 
       ImGui::Separator();
       ImGui::Text("Ptex filtering options");
