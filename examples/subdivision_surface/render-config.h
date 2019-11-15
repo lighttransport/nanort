@@ -54,6 +54,11 @@ typedef struct {
   int ptex_start_channel = 0; // Channel index to start[0, 4]
   int ptex_channels = 3; // 1 = grayscale, 3 == rgb
 
+  // SubD options
+  int subd_level = 1; // 0 = no subdiv?
+
+  bool dump_subd = false;
+
 } RenderConfig;
 
 /// Loads config from JSON file.

@@ -18,8 +18,19 @@ class Renderer {
   /// Loads wavefront .obj mesh.
   bool LoadObjMesh(const char* obj_filename, float scene_scale);
 
-  /// Loads Ptex.
-  bool LoadPtex(const std::string& ptex_filename, const bool dump = false);
+  /// Loads mesh from Ptex.
+  bool LoadPtexMesh(const std::string& ptex_filename, const bool dump = false);
+
+  ///
+  /// Subdivide a mesh.
+  ///
+  /// Do not call this function during rendering.
+  /// Should call `BuildBVH` after `Subdivide` before the rendering.
+  ///
+  /// @param[in] level Subdivision level.
+  /// @param[in] dump_obj Dump subdivided mesh as wavefront .obj?
+  ///
+  void Subdivide(int level, bool dump_obj = false);
 
   /// Builds bvh.
   bool BuildBVH();

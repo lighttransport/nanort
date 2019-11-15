@@ -123,6 +123,19 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
+  if (o.find("subd_level") != o.end()) {
+    if (o["subd_level"].is<double>()) {
+      config->subd_level = static_cast<int>(o["subd_level"].get<double>());
+    }
+  }
+
+  if (o.find("dump_subd") != o.end()) {
+    if (o["dump_subd"].is<bool>()) {
+      config->dump_subd = o["dump_subd"].get<bool>();
+    }
+  }
+
   return true;
 }
+
 }

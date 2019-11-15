@@ -42,6 +42,7 @@ THE SOFTWARE.
 
 #include "../../nanort.h"
 #include "matrix.h"
+#include "subdiv.hh"
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
@@ -342,44 +343,6 @@ void pcg32_srandom(pcg32_state_t* rng, uint64_t initstate, uint64_t initseq) {
 
 const float kPI = 3.141592f;
 
-typedef struct {
-  // num_triangle_faces = indices.size() / 3
-  std::vector<float> vertices;       /// [xyz] * num_vertices
-  std::vector<float> vertex_colors;  /// [rgb] * num_vertices
-
-  std::vector<float>
-      facevarying_normals;  /// [xyz] * 3(triangle) * num_triangle_faces
-  std::vector<float>
-      facevarying_tangents;  /// [xyz] * 3(triangle) * num_triangle_faces
-  std::vector<float>
-      facevarying_binormals;  /// [xyz] * 3(triangle) * num_triangle_faces
-  std::vector<float>
-      facevarying_uvs;  /// [xy]  * 3(triangle) * num_triangle_faces
-
-  std::vector<unsigned int> material_ids;  /// index x num_triangle_faces
-
-  // List of triangle vertex indices. For NanoRT BVH
-  std::vector<unsigned int>
-      triangulated_indices;  /// 3(triangle) x num_triangle_faces
-
-  // List of original vertex indices. For UV interpolation
-  std::vector<unsigned int>
-      face_indices;  /// length = sum(for each face_num_verts[i])
-
-  // Offset to `face_indices` for a given face_id.
-  std::vector<unsigned int>
-      face_index_offsets;  /// length = face_num_verts.size()
-
-  std::vector<unsigned char> face_num_verts;  /// # of vertices per face
-
-  // face ID for each triangle. For ptex textureing.
-  std::vector<unsigned int> face_ids;  /// index x num_triangle_faces
-
-  // Triangule ID of a face(e.g. 0 for triangle primitive. 0 or 1 for quad
-  // primitive(tessellated into two-triangles)
-  std::vector<uint8_t> face_triangle_ids;  /// index x num_triangle_faces
-
-} Mesh;
 
 struct Material {
   // float ambient[3];
@@ -437,10 +400,12 @@ struct Texture {
   }
 };
 
+example::ControlQuadMesh gQuadMesh;
 Mesh gMesh;
 std::vector<Material> gMaterials;
 std::vector<Texture> gTextures;
 nanort::BVHAccel<float> gAccel;
+
 
 typedef nanort::real3<float> float3;
 
@@ -520,6 +485,7 @@ bool RayQuadIntersection(const float3& rayorg, const float3& raydir,
     const float3 TT = rayorg - v11;
     const float aa = vdot(TT, pp) / dett;
     if (aa < 0.0f) {
+      // Usually this should not happen.
       std::cerr << "aa = " << std::to_string(aa) << "\n";
       return false;
     }
@@ -1118,7 +1084,11 @@ bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale) {
   return LoadObj(gMesh, obj_filename, scene_scale);
 }
 
-bool Renderer::LoadPtex(const std::string& ptex_filename, const bool dump) {
+#define PTEX_META_VERT_POSITIONS "PtexVertPositions"
+#define PTEX_META_FACE_VERT_COUNTS "PtexFaceVertCounts"
+#define PTEX_META_FACE_VERT_INDICES "PtexFaceVertIndices"
+
+bool Renderer::LoadPtexMesh(const std::string& ptex_filename, const bool dump) {
   Ptex::String error;
   _ptex.reset(Ptex::PtexTexture::open(ptex_filename.c_str(), error));
   // Ptex::PtexPtr<Ptex::PtexTexture> r(
@@ -1133,6 +1103,7 @@ bool Renderer::LoadPtex(const std::string& ptex_filename, const bool dump) {
   if (checkadjacency) {
     int retcode = CheckAdjacency(_ptex);
     if (retcode != 0) {
+      std::cerr << "Ptex adjacency check failed.\n";
       return false;
     }
   }
@@ -1162,7 +1133,7 @@ bool Renderer::LoadPtex(const std::string& ptex_filename, const bool dump) {
   bool dumpdata = true;
   bool dumptiling = true;
   bool dumpinternal = true;
-  bool dumpmeta = true;
+  bool dumpmeta = false;
   bool dumpalldata = true;
 
   PtexPtr<PtexMetaData> meta(_ptex->getMetaData());
@@ -1171,26 +1142,53 @@ bool Renderer::LoadPtex(const std::string& ptex_filename, const bool dump) {
     if (dumpmeta && meta->numKeys()) DumpMetaData(meta);
   }
 
-  if (dump) {
-    if (dumpfaceinfo || dumpdata || dumptiling) {
-      uint64_t texels = 0;
-      for (int i = 0; i < _ptex->numFaces(); i++) {
-        std::cout << "face " << i << ":";
-        const Ptex::FaceInfo& f = _ptex->getFaceInfo(i);
-        DumpFaceInfo(f);
-        texels += f.res.size();
+  const float* vp;
+  const int *vi, *vc;
+  int nvp = 0;
+  int nvi = 0;
+  int nvc = 0;
 
-        if (dumptiling) {
-          PtexPtr<PtexFaceData> dh(_ptex->getData(i, f.res));
-          DumpTiling(dh);
-        }
-        if (dumpdata) DumpData(_ptex, i, dumpalldata);
-      }
-      std::cout << "texels: " << texels << std::endl;
-    }
-
-    if (dumpinternal) DumpInternal(_ptex);
+  meta->getValue(PTEX_META_FACE_VERT_COUNTS, vc, nvc);
+  if (nvc == 0) {
+    std::cerr << PTEX_META_FACE_VERT_COUNTS << " Metadata not found in .ptx.\n";
+    return false;
   }
+
+  meta->getValue(PTEX_META_VERT_POSITIONS, vp, nvp);
+  if (nvp == 0) {
+    std::cerr << PTEX_META_VERT_POSITIONS << " Metadata not found in .ptx.\n";
+    return false;
+  }
+
+  meta->getValue(PTEX_META_FACE_VERT_INDICES, vi, nvi);
+  if (nvi == 0) {
+    std::cerr << PTEX_META_FACE_VERT_INDICES
+              << " Metadata not found in .ptx.\n";
+    return false;
+  }
+
+  std::cout << "face_vert_counts: " << nvc << "\n";
+  std::cout << "vert_positions: " << nvp << "\n";
+  std::cout << "face_vert_indices: " << nvi << "\n";
+
+  // check if all faces are quad face.
+  for (size_t i = 0; i < nvc; i++) {
+    if (vc[i] != 4) {
+      std::cerr << "face_vert[" << i << "] is " << vc[i] << ". Non-quad face is not supported.\n";
+      return false;
+    }
+  }
+
+  assert(nvi == (4 * nvc));
+
+  gQuadMesh.vertices.resize(nvp);
+  gQuadMesh.indices.resize(4 * nvc);
+  gQuadMesh.verts_per_faces.resize(nvc);
+  // TODO(LTE): UV
+
+  memcpy(gQuadMesh.vertices.data(), vp, sizeof(float) * nvp);
+  memcpy(gQuadMesh.indices.data(), vi, sizeof(int) * nvi);
+  memcpy(gQuadMesh.verts_per_faces.data(), vc, sizeof(int) * nvc);
 
   return true;
 }
@@ -1678,5 +1676,10 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 
   return (!cancelFlag);
 };
+
+void Renderer::Subdivide(int level, bool dump)
+{
+  example::subdivide(level, gQuadMesh, &gMesh, dump);
+}
 
 }  // namespace example

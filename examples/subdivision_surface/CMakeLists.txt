@@ -53,6 +53,7 @@ set(SOURCES
     main.cc
     render.cc
     render-config.cc
+    subdiv.cc
     primitive.cc
     ../common/trackball.cc
     ../common/matrix.cc

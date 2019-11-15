@@ -24,7 +24,7 @@ Build and install Ptex and OpenSubdiv. This example uses CPU backend, thus no ne
 
 ### Build Embree
 
-Download prebuild Embree3 should work.
+Or prebuild Embree3 should work.
 
 You can also use `https://github.com/lighttransport/embree-aarch64` to easily build Embree3.
 
@@ -50,9 +50,12 @@ T.B.W.
 
 ## Usage
 
-Prepare ptex scene. for example download some ptex scene for example from http://ptex.us/samples.html
+The demo reads geometry data from .obj or .ptx. If you use .ptx, it should have geometry data(ptex can optionally have geometry data)
+For example you can download some ptex scene for example from http://ptex.us/samples.html
 
-Edit `config.json` and setup file path to .obj and .ptx, then
+Geometry data must be composed of quad mesh only.
+
+Edit `config.json` and setup file path to .obj or .ptx, then
 
 ```
 $ cd build
@@ -72,6 +75,8 @@ To compute correct UV, we store
 * `obj_filename` : filepath : filenam of wavefront obj mesh(.obj)
 * `ptex_filename` : filepath : filenam of ptex(.ptx)
 * `dump_ptex` : true/false : Dump ptex data after loading it.
+
+When both `ojb_filename` and `ptex_filename` are given, `ptex_filename` will be used.
 
 ## TODO
 

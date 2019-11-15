@@ -455,18 +455,16 @@ int main(int argc, char** argv) {
     }
   }
 
-  {
+  if (!gRenderConfig.ptex_filename.empty()) {
     // load ptex
-    bool ptex_ret = gRenderer.LoadPtex(gRenderConfig.ptex_filename,
+    bool ptex_ret = gRenderer.LoadPtexMesh(gRenderConfig.ptex_filename,
                                        gRenderConfig.dump_ptex);
     if (!ptex_ret) {
       fprintf(stderr, "Failed to load ptex [ %s ]\n",
               gRenderConfig.ptex_filename.c_str());
       return -1;
     }
-  }
-
-  {
+  } else {
     // load obj
     bool obj_ret = gRenderer.LoadObjMesh(gRenderConfig.obj_filename.c_str(),
                                          gRenderConfig.scene_scale);
@@ -476,6 +474,9 @@ int main(int argc, char** argv) {
       return -1;
     }
   }
+
+  std::cout << "Subdivide with level " << gRenderConfig.subd_level << "\n";
+  gRenderer.Subdivide(gRenderConfig.subd_level, gRenderConfig.dump_subd);
 
   gRenderer.BuildBVH();
 
