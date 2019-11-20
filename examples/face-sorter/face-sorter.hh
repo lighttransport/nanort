@@ -13,7 +13,7 @@ template<typename T>
 class TriangleFaceCenterAccessor
 {
  public:
-  TriangleFaceCenterAccessor(const T *vertices, const uint32_t *indices, const uint32_t num_faces)
+  TriangleFaceCenterAccessor(const T *vertices, const uint32_t *indices, const size_t num_faces)
     : _vertices(vertices), _indices(indices), _num_faces(num_faces) {
   }
 
@@ -43,7 +43,7 @@ class TriangleFaceCenterAccessor
  private:
   const T *_vertices;
   const uint32_t *_indices;
-  const uint32_t _num_faces;
+  const size_t _num_faces;
 };
 
 // Sort polygon face by its barycentric z value.
@@ -58,7 +58,7 @@ class TriangleFaceCenterAccessor
 
 template<typename T, class FA>
 void SortByBarycentricZ(
-  const uint32_t num_faces,
+  const size_t num_faces,
   const float ray_org[3],
   const float ray_dir[3],
   const FA &fa,
