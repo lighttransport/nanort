@@ -590,7 +590,9 @@ class BVHBuildStatistics {
         build_secs(0.0f) {}
 };
 
-/// BVH trace option.
+///
+/// @brief BVH trace option.
+///
 class BVHTraceOptions {
  public:
   // Hit only for face IDs in indexRange.
@@ -613,6 +615,9 @@ class BVHTraceOptions {
   }
 };
 
+///
+/// @brief Bounding box.
+///
 template <typename T>
 class BBox {
  public:
@@ -625,6 +630,12 @@ class BBox {
   }
 };
 
+///
+/// @brief Hit class for traversing nodes.
+///
+/// Stores hit information of node traversal.
+/// Node traversal is used for two-level ray tracing(efficient ray traversal of a scene hierarchy)
+///
 template <typename T>
 class NodeHit {
  public:
@@ -654,6 +665,11 @@ class NodeHit {
   unsigned int node_id;
 };
 
+///
+/// @brief Comparator object for NodeHit.
+///
+/// Comparator object for finding nearest hit point in node traversal.
+///
 template <typename T>
 class NodeHitComparator {
  public:
@@ -662,6 +678,15 @@ class NodeHitComparator {
   }
 };
 
+///
+/// @brief Bounding Volume Hierarchy acceleration.
+///
+/// BVHAccel is central part of ray tracing(ray traversal).
+/// BVHAccel takes an input geometry(primitive) information and build a data structure
+/// for efficient ray tracing(`O(log2 N)` in theory, where N is the number of primitive in the scene).
+///
+/// @tparam T real value type(float or double).
+///
 template <typename T>
 class BVHAccel {
  public:
@@ -671,12 +696,23 @@ class BVHAccel {
   ///
   /// Build BVH for input primitives.
   ///
-  template <class P, class Pred>
-  bool Build(const unsigned int num_primitives, const P &p, const Pred &pred,
+  /// @tparam Prim Primitive(e.g. Triangle) accessor class.
+  /// @tparam Pred Predicator(comparator class object for `Prim` class to find nearest hit point)
+  ///
+  /// @param[in] num_primitives The number of primitive.
+  /// @param[in] p Primitive accessor class object.
+  /// @param[in] pred Predicator object.
+  ///
+  /// @return true upon success.
+  ///
+  template <class Prim, class Pred>
+  bool Build(const unsigned int num_primitives, const Prim &p, const Pred &pred,
              const BVHBuildOptions<T> &options = BVHBuildOptions<T>());
 
   ///
-  /// Get statistics of built BVH tree. Valid after Build()
+  /// Get statistics of built BVH tree. Valid after `Build()`
+  ///
+  /// @return BVH build statistics.
   ///
   BVHBuildStatistics GetStatistics() const { return stats_; }
 
@@ -697,8 +733,18 @@ class BVHAccel {
   void Debug();
 
   ///
-  /// Traverse into BVH along ray and find closest hit point & primitive if
+  /// @brief Traverse into BVH along ray and find closest hit point & primitive if
   /// found
+  ///
+  /// @tparam I Intersector class
+  /// @tparam H Hit class
+  ///
+  /// @param[in] ray Input ray
+  /// @param[in] intersector Intersector object. This object is called for each possible intersection of ray and BVH during traversal.
+  /// @param[out] isect Intersection point information(filled when any hit point was found)
+  /// @param[in] options Traversal options.
+  ///
+  /// @return true if any hit point found
   ///
   template <class I, class H>
   bool Traverse(const Ray<T> &ray, const I &intersector, H *isect,
@@ -718,6 +764,11 @@ class BVHAccel {
   ///
   /// List up nodes which intersects along the ray.
   /// This function is useful for two-level BVH traversal.
+  /// See `examples/nanosg` for example.
+  ///
+  /// @tparam I Intersection class
+  ///
+  ///
   ///
   template <class I>
   bool ListNodeIntersections(const Ray<T> &ray, int max_intersections,
@@ -1832,8 +1883,8 @@ unsigned int BVHAccel<T>::BuildTree(BVHBuildStatistics *out_stat,
 }
 
 template <typename T>
-template <class P, class Pred>
-bool BVHAccel<T>::Build(unsigned int num_primitives, const P &p,
+template <class Prim, class Pred>
+bool BVHAccel<T>::Build(unsigned int num_primitives, const Prim &p,
                         const Pred &pred, const BVHBuildOptions<T> &options) {
   options_ = options;
   stats_ = BVHBuildStatistics();
