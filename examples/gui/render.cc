@@ -442,7 +442,7 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
         f1 = shapes[i].mesh.indices[3 * f + 1].normal_index;
         f2 = shapes[i].mesh.indices[3 * f + 2].normal_index;
 
-        if ((f0 >= 0) && (f1 >= 0) && (f2 > 0)) {
+        if ((f0 >= 0) && (f1 >= 0) && (f2 >= 0)) {
           float3 n0, n1, n2;
 
           n0[0] = attrib.normals[3 * f0 + 0];
@@ -1057,7 +1057,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             unsigned int material_id =
                 gMesh.material_ids[isect.prim_id];
 
-          
+
             float diffuse_col[3] = {0.5f, 0.5f, 0.5f};
             float specular_col[3] = {0.0f, 0.0f, 0.0f};
 
