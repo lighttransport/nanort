@@ -22,7 +22,7 @@ This program does not support automatic generation of UV atlas. Input mesh must 
 ## Requirements
 
 * C++11 compiler
-* meson(for ninja and/or msvc build)
+* optional: meson(for ninja and/or msvc build)
 
 ## UV images to be generated
 
