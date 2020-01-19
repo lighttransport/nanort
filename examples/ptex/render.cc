@@ -915,8 +915,8 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
         mesh.face_triangle_ids.push_back(0);
         mesh.face_triangle_ids.push_back(1);
 
-        mesh.material_ids.push_back(shapes[i].mesh.material_ids[offset]);
-        mesh.material_ids.push_back(shapes[i].mesh.material_ids[offset]);
+        mesh.material_ids.push_back(shapes[i].mesh.material_ids[f]);
+        mesh.material_ids.push_back(shapes[i].mesh.material_ids[f]);
 
         // for computing normal/uv in the later stage
         triangulated_indices.push_back(shapes[i].mesh.indices[offset + 0]);
