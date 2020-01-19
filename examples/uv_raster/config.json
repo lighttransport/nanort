@@ -1,0 +1,10 @@
+{ "obj_filename" : "../common/suzanne_uv.obj",
+  "width" : 1024,
+  "height" : 1024,
+  "0comment" : "[left, right, top, bottom]. Be careful output image will not contain any information of uv region",
+  "uv_region" : [0.0, 1.0, 0.0, 1.0],
+  "output_basename" : "output_",
+  "debug_uvmesh" : true,
+  "num_threads" : -1
+}
+
