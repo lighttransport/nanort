@@ -43,7 +43,7 @@ bool SaveFloatEXR(const float* pixels, uint32_t width, uint32_t height,
   }
 
   printf("Saved exr file. [ %s ] \n", outfilename.c_str());
- 
+
   return true;
 }
 
@@ -78,7 +78,7 @@ bool SaveIntEXR(const int* pixels, uint32_t width, uint32_t height,
   std::vector<int*> image_ptr(channels);
   for (size_t i = 0; i < size_t(channels); i++) {
     // reverse order
-    image_ptr[i] = &(images[channels-i].at(0));
+    image_ptr[i] = &(images[channels-i-1].at(0));
   }
 
   image.images = reinterpret_cast<unsigned char**>(image_ptr.data());
@@ -93,8 +93,8 @@ bool SaveIntEXR(const int* pixels, uint32_t width, uint32_t height,
       static_cast<EXRChannelInfo*>(malloc(sizeof(EXRChannelInfo) * size_t(header.num_channels)));
   // Must be (A)BGR order, since most of EXR viewers expect this channel order.
   for (size_t i = 0; i < size_t(channels); i++) {
-    strncpy(header.channels[i].name, channel_names[channels - i].c_str(), 255);
-    header.channels[i].name[channel_names[channels - i].size()] = '\0';
+    strncpy(header.channels[i].name, channel_names[channels - i - 1].c_str(), 255);
+    header.channels[i].name[channel_names[channels - i - 1].size()] = '\0';
   }
 
   header.pixel_types = static_cast<int*>(malloc(sizeof(int) * size_t(header.num_channels)));

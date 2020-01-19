@@ -209,10 +209,8 @@ static void SetupVerticesForUVRaster(Mesh* mesh) {
 
   // Set UV coord as vertex position.
   for (size_t i = 0; i < mesh->triangulated_indices.size(); i++) {
-    size_t f = mesh->triangulated_indices[i];
-
-    const float vx = mesh->facevarying_uvs[2 * f + 0];
-    const float vy = mesh->facevarying_uvs[2 * f + 1];
+    const float vx = mesh->facevarying_uvs[2 * i + 0];
+    const float vy = mesh->facevarying_uvs[2 * i + 1];
     const float vz = 0.0f;
 
     mesh->uv_vertices.push_back(vx);
@@ -223,8 +221,7 @@ static void SetupVerticesForUVRaster(Mesh* mesh) {
   // fill verterx indices.(facevarying indices)
   // uv_face_indices[i] = i;
   mesh->uv_face_indices.resize(mesh->triangulated_indices.size());
-  std::iota(mesh->uv_face_indices.begin(), mesh->uv_face_indices.end(),
-            mesh->triangulated_indices.size());
+  std::iota(mesh->uv_face_indices.begin(), mesh->uv_face_indices.end(), 0);
 }
 
 static bool LoadObj(Mesh& mesh, const char* filename, int shape_id) {
@@ -691,7 +688,7 @@ int main(int argc, char** argv) {
   num_threads = std::max(1, std::min(1024, num_threads));
 
   std::vector<std::thread> workers;
-  std::atomic<int> y(0);
+  std::atomic<int> counter(0); // for Y
 
   const auto start_t = std::chrono::system_clock::now();
 
@@ -708,14 +705,16 @@ int main(int argc, char** argv) {
 
   for (size_t t = 0; t < size_t(num_threads); t++) {
     workers.push_back(std::thread([&]() {
-      while ((y++) < config.height) {
+      int y = 0;
+      while ((y = counter++) < config.height) {
         for (int x = 0; x < config.width; x++) {
           // Simple camera. change eye pos and direction fit to .obj model.
 
           nanort::Ray<float> ray;
-          ray.org[0] = (x / float(config.width)) - 0.5f;
-          ray.org[1] = 5.0f;
-          ray.org[2] = 20.0f;
+          // TODO(LTE): uv_region
+          ray.org[0] = (x / float(config.width));
+          ray.org[1] = (y / float(config.height));
+          ray.org[2] = 1.0f;
 
           float3 dir;
           dir[0] = 0.0f;
@@ -736,6 +735,7 @@ int main(int argc, char** argv) {
           nanort::TriangleIntersection<> isect;
           bool hit = accel.Traverse(ray, triangle_intersector, &isect);
           if (hit) {
+
             // FIXME(LTE): Flip Y is correct?
             size_t pixel_idx =
                 size_t((config.height - y - 1) * config.width + x);
@@ -803,6 +803,20 @@ int main(int argc, char** argv) {
 
   std::cout << "raster time : " << ms.count() << " [ms]\n";
 
+  if (!example::SaveFloatEXR(aov_positions.data(), uint32_t(config.width),
+                             uint32_t(config.height), /* channels */ 3,
+                             config.output_basename + "position.exr")) {
+    std::cerr << "Failed to save position(P) EXR\n";
+    return EXIT_FAILURE;
+  }
+
+  if (!example::SaveFloatEXR(aov_normals.data(), uint32_t(config.width),
+                             uint32_t(config.height), /* channels */ 3,
+                             config.output_basename + "normal.exr")) {
+    std::cerr << "Failed to save normal(Ns) EXR\n";
+    return EXIT_FAILURE;
+  }
+
   if (!example::SaveIntEXR(aov_face_ids.data(), uint32_t(config.width),
                            uint32_t(config.height), /* channels */ 1,
                            config.output_basename + "faceid.exr")) {
@@ -812,4 +826,3 @@ int main(int argc, char** argv) {
 
   return EXIT_SUCCESS;
 }
-
