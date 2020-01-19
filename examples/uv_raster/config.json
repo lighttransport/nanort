@@ -4,6 +4,9 @@
   "0comment" : "[left, right, top, bottom]. Be careful output image will not contain any information of uv region",
   "uv_region" : [0.0, 1.0, 0.0, 1.0],
   "output_basename" : "output_",
+  "flip_y" : true,
+  "flip_x" : false,
+  "texel_offset" : [0.5, 0.5],
   "debug_uvmesh" : true,
   "num_threads" : -1
 }

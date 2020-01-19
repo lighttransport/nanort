@@ -18,8 +18,9 @@ This program does not support automatic generation of UV atlas. Input mesh must 
 ## Requirements
 
 * C++11 compiler
+* meson(for ninja and/or msvc build)
 
-## Generated images
+## UV images to be generated
 
 Default shader generates following images.
 
@@ -27,6 +28,24 @@ Default shader generates following images.
 * Normal vector(in object space)
 * Face id(32bit int)
 * Barycentric coordinate.
+
+## Build
+
+### Unixish system
+
+```
+$ make
+```
+
+### MSVC(Visual Studio)
+
+```
+$ /path/to/meson.exe builddir --backend vs2017
+```
+
+For more details, see meson document.
+
+https://mesonbuild.com/Using-with-Visual-Studio.html
 
 ## Usage
 
@@ -36,7 +55,7 @@ $ ./uv_raster config.json
 
 ### configurations
 
-See `config.json` for details.
+See `config.json` and `Config` class in `main.cc` for details.
 
 
 ## Advantages of using ray casting over polygon rasterizer(e.g. by utilizing OpenGL)
@@ -54,6 +73,7 @@ See `config.json` for details.
 
 ## TODO
 
+* [ ] Write UV range info as EXR custom attributes.
 * [ ] Batch processing and UDIM texture filename support.
 * [ ] Integrate UV atlas generator.
 * [ ] Support native quad face.
