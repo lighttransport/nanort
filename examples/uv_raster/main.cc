@@ -677,7 +677,13 @@ int main(int argc, char** argv) {
     const auto end_t = std::chrono::system_clock::now();
     std::chrono::duration<double, std::milli> ms = end_t - start_t;
 
-    std::cout << "raster time : " << ms.count() << " [ms]\n";
+    std::cout << "BVH build time : " << ms.count() << " [ms]\n";
+
+    // Bounding box = UV range.
+    float bmin[3], bmax[3];
+    accel.BoundingBox(bmin, bmax);
+    std::cout << "  UV x(left, right)    : " << bmin[0] << ", " << bmax[0] << "\n";
+    std::cout << "  UV y(top, bottom)    : " << bmin[1] << ", " << bmax[1] << "\n";
   }
 
   int num_threads = int(std::thread::hardware_concurrency());

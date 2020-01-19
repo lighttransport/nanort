@@ -13,12 +13,11 @@ Idea is very simple
 * Do ray casting
 * Save image
 
-This program does not support the generation of UV atlas. Input mesh must have UV coordinates.
+This program does not support automatic generation of UV atlas. Input mesh must have UV coordinates.
 
 ## Requirements
 
 * C++11 compiler
-
 
 ## Generated images
 
@@ -55,8 +54,10 @@ See `config.json` for details.
 
 ## TODO
 
+* [ ] Batch processing and UDIM texture filename support.
+* [ ] Integrate UV atlas generator.
 * [ ] Support native quad face.
-  * Since triangulated face may create some shading discontinuities.
+  * Triangulated face may create some shading discontinuities. support quad face natively may improve it(see `ptex` example for ray-quad intersector)
 * [ ] Generate texture map layout for patch textures(requires adjacency face calculation)
   * https://graphics.geometrian.com/research/patch-textures.html
 

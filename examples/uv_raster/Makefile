@@ -1,5 +1,5 @@
 CXX := clang++
-CXXFLAGS := -O2 -g
+CXXFLAGS := -std=c++11 -O2 -g
 
 INC_FLAGS=-I../common/ -I../../
 EXTRA_CXXFLAGS=-fsanitize=address -Werror -Weverything -Wno-c++98-compat
