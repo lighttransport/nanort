@@ -1,10 +1,13 @@
 # UV raster using ray casting.
 
+![](images/output_normal.jpg)
+![](images/output_position.jpg)
+
 This example rasterize(by ray casting) to generate UV altras image for texture baking, light mapping, etc.
 
 ## How it works
 
-Idea is very simple
+Idea is very simple:
 
 * Read 3d mesh
   * Polygons are triangulated. 
@@ -13,7 +16,7 @@ Idea is very simple
 * Do ray casting
 * Save image
 
-This program does not support automatic generation of UV atlas. Input mesh must have UV coordinates.
+This program does not support automatic generation of UV atlas. Input mesh must have UV coordinates for all vertices.
 
 ## Requirements
 
@@ -48,6 +51,9 @@ For more details, see meson document.
 https://mesonbuild.com/Using-with-Visual-Studio.html
 
 ## Usage
+
+Prepare a mesh in wavefront .obj format.
+Edit `config.json` if required, then:
 
 ```
 $ ./uv_raster config.json
