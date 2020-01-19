@@ -2,6 +2,7 @@
 
 ![](images/output_normal.jpg)
 ![](images/output_position.jpg)
+![](images/uvmesh.jpg)
 
 This example rasterize(by ray casting) to generate UV altras image for texture baking, light mapping, etc.
 
