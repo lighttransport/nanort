@@ -18,9 +18,10 @@ This program does not support the generation of UV atlas. Input mesh must have U
 ## Requirements
 
 * C++11 compiler
+* meson(for ninja and/or msvc build)
 
 
-## Generated images
+## Generated UV images
 
 Default shader generates following images.
 
@@ -28,6 +29,24 @@ Default shader generates following images.
 * Normal vector(in object space)
 * Face id(32bit int)
 * Barycentric coordinate.
+
+## Build
+
+### Unixish system
+
+```
+$ make
+```
+
+### MSVC(Visual Studio)
+
+```
+$ /path/to/meson.exe builddir --backend vs2017
+```
+
+For more details, see meson document.
+
+https://mesonbuild.com/Using-with-Visual-Studio.html
 
 ## Usage
 
@@ -55,6 +74,7 @@ See `config.json` for details.
 
 ## TODO
 
+* [ ] Write UV range info as EXR custom attributes.
 * [ ] Support native quad face.
   * Since triangulated face may create some shading discontinuities.
 * [ ] Generate texture map layout for patch textures(requires adjacency face calculation)

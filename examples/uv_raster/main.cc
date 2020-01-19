@@ -86,6 +86,13 @@ struct Config {
 
   bool debug_uvmesh = true;  // Output UV mesh as .obj?
 
+  // default = center of texel(pixel).
+  // Offset ray's position using this value.
+  float texel_offset[2] = {0.5f, 0.5f};
+
+  bool flip_y = true; // true to compensate wavefront .obj's v texture coordinate.
+  bool flip_x = false;
+
   int num_threads = -1;  // -1 = use # of system threads.
 };
 
@@ -177,9 +184,31 @@ static bool LoadConfig(Config* config, const char* filename) {
     }
   }
 
+  if (o.find("flip_y") != o.end()) {
+    if (o["flip_y"].is<bool>()) {
+      config->flip_y = o["flip_y"].get<bool>();
+    }
+  }
+
+  if (o.find("flip_x") != o.end()) {
+    if (o["flip_x"].is<bool>()) {
+      config->flip_x = o["flip_x"].get<bool>();
+    }
+  }
+
   if (o.find("output_basename") != o.end()) {
     if (o["output_basename"].is<std::string>()) {
       config->output_basename = o["output_basename"].get<std::string>();
+    }
+  }
+
+  if (o.find("texel_offset") != o.end()) {
+    if (o["texel_offset"].is<picojson::array>()) {
+      picojson::array arr = o["texel_offset"].get<picojson::array>();
+      if (arr.size() == 2) {
+        config->texel_offset[0] = static_cast<float>(arr[0].get<double>());
+        config->texel_offset[1] = static_cast<float>(arr[1].get<double>());
+      }
     }
   }
 
@@ -703,6 +732,8 @@ int main(int argc, char** argv) {
 
   std::vector<int> aov_face_ids(num_pixels, -1);
 
+  std::cout << "UV region = " << config.uv_region[0] << ", " << config.uv_region[1] << ", " << config.uv_region[2] << ", " << config.uv_region[3] << "\n";
+
   for (size_t t = 0; t < size_t(num_threads); t++) {
     workers.push_back(std::thread([&]() {
       int y = 0;
@@ -711,9 +742,12 @@ int main(int argc, char** argv) {
           // Simple camera. change eye pos and direction fit to .obj model.
 
           nanort::Ray<float> ray;
-          // TODO(LTE): uv_region
-          ray.org[0] = (x / float(config.width));
-          ray.org[1] = (y / float(config.height));
+
+          const float usize = (config.uv_region[1] - config.uv_region[0]);
+          const float vsize = (config.uv_region[3] - config.uv_region[2]);
+
+          ray.org[0] = config.uv_region[0] + (x * usize + config.texel_offset[0]) / float(config.width);
+          ray.org[1] = config.uv_region[2] + (y * vsize + config.texel_offset[1]) / float(config.height);
           ray.org[2] = 1.0f;
 
           float3 dir;
@@ -736,9 +770,10 @@ int main(int argc, char** argv) {
           bool hit = accel.Traverse(ray, triangle_intersector, &isect);
           if (hit) {
 
-            // FIXME(LTE): Flip Y is correct?
-            size_t pixel_idx =
-                size_t((config.height - y - 1) * config.width + x);
+            int px = config.flip_x ? (config.width - x - 1) : x;
+            int py = config.flip_y ? (config.height - y - 1) : y;
+
+            size_t pixel_idx = size_t(py * config.width + px);
 
             //
             // Write your shader here.
