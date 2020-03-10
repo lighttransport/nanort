@@ -15,8 +15,8 @@ class Renderer {
   Renderer() {}
   ~Renderer() {}
 
-  /// Loads wavefront .obj mesh.
-  bool LoadObjMesh(const char* obj_filename, float scene_scale);
+  /// Loads wavefront .obj mesh with all quad faces.
+  bool LoadObjQuadMesh(const char* obj_filename, float scene_scale);
 
   /// Loads mesh from Ptex.
   bool LoadPtexMesh(const std::string& ptex_filename, const bool dump = false);

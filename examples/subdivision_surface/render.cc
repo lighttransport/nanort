@@ -1082,8 +1082,81 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   return true;
 }
 
-bool Renderer::LoadObjMesh(const char* obj_filename, float scene_scale) {
-  return LoadObj(gMesh, obj_filename, scene_scale);
+bool Renderer::LoadObjQuadMesh(const char* obj_filename, float scene_scale) {
+  //return LoadObj(gMesh, obj_filename, scene_scale);
+
+  tinyobj::attrib_t attrib;
+  std::vector<tinyobj::shape_t> shapes;
+  std::vector<tinyobj::material_t> materials;
+  std::string warn;
+  std::string err;
+
+  std::string basedir = GetBaseDir(obj_filename) + "/";
+  const char* basepath = (basedir.compare("/") == 0) ? NULL : basedir.c_str();
+
+  auto t_start = std::chrono::system_clock::now();
+
+  // We only support quad faces, so disable triangulation.
+  bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                              obj_filename, basepath, /* triangulate */ false);
+
+  auto t_end = std::chrono::system_clock::now();
+  std::chrono::duration<double, std::milli> ms = t_end - t_start;
+
+  if (!warn.empty()) {
+    std::cout << warn << std::endl;
+  }
+
+  if (!err.empty()) {
+    std::cerr << err << std::endl;
+    return false;
+  }
+
+  // Use the first shape.
+  if (shapes.empty()) {
+    std::cerr << "No shape in .obj" << std::endl;
+    return false;
+  }
+
+  tinyobj::shape_t &shape = shapes[0];
+
+  std::vector<int> v_indices;
+  std::vector<int> verts_per_faces;
+
+  for (size_t i = 0; i < shape.mesh.num_face_vertices.size(); i++) {
+    int npoly = shape.mesh.num_face_vertices[i]; // uint8 -> int
+
+    if (npoly != 4) {
+      std::cerr << "non quad face found for face index[" << i << "]\n" << std::endl;
+      return false;
+    }
+
+    verts_per_faces.push_back(npoly);
+  }
+
+  // TODO(LTE): UV, normals
+
+  for (size_t i = 0; i < shape.mesh.indices.size(); i++) {
+    v_indices.push_back(shape.mesh.indices[i].vertex_index);
+  }
+
+  gQuadMesh.vertices.resize(attrib.vertices.size());
+  gQuadMesh.indices.resize(shape.mesh.indices.size());
+  gQuadMesh.verts_per_faces.resize(verts_per_faces.size());
+
+  std::cout << "v.size = " << attrib.vertices.size() << "\n";
+  std::cout << "i.size = " << shape.mesh.indices.size() << "\n";
+  std::cout << "vf.size = " << verts_per_faces.size() << "\n";
+
+  for (size_t i = 0; i < v_indices.size(); i++) {
+    std::cout << "indx[" << i << "] = " << v_indices[i] << "\n";
+  }
+
+  memcpy(gQuadMesh.vertices.data(), attrib.vertices.data(), sizeof(float) * attrib.vertices.size());
+  memcpy(gQuadMesh.indices.data(), v_indices.data(), sizeof(int) * v_indices.size());
+  memcpy(gQuadMesh.verts_per_faces.data(), verts_per_faces.data(), sizeof(int) * verts_per_faces.size());
+
+  return true;
 }
 
 #define PTEX_META_VERT_POSITIONS "PtexVertPositions"

@@ -486,7 +486,7 @@ int main(int argc, char** argv) {
     }
   } else {
     // load obj
-    bool obj_ret = gRenderer.LoadObjMesh(gRenderConfig.obj_filename.c_str(),
+    bool obj_ret = gRenderer.LoadObjQuadMesh(gRenderConfig.obj_filename.c_str(),
                                          gRenderConfig.scene_scale);
     if (!obj_ret) {
       fprintf(stderr, "Failed to load .obj [ %s ]\n",
