@@ -13,6 +13,22 @@ Sort polygon faces by ray's origin and direction.
 * premake5
 * OpenGL(for demo program)
 
+### Build
+
+GUI build
+
+```
+$ premake5 gmake
+$ make
+```
+
+CLI build
+
+```
+$ premake5 --file=premake5.cli.lua gmake
+$ make
+```
+
 ## Input
 
 * vertices(floating point value. Assume XYZXYZXYZ...)

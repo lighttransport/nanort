@@ -48,6 +48,13 @@ typedef struct {
   std::string obj_filename;
   float scene_scale;
 
+  // for face sorter cli.
+  // ray org and ray dir for sorting.
+  float ray_org[3] = {0.0f, 0.0f, 100.0f};
+  float ray_dir[3] = {0.0f, 0.0f, -1.0f};
+  // shape id to use(0 = use the first one)
+  int shape_id = 0;
+
 } RenderConfig;
 
 /// Loads config from JSON file.

@@ -105,6 +105,41 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
+  config->shape_id = 512;
+  if (o.find("shape_id") != o.end()) {
+    if (o["shape_id"].is<double>()) {
+      config->shape_id = static_cast<int>(o["shape_id"].get<double>());
+    }
+  }
+
+  config->ray_org[0] = 0.0f;
+  config->ray_org[1] = 0.0f;
+  config->ray_org[2] = 100.0f;
+  if (o.find("ray_org") != o.end()) {
+    if (o["ray_org"].is<picojson::array>()) {
+      picojson::array arr = o["ray_org"].get<picojson::array>();
+      if (arr.size() == 3) {
+        config->ray_org[0] = arr[0].get<double>();
+        config->ray_org[1] = arr[1].get<double>();
+        config->ray_org[2] = arr[2].get<double>();
+      }
+    }
+  }
+
+  config->ray_dir[0] = 0.0f;
+  config->ray_dir[1] = 0.0f;
+  config->ray_dir[2] = -1.0f;
+  if (o.find("ray_dir") != o.end()) {
+    if (o["ray_dir"].is<picojson::array>()) {
+      picojson::array arr = o["ray_dir"].get<picojson::array>();
+      if (arr.size() == 3) {
+        config->ray_dir[0] = arr[0].get<double>();
+        config->ray_dir[1] = arr[1].get<double>();
+        config->ray_dir[2] = arr[2].get<double>();
+      }
+    }
+  }
+
   return true;
 }
 }
