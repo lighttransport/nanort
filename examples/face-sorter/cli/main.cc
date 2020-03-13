@@ -558,7 +558,7 @@ int main(int argc, char** argv) {
   std::string config_filename;
 
   if (argc < 3) {
-    std::cout << "Usage: input.obj output-sorted.obj <config.json>\n";
+    std::cout << "Usage: input.obj output-sorted-basename <config.json>\n";
     return EXIT_FAILURE;
   }
 
@@ -568,7 +568,7 @@ int main(int argc, char** argv) {
 
   // obj_filename in config.json is not used.
   std::string input_objfilename = argv[1];
-  std::string output_objfilename = argv[2];
+  std::string output_objbasename = argv[2];
 
   example::RenderConfig render_config;
 
@@ -609,10 +609,11 @@ int main(int argc, char** argv) {
 
   assert(mesh.sorted_indices.size() == mesh.indices.size());
 
-  if (!objlab::SaveMeshAsObj(render_config.shape_id, meshes, output_objfilename)) {
-    std::cerr << "Failed to save .obj: " << output_objfilename + "\n";
+  if (!objlab::SaveMeshAsObj(render_config.shape_id, meshes, output_objbasename)) {
+    std::cerr << "Failed to save .obj: " << output_objbasename+ ".obj\n";
     return EXIT_FAILURE;
   }
+  std::cout << "Wrote: " << output_objbasename << ".obj\n";
 
   return EXIT_SUCCESS;
 }
