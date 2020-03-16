@@ -74,7 +74,7 @@ class BVHTraceOptions {
   bool cull_back_face; // default: false
 };
 
-nanort::BVHBuildOptions build_options; // BVH build option(optional)
+nanort::BVHBuildOptions<float> build_options; // BVH build option(optional)
 
 const float *vertices = ...;
 const unsigned int *faces = ...;
@@ -84,7 +84,7 @@ const unsigned int *faces = ...;
 nanort::TriangleMesh<float> triangle_mesh(vertices, faces, /* stride */sizeof(float) * 3);
 nanort::TriangleSAHPred<float> triangle_pred(vertices, faces, /* stride */sizeof(float) * 3);
 
-nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float>, nanort::TriangleIntersector<> > accel;
+nanort::BVHAccel<float, nanort::TriangleMesh<float>, nanort::TriangleSAHPred<float> > accel;
 ret = accel.Build(mesh.num_faces, triangle_mesh, triangle_pred, build_options);
 
 nanort::TriangleIntersector<> triangle_intersecter(vertices, faces, /* stride */sizeof(float) * 3);
