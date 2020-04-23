@@ -923,7 +923,6 @@ class TriangleMesh {
 
   /// Compute bounding box for `prim_index`th triangle.
   /// This function is called for each primitive in BVH build.
-  // FIXME: Why not return a BBox<T>? Also, why not take references?
   void BoundingBox(real3<T> *bmin, real3<T> *bmax,
                    unsigned int prim_index) const {
     unsigned vertex = faces_[3 * prim_index + 0];
@@ -948,9 +947,7 @@ class TriangleMesh {
     }
   }
 
-  // FIXME: Overlap with TriangleSAHPred...
-  // FIXME: Why not return a real3<T>? (+ same reference thing as above)
-  void Center(real3<T>* center, unsigned int prim_index) const {
+  void BoundingBoxAndCenter(real3<T>* bmin, real3<T>* bmax, real3<T>* center, unsigned int prim_index) const {
     unsigned int i0 = faces_[3 * prim_index + 0];
     unsigned int i1 = faces_[3 * prim_index + 1];
     unsigned int i2 = faces_[3 * prim_index + 2];
@@ -958,6 +955,10 @@ class TriangleMesh {
     real3<T> p0(get_vertex_addr<T>(vertices_, i0, vertex_stride_bytes_));
     real3<T> p1(get_vertex_addr<T>(vertices_, i1, vertex_stride_bytes_));
     real3<T> p2(get_vertex_addr<T>(vertices_, i2, vertex_stride_bytes_));
+    for (int k = 0; k < 3; ++k) {
+      (*bmin)[k] = std::min(p0[k], std::min(p1[k], p2[k]));
+      (*bmax)[k] = std::max(p0[k], std::max(p1[k], p2[k]));
+    }
     *center = (p0 + p1 + p2) * (T(1) / T(3));
   }
 
@@ -1197,13 +1198,20 @@ const T &safemax(const T &a, const T &b) {
 // SAH functions
 //
 template <typename T>
-struct BinBuffer {
-  struct Bin {
-    BBox<T> bbox;
-    size_t  count;
-    T cost;
-  };
+struct Bin {
+  BBox<T> bbox;
+  size_t  count;
+  T cost;
+  
+  Bin()
+    : count(0), cost(0)
+  {
+    // Note: bbox is initialized to be empty
+  }
+};
 
+template <typename T>
+struct BinBuffer {
   explicit BinBuffer(unsigned int size) {
     bin_size = size;
     bin.resize(3 * size);
@@ -1211,10 +1219,10 @@ struct BinBuffer {
   }
 
   void clear() {
-    std::fill(bin.begin(), bin.end(), Bin { BBox<T>(), 0, T(0) });
+    std::fill(bin.begin(), bin.end(), Bin<T>());
   }
 
-  std::vector<Bin> bin;  // (min, max) * xyz * binsize
+  std::vector<Bin<T>> bin;
   unsigned int bin_size;
   unsigned int pad0;
 };
@@ -1267,7 +1275,6 @@ inline void ContributeBinBuffer(BinBuffer<T> *bins,  // [out]
   real3<T> scene_size, scene_inv_size;
   scene_size = scene_max - scene_min;
 
-  // FIXME: Why is this here? scene_max should be > than scene_min in any sane scenario
   for (int i = 0; i < 3; ++i) {
     assert(scene_size[i] >= static_cast<T>(0.0));
 
@@ -1288,17 +1295,15 @@ inline void ContributeBinBuffer(BinBuffer<T> *bins,  // [out]
     //
 
     real3<T> bmin, bmax, center;
-    p.BoundingBox(&bmin, &bmax, indices[i]);
-    p.Center(&center, indices[i]);
+    p.BoundingBoxAndCenter(&bmin, &bmax, &center, indices[i]);
     real3<T> quantized_center = (center - scene_min) * scene_inv_size;
 
     for (int j = 0; j < 3; ++j) {
       // idx is now in [0, BIN_SIZE)
-      auto idx = std::min(bins->bin_size - 1, unsigned(std::max(0, int(quantized_center[j]))));
+      unsigned idx = std::min(bins->bin_size - 1, unsigned(std::max(0, int(quantized_center[j]))));
 
       // Increment bin counter + extend bounding box of bin
-      // FIXME: Implement BBox extend function!
-      auto& bin = bins->bin[j * bins->bin_size + idx];
+      Bin<T>& bin = bins->bin[j * bins->bin_size + idx];
       bin.count++;
       for (int k = 0; k < 3; ++k) {
         bin.bbox.bmin[k] = std::min(bin.bbox.bmin[k], bmin[k]);
@@ -1320,13 +1325,11 @@ inline T SAH(size_t ns1, T leftArea, size_t ns2, T rightArea, T invS, T Taabb,
   return sah;
 }
 
-// FIXME: Remove useless costTaabb parameter
 template <typename T>
 inline bool FindCutFromBinBuffer(T *cut_pos,        // [out] xyz
                                  int *minCostAxis,  // [out]
                                  BinBuffer<T> *bins, const real3<T> &bmin,
-                                 const real3<T> &bmax, size_t num_primitives,
-                                 T costTaabb) {      // should be in [0.0, 1.0]
+                                 const real3<T> &bmax, size_t num_primitives) {
   T minCost[3];
   for (int j = 0; j < 3; ++j) {
     minCost[j] = std::numeric_limits<T>::max();
@@ -1335,8 +1338,7 @@ inline bool FindCutFromBinBuffer(T *cut_pos,        // [out] xyz
     size_t count = 0;
     BBox<T> accumulated_bbox;
     for (size_t i = bins->bin_size - 1; i > 0; --i) {
-      auto& bin = bins->bin[j * bins->bin_size + i];
-      // FIXME: Implement BBox extend function!
+      Bin<T>& bin = bins->bin[j * bins->bin_size + i];
       for (int k = 0; k < 3; ++k) {
         accumulated_bbox.bmin[k] = std::min(bin.bbox.bmin[k], accumulated_bbox.bmin[k]);
         accumulated_bbox.bmax[k] = std::max(bin.bbox.bmax[k], accumulated_bbox.bmax[k]);
@@ -1350,17 +1352,15 @@ inline bool FindCutFromBinBuffer(T *cut_pos,        // [out] xyz
     accumulated_bbox = BBox<T>();
     size_t minBin = 1;
     for (size_t i = 0; i < bins->bin_size - 1; i++) {
-      auto& bin = bins->bin[j * bins->bin_size + i];
-      auto& next_bin = bins->bin[j * bins->bin_size + i + 1];
-      // FIXME: Implement BBox extend function!
+      Bin<T>& bin = bins->bin[j * bins->bin_size + i];
+      Bin<T>& next_bin = bins->bin[j * bins->bin_size + i + 1];
       for (int k = 0; k < 3; ++k) {
         accumulated_bbox.bmin[k] = std::min(bin.bbox.bmin[k], accumulated_bbox.bmin[k]);
         accumulated_bbox.bmax[k] = std::max(bin.bbox.bmax[k], accumulated_bbox.bmax[k]);
       }
       count += bin.count;
       // Traversal cost and intersection cost are irrelevant for minimization
-      // (i.e. costTaabb and costTtri are useless!)
-      auto cost = count * CalculateSurfaceArea(accumulated_bbox.bmin, accumulated_bbox.bmax) + next_bin.cost;
+      T cost = count * CalculateSurfaceArea(accumulated_bbox.bmin, accumulated_bbox.bmax) + next_bin.cost;
       if (cost < minCost[j]) {
         minCost[j] = cost;
         // Store the beginning of the right partition
@@ -1631,8 +1631,7 @@ unsigned int BVHAccel<T>::BuildShallowTree(std::vector<BVHNode<T> > *out_nodes,
     BinBuffer<T> bins(options_.bin_size);
     ContributeBinBuffer(&bins, bmin, bmax, &indices_.at(0), left_idx, right_idx,
                         p);
-    FindCutFromBinBuffer(cut_pos, &min_cut_axis, &bins, bmin, bmax, n,
-                         options_.cost_t_aabb);
+    FindCutFromBinBuffer(cut_pos, &min_cut_axis, &bins, bmin, bmax, n);
 
     // Try all 3 axis until good cut position avaiable.
     unsigned int mid_idx = left_idx;
@@ -1766,8 +1765,7 @@ unsigned int BVHAccel<T>::BuildTree(BVHBuildStatistics *out_stat,
   BinBuffer<T> bins(options_.bin_size);
   ContributeBinBuffer(&bins, bmin, bmax, &indices_.at(0), left_idx, right_idx,
                       p);
-  FindCutFromBinBuffer(cut_pos, &min_cut_axis, &bins, bmin, bmax, n,
-                       options_.cost_t_aabb);
+  FindCutFromBinBuffer(cut_pos, &min_cut_axis, &bins, bmin, bmax, n);
 
   // Try all 3 axis until good cut position avaiable.
   unsigned int mid_idx = left_idx;
