@@ -82,6 +82,7 @@ THE SOFTWARE.
 #define SHOW_BUFFER_TEXCOORD (4)
 #define SHOW_BUFFER_VARYCOORD (5)
 #define SHOW_BUFFER_VERTEXCOLOR (6)
+#define SHOW_BUFFER_MATERIALID (7)
 
 b3gDefaultOpenGLWindow* window = 0;
 int gWidth = 512;
@@ -115,6 +116,7 @@ std::vector<float> gDepthRGBA;      // For visualizing depth
 std::vector<float> gTexCoordRGBA;   // For visualizing texcoord
 std::vector<float> gVaryCoordRGBA;  // For visualizing varycentric coord
 std::vector<float> gVertexColorRGBA;  // For visualizing vertex color
+std::vector<int> gMaterialID;  // For visualizing material id(-1 = invalid)
 
 void RequestRender() {
   {
@@ -209,12 +211,16 @@ void InitRender(example::RenderConfig* rc) {
   gVertexColorRGBA.resize(rc->width * rc->height * 4);
   std::fill(gVertexColorRGBA.begin(), gVertexColorRGBA.end(), 0.0);
 
+  gMaterialID.resize(rc->width * rc->height);
+  std::fill(gMaterialID.begin(), gMaterialID.end(), -1);
+
   rc->normalImage = &gNormalRGBA.at(0);
   rc->positionImage = &gPositionRGBA.at(0);
   rc->depthImage = &gDepthRGBA.at(0);
   rc->texcoordImage = &gTexCoordRGBA.at(0);
   rc->varycoordImage = &gVaryCoordRGBA.at(0);
   rc->vertexColorImage = &gVertexColorRGBA.at(0);
+  rc->materialIDImage = &gMaterialID.at(0);
 
   trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
@@ -315,6 +321,27 @@ void resizeCallback(float width, float height) {
   gHeight = static_cast<int>(height);
 }
 
+// Simple id to color mapping
+void IdToCol(float col[3], int mid) {
+  if (mid < 0) {
+    col[0] = 0.25f;
+    col[1] = 0.25f;
+    col[2] = 0.25f;
+    return;
+  }
+
+  float table[8][3] = {{1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f},
+                       {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f, 1.0f},
+                       {0.0f, 1.0f, 1.0f}, {1.0f, 1.0f, 0.0f},
+                       {1.0f, 1.0f, 1.0f}, {0.5f, 0.5f, 0.5f}};
+
+  int id = mid % 8;
+
+  col[0] = table[id][0];
+  col[1] = table[id][1];
+  col[2] = table[id][2];
+};
+
 inline float pesudoColor(float v, int ch) {
   if (ch == 0) {  // red
     if (v <= 0.5f)
@@ -389,6 +416,15 @@ void Display(int width, int height) {
   } else if (gShowBufferMode == SHOW_BUFFER_VERTEXCOLOR) {
     for (size_t i = 0; i < buf.size(); i++) {
       buf[i] = gVertexColorRGBA[i];
+    }
+  } else if (gShowBufferMode == SHOW_BUFFER_MATERIALID) {
+    for (size_t i = 0; i < buf.size() / 4; i++) {
+      float rgb[3];
+      IdToCol(rgb, gMaterialID[i]);
+      buf[4 * i + 0] = rgb[0];
+      buf[4 * i + 1] = rgb[1];
+      buf[4 * i + 2] = rgb[2];
+      buf[4 * i + 3] = 1.0f;
     }
   }
 
@@ -533,6 +569,8 @@ int main(int argc, char** argv) {
       ImGui::RadioButton("varycoord", &gShowBufferMode, SHOW_BUFFER_VARYCOORD);
       ImGui::SameLine();
       ImGui::RadioButton("vertex col", &gShowBufferMode, SHOW_BUFFER_VERTEXCOLOR);
+      ImGui::SameLine();
+      ImGui::RadioButton("material id", &gShowBufferMode, SHOW_BUFFER_MATERIALID);
 
       ImGui::InputFloat("show pos scale", &gShowPositionScale);
 

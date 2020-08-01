@@ -1057,6 +1057,11 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             unsigned int material_id =
                 gMesh.material_ids[isect.prim_id];
 
+            if (material_id < gMaterials.size()) {
+              config.materialIDImage[(y * config.width + x)] = material_id;
+            } else {
+              config.materialIDImage[(y * config.width + x)] = -1;
+            }
 
             float diffuse_col[3] = {0.5f, 0.5f, 0.5f};
             float specular_col[3] = {0.0f, 0.0f, 0.0f};
@@ -1140,6 +1145,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               config.vertexColorImage[4 * (y * config.width + x) + 1] = 1.0f;
               config.vertexColorImage[4 * (y * config.width + x) + 2] = 1.0f;
               config.vertexColorImage[4 * (y * config.width + x) + 3] = 1.0f;
+              config.materialIDImage[y * config.width + x] = -1;
             }
           }
         }
