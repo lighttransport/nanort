@@ -96,9 +96,11 @@ nanort::Ray<float> ray;
 ray.min_t = 0.0f;
 ray.max_t = 1.0e+30f;
 
-// Returns nearest hit point(if exists)
+nanort::TriangleIntersection<float> isect;
+
+// Store nearest hit point to `isect` and returns true if the hit point found.
 BVHTraceOptions trace_options; // optional
-bool hit = accel.Traverse(ray, triangle_intersecter, trace_options);
+bool hit = accel.Traverse(ray, triangle_intersecter, &isect, trace_options);
 ```
 
 Application must prepare geometric information and store it in linear array.
@@ -157,7 +159,8 @@ for (int y = 0; y < height; y++) {
     ray.dir[2] = dir[2];
 
     nanort::TriangleIntersector<> triangle_intersecter(mesh.vertices, mesh.faces, /* stride */sizeof(float) * 3);
-    bool hit = accel.Traverse(ray, trace_options, triangle_intersector);
+    nanort::TriangleIntersection<> isect,
+    bool hit = accel.Traverse(ray, triangle_intersector, &isect, trace_options);
     if (hit) {
       // Write your shader here.
       float3 normal;

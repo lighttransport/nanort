@@ -741,10 +741,10 @@ class BVHAccel {
   ///
   /// @param[in] ray Input ray
   /// @param[in] intersector Intersector object. This object is called for each possible intersection of ray and BVH during traversal.
-  /// @param[out] isect Intersection point information(filled when any hit point was found)
+  /// @param[out] isect Intersection point information(filled when closest hit point was found)
   /// @param[in] options Traversal options.
   ///
-  /// @return true if any hit point found
+  /// @return true if the closest hit point found.
   ///
   template <class I, class H>
   bool Traverse(const Ray<T> &ray, const I &intersector, H *isect,
@@ -953,6 +953,9 @@ class TriangleMesh {
   const size_t vertex_stride_bytes_;
 };
 
+///
+/// Stores intersection point information for triangle geometry.
+///
 template <typename T = float>
 class TriangleIntersection {
  public:
@@ -964,6 +967,13 @@ class TriangleIntersection {
   unsigned int prim_id;
 };
 
+///
+/// Intersector is a template class which implements intersection method and stores
+/// intesection point information(`H`)
+///
+/// @tparam T Precision(float or double)
+/// @tparam H Intersection point information struct
+///
 template <typename T = float, class H = TriangleIntersection<T> >
 class TriangleIntersector {
  public:
