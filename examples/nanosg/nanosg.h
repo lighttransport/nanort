@@ -751,7 +751,10 @@ class Scene {
   /// First find the intersection of nodes' bounding box using toplevel BVH.
   /// Then, trace into the hit node to find the intersection of the primitive.
   ///
-  template <class H>
+  /// @tparam H Hit intersection info class
+  /// @tparam I Intersector class
+  ///
+  template <class H, class I>
   bool Traverse(nanort::Ray<T> &ray, H *isect,
                 const bool cull_back_face = false) const {
     if (!toplevel_accel_.IsValid()) {
@@ -792,12 +795,14 @@ class Scene {
         Matrix<T>::MultV(local_ray.org, node.inv_xform_, ray.org);
         Matrix<T>::MultV(local_ray.dir, node.inv_xform33_, ray.dir);
 
-        nanort::TriangleIntersector<T, H> triangle_intersector(
-            node.GetMesh()->vertices.data(), node.GetMesh()->faces.data(),
-            node.GetMesh()->stride);
+        // TODO(LTE): Provide custom intersector
+        //nanort::TriangleIntersector<T, H> triangle_intersector(
+        //    node.GetMesh()->vertices.data(), node.GetMesh()->faces.data(),
+        //    node.GetMesh()->stride);
+        I intersector(node.GetMesh());
         H local_isect;
 
-        bool hit = node.GetAccel().Traverse(local_ray, triangle_intersector,
+        bool hit = node.GetAccel().Traverse(local_ray, intersector,
                                             &local_isect);
 
         if (hit) {

@@ -91,6 +91,18 @@ class Mesh {
 
   // --- Required methods in Scene::Traversal. ---
 
+  const T *GetVertices() const {
+    return vertices.data();
+  }
+
+  const unsigned int *GetFaces() const {
+    return faces.data();
+  }
+
+  size_t GetVertexStrideBytes() const {
+    return stride;
+  }
+
   ///
   /// Get the geometric normal and the shading normal at `face_idx' th face.
   ///
@@ -114,7 +126,7 @@ class Mesh {
     v2[0] = vertices[3 * f2 + 0];
     v2[1] = vertices[3 * f2 + 1];
     v2[2] = vertices[3 * f2 + 2];
-    
+
     calculate_normal(Ng, v0, v1, v2);
 
     if (facevarying_normals.size() > 0) {
@@ -143,7 +155,7 @@ class Mesh {
       Ns[2] = Ng[2];
 
     }
-  
+
   }
 
   // --- end of required methods in Scene::Traversal. ---
@@ -172,13 +184,13 @@ class Mesh {
       lerp(tcoord, t0, t1, t2, u, v);
 
     } else {
-  
+
       tcoord[0] = static_cast<T>(0.0);
       tcoord[1] = static_cast<T>(0.0);
       tcoord[2] = static_cast<T>(0.0);
 
     }
-  
+
   }
 
 };

@@ -235,7 +235,7 @@ void FetchTexture(const Texture &texture, float u, float v, float* col) {
 }
 
 bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
-                      float quat[4], 
+                      float quat[4],
                       const nanosg::Scene<float, example::Mesh<float>> &scene,
                       const example::Asset &asset,
                       const RenderConfig& config,
@@ -245,9 +245,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
   //if (!gAccel.IsValid()) {
   //  return false;
   //}
-  
-  
-  
+
+
+
 
   int width = config.width;
   int height = config.height;
@@ -309,19 +309,19 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           float u1 = pcg32_random(&rng);
 
           float3 dir;
-        
+
         //for modes not a "color"
 		    if(_showBufferMode != SHOW_BUFFER_COLOR)
 		    {
           //only one pass
 			    if(config.pass > 0)
 				    continue;
-				  
+
           //to the center of pixel
 			      u0 = 0.5f;
 			      u1 = 0.5f;
 		      }
-      
+
           dir = corner + (float(x) + u0) * u +
                 (float(config.height - y - 1) + u1) * v;
           dir = vnormalize(dir);
@@ -333,16 +333,16 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           ray.min_t = 0.0f;
           ray.max_t = kFar;
 
-          
+
           nanosg::Intersection<float> isect;
-          bool hit = scene.Traverse(ray, &isect, /* cull_back_face */false);
+          bool hit = scene.Traverse<nanosg::Intersection<float>, nanort::TriangleIntersector<float, nanosg::Intersection<float>>>(ray, &isect, /* cull_back_face */false);
 
           if (hit) {
 
             const std::vector<Material> &materials = asset.materials;
             const std::vector<Texture> &textures = asset.textures;
             const Mesh<float> &mesh = asset.meshes[isect.node_id];
-			
+
 			//tigra: add default material
 			const Material &default_material = asset.default_material;
 
@@ -435,18 +435,18 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             // Fetch texture
             unsigned int material_id =
                 mesh.material_ids[isect.prim_id];
-				
+
 			//printf("material_id=%d materials=%lld\n", material_id, materials.size());
 
             float diffuse_col[3];
 
             float specular_col[3];
-			
+
 			//tigra: material_id is ok
 			if(material_id>=0 && material_id<materials.size())
 			{
 				//printf("ok mat\n");
-				
+
 				int diffuse_texid = materials[material_id].diffuse_texid;
 				if (diffuse_texid >= 0) {
 				  FetchTexture(textures[diffuse_texid], UV[0], UV[1], diffuse_col);
@@ -455,7 +455,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 				  diffuse_col[1] = materials[material_id].diffuse[1];
 				  diffuse_col[2] = materials[material_id].diffuse[2];
 				}
-				
+
 				int specular_texid = materials[material_id].specular_texid;
 				if (specular_texid >= 0) {
 				  FetchTexture(textures[specular_texid], UV[0], UV[1], specular_col);
@@ -468,9 +468,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 			else
 				//tigra: wrong material_id, use default_material
 				{
-					
+
 				//printf("default_material\n");
-				
+
 					diffuse_col[0] = default_material.diffuse[0];
 					diffuse_col[1] = default_material.diffuse[1];
 					diffuse_col[2] = default_material.diffuse[2];

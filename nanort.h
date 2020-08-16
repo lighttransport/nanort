@@ -951,6 +951,21 @@ class TriangleMesh {
   const T *vertices_;
   const unsigned int *faces_;
   const size_t vertex_stride_bytes_;
+
+  //
+  // Accessors
+  //
+  const T *GetVertices() const {
+    return vertices_;
+  }
+
+  const unsigned int *GetFaces() const {
+    return faces_;
+  }
+
+  size_t GetVertexStrideBytes() const {
+    return vertex_stride_bytes_;
+  }
 };
 
 ///
@@ -977,6 +992,21 @@ class TriangleIntersection {
 template <typename T = float, class H = TriangleIntersection<T> >
 class TriangleIntersector {
  public:
+
+  // Initialize from mesh object.
+  // M: mesh class
+  template<class M>
+  TriangleIntersector(const M &m)
+      : vertices_(m.GetVertices()),
+        faces_(m.GetFaces()),
+        vertex_stride_bytes_(m.GetVertexStrideBytes()) {}
+
+  template<class M>
+  TriangleIntersector(const M *m)
+      : vertices_(m->GetVertices()),
+        faces_(m->GetFaces()),
+        vertex_stride_bytes_(m->GetVertexStrideBytes()) {}
+
   TriangleIntersector(const T *vertices, const unsigned int *faces,
                       const size_t vertex_stride_bytes)  // e.g.
                                                          // vertex_stride_bytes
