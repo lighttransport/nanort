@@ -294,13 +294,18 @@ static void XformBoundingBox(T xbmin[3],  // out
   }
 }
 
+///
+/// Intersection info struct for Node intersector
+///
+/// @tparam T Precision(usually `float` or `double`)
+///
 template <typename T>
 struct Intersection {
   // required fields.
   T t;                   // hit distance
   unsigned int prim_id;  // primitive ID of the hit
-  float u;
-  float v;
+  T u;
+  T v;
 
   unsigned int node_id;  // node ID of the hit.
   nanort::real3<T> P;    // intersection point
@@ -310,6 +315,9 @@ struct Intersection {
 
 ///
 /// Renderable node
+///
+/// @tparam T Type of xform and bounding box(usually `float` or `double`).
+/// @tparam M Mesh class
 ///
 template <typename T, class M>
 class Node {
@@ -492,7 +500,7 @@ class Node {
 
   std::string name_;
 
-  const M *mesh_;
+  const M *mesh_{nullptr};
 
   std::vector<type> children_;
 };
