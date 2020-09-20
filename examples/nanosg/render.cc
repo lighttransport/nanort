@@ -22,7 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-
 #ifdef _MSC_VER
 #pragma warning(disable : 4018)
 #pragma warning(disable : 4244)
@@ -35,20 +34,16 @@ THE SOFTWARE.
 #include "render.h"
 
 #include <chrono>  // C++11
+#include <iostream>
 #include <sstream>
 #include <thread>  // C++11
 #include <vector>
 
-#include <iostream>
-
 #include "../../nanort.h"
-#include "matrix.h"
 #include "material.h"
+#include "matrix.h"
 #include "mesh.h"
-
-
 #include "trackball.h"
-
 
 #ifdef WIN32
 #undef min
@@ -73,7 +68,8 @@ float pcg32_random(pcg32_state_t* rng) {
   rng->state = oldstate * 6364136223846793005ULL + rng->inc;
   unsigned int xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
   unsigned int rot = oldstate >> 59u;
-  unsigned int ret = (xorshifted >> rot) | (xorshifted << ((-static_cast<int>(rot)) & 31));
+  unsigned int ret =
+      (xorshifted >> rot) | (xorshifted << ((-static_cast<int>(rot)) & 31));
 
   return (float)((double)ret / (double)4294967296.0);
 }
@@ -200,7 +196,7 @@ void BuildCameraFrame(float3* origin, float3* corner, float3* u, float3* v,
   }
 }
 
-#if 0 // TODO(LTE): Not used method. Delete.
+#if 0  // TODO(LTE): Not used method. Delete.
 nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
                                const float3& du, const float3& dv, float u,
                                float v) {
@@ -225,7 +221,7 @@ nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
 }
 #endif
 
-void FetchTexture(const Texture &texture, float u, float v, float* col) {
+void FetchTexture(const Texture& texture, float u, float v, float* col) {
   int tx = u * texture.width;
   int ty = (1.0f - v) * texture.height;
   int idx_offset = (ty * texture.width + tx) * texture.components;
@@ -236,18 +232,12 @@ void FetchTexture(const Texture &texture, float u, float v, float* col) {
 
 bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
                       float quat[4],
-                      const nanosg::Scene<float, example::Mesh<float>> &scene,
-                      const example::Asset &asset,
-                      const RenderConfig& config,
-                      std::atomic<bool>& cancelFlag,
-                      int &_showBufferMode
-                      ) {
-  //if (!gAccel.IsValid()) {
+                      const nanosg::Scene<float, example::Mesh<float> >& scene,
+                      const example::Asset& asset, const RenderConfig& config,
+                      std::atomic<bool>& cancelFlag, int& _showBufferMode) {
+  // if (!gAccel.IsValid()) {
   //  return false;
   //}
-
-
-
 
   int width = config.width;
   int height = config.height;
@@ -310,17 +300,15 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 
           float3 dir;
 
-        //for modes not a "color"
-		    if(_showBufferMode != SHOW_BUFFER_COLOR)
-		    {
-          //only one pass
-			    if(config.pass > 0)
-				    continue;
+          // for modes not a "color"
+          if (_showBufferMode != SHOW_BUFFER_COLOR) {
+            // only one pass
+            if (config.pass > 0) continue;
 
-          //to the center of pixel
-			      u0 = 0.5f;
-			      u1 = 0.5f;
-		      }
+            // to the center of pixel
+            u0 = 0.5f;
+            u1 = 0.5f;
+          }
 
           dir = corner + (float(x) + u0) * u +
                 (float(config.height - y - 1) + u1) * v;
@@ -333,36 +321,31 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           ray.min_t = 0.0f;
           ray.max_t = kFar;
 
-
           nanosg::Intersection<float> isect;
-          bool hit = scene.Traverse<nanosg::Intersection<float>, nanort::TriangleIntersector<float, nanosg::Intersection<float>>>(ray, &isect, /* cull_back_face */false);
+          bool hit = scene.Traverse<nanosg::Intersection<float>,
+                                    nanort::TriangleIntersector<
+                                        float, nanosg::Intersection<float> > >(
+              ray, &isect, /* cull_back_face */ false);
 
           if (hit) {
+            const std::vector<Material>& materials = asset.materials;
+            const std::vector<Texture>& textures = asset.textures;
+            const Mesh<float>& mesh = asset.meshes[isect.node_id];
 
-            const std::vector<Material> &materials = asset.materials;
-            const std::vector<Texture> &textures = asset.textures;
-            const Mesh<float> &mesh = asset.meshes[isect.node_id];
-
-			//tigra: add default material
-			const Material &default_material = asset.default_material;
+            const Material& default_material = asset.default_material;
 
             float3 p;
-            p[0] =
-                ray.org[0] + isect.t * ray.dir[0];
-            p[1] =
-                ray.org[1] + isect.t * ray.dir[1];
-            p[2] =
-                ray.org[2] + isect.t * ray.dir[2];
+            p[0] = ray.org[0] + isect.t * ray.dir[0];
+            p[1] = ray.org[1] + isect.t * ray.dir[1];
+            p[2] = ray.org[2] + isect.t * ray.dir[2];
 
             config.positionImage[4 * (y * config.width + x) + 0] = p.x();
             config.positionImage[4 * (y * config.width + x) + 1] = p.y();
             config.positionImage[4 * (y * config.width + x) + 2] = p.z();
             config.positionImage[4 * (y * config.width + x) + 3] = 1.0f;
 
-            config.varycoordImage[4 * (y * config.width + x) + 0] =
-                isect.u;
-            config.varycoordImage[4 * (y * config.width + x) + 1] =
-                isect.v;
+            config.varycoordImage[4 * (y * config.width + x) + 0] = isect.u;
+            config.varycoordImage[4 * (y * config.width + x) + 1] = isect.v;
             config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
             config.varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
 
@@ -408,12 +391,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
                 0.5f * N[2] + 0.5f;
             config.normalImage[4 * (y * config.width + x) + 3] = 1.0f;
 
-            config.depthImage[4 * (y * config.width + x) + 0] =
-                isect.t;
-            config.depthImage[4 * (y * config.width + x) + 1] =
-                isect.t;
-            config.depthImage[4 * (y * config.width + x) + 2] =
-                isect.t;
+            config.depthImage[4 * (y * config.width + x) + 0] = isect.t;
+            config.depthImage[4 * (y * config.width + x) + 1] = isect.t;
+            config.depthImage[4 * (y * config.width + x) + 2] = isect.t;
             config.depthImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             float3 UV;
@@ -433,51 +413,49 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             }
 
             // Fetch texture
-            unsigned int material_id =
-                mesh.material_ids[isect.prim_id];
+            unsigned int material_id = mesh.material_ids[isect.prim_id];
 
-			//printf("material_id=%d materials=%lld\n", material_id, materials.size());
+            // printf("material_id=%d materials=%lld\n", material_id,
+            // materials.size());
 
             float diffuse_col[3];
 
             float specular_col[3];
 
-			//tigra: material_id is ok
-			if(material_id>=0 && material_id<materials.size())
-			{
-				//printf("ok mat\n");
+            if (material_id >= 0 && material_id < materials.size()) {
+              // printf("ok mat\n");
 
-				int diffuse_texid = materials[material_id].diffuse_texid;
-				if (diffuse_texid >= 0) {
-				  FetchTexture(textures[diffuse_texid], UV[0], UV[1], diffuse_col);
-				} else {
-				  diffuse_col[0] = materials[material_id].diffuse[0];
-				  diffuse_col[1] = materials[material_id].diffuse[1];
-				  diffuse_col[2] = materials[material_id].diffuse[2];
-				}
+              int diffuse_texid = materials[material_id].diffuse_texid;
+              if (diffuse_texid >= 0) {
+                FetchTexture(textures[diffuse_texid], UV[0], UV[1],
+                             diffuse_col);
+              } else {
+                diffuse_col[0] = materials[material_id].diffuse[0];
+                diffuse_col[1] = materials[material_id].diffuse[1];
+                diffuse_col[2] = materials[material_id].diffuse[2];
+              }
 
-				int specular_texid = materials[material_id].specular_texid;
-				if (specular_texid >= 0) {
-				  FetchTexture(textures[specular_texid], UV[0], UV[1], specular_col);
-				} else {
-				  specular_col[0] = materials[material_id].specular[0];
-				  specular_col[1] = materials[material_id].specular[1];
-				  specular_col[2] = materials[material_id].specular[2];
-				}
-			}
-			else
-				//tigra: wrong material_id, use default_material
-				{
+              int specular_texid = materials[material_id].specular_texid;
+              if (specular_texid >= 0) {
+                FetchTexture(textures[specular_texid], UV[0], UV[1],
+                             specular_col);
+              } else {
+                specular_col[0] = materials[material_id].specular[0];
+                specular_col[1] = materials[material_id].specular[1];
+                specular_col[2] = materials[material_id].specular[2];
+              }
+            } else
+            {
+              // tigra: wrong material_id, use default_material
+              // printf("default_material\n");
 
-				//printf("default_material\n");
-
-					diffuse_col[0] = default_material.diffuse[0];
-					diffuse_col[1] = default_material.diffuse[1];
-					diffuse_col[2] = default_material.diffuse[2];
-					specular_col[0] = default_material.specular[0];
-					specular_col[1] = default_material.specular[1];
-					specular_col[2] = default_material.specular[2];
-				}
+              diffuse_col[0] = default_material.diffuse[0];
+              diffuse_col[1] = default_material.diffuse[1];
+              diffuse_col[2] = default_material.diffuse[2];
+              specular_col[0] = default_material.specular[0];
+              specular_col[1] = default_material.specular[1];
+              specular_col[2] = default_material.specular[2];
+            }
 
             // Simple shading
             float NdotV = fabsf(vdot(N, dir));
