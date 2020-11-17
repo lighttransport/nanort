@@ -2189,8 +2189,8 @@ void BVHAccel<T>::Debug() {
 
   for (size_t i = 0; i < nodes_.size(); i++) {
     printf("node[%d] : bmin %f, %f, %f, bmax %f, %f, %f\n", int(i),
-           nodes_[i].bmin[0], nodes_[i].bmin[1], nodes_[i].bmin[1],
-           nodes_[i].bmax[0], nodes_[i].bmax[1], nodes_[i].bmax[1]);
+           nodes_[i].bmin[0], nodes_[i].bmin[1], nodes_[i].bmin[2],
+           nodes_[i].bmax[0], nodes_[i].bmax[1], nodes_[i].bmax[2]);
   }
 }
 
