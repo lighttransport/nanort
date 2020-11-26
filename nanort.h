@@ -488,6 +488,23 @@ class Ray {
 };
 
 template <typename T = float>
+struct PointQuery {
+  PointQuery()
+      : min_t(static_cast<T>(0.0)),
+        max_t(std::numeric_limits<T>::max()) {
+    position[0] = static_cast<T>(0.0);
+    position[1] = static_cast<T>(0.0);
+    position[2] = static_cast<T>(0.0);
+    radius = static_cast<T>(1.0);
+  }
+
+  T position[3];      // must set
+  T radius;           // must set
+  T min_t;            // minimum hit distance.
+  T max_t;            // maximum hit distance.
+};
+
+template <typename T = float>
 class BVHNode {
  public:
   BVHNode() {}
@@ -762,6 +779,17 @@ class BVHAccel {
 #endif
 
   ///
+  /// Find(query) closest intersection point for given position.
+  ///
+  /// @param[in] point Query point information.
+  ///
+  /// @return true if the closest hit point found.
+  ///
+  template <class I, class H>
+  bool FindClosestPoint(const PointQuery<T> &point, const I &intersector, H *isect,
+                const BVHTraceOptions &options = BVHTraceOptions()) const;
+
+  ///
   /// List up nodes which intersects along the ray.
   /// This function is useful for two-level BVH traversal.
   /// See `examples/nanosg` for example.
@@ -827,6 +855,16 @@ class BVHAccel {
   template <class I>
   bool TestLeafNode(const BVHNode<T> &node, const Ray<T> &ray,
                     const I &intersector) const;
+
+  ///
+  /// Find nearest hit poisition for primitives in given BVH leaf node.
+  ///
+  /// @tparam I Point query intersector
+  ///
+  template <class I>
+  bool FindClosestPointInLeaf(const BVHNode<T> &node, const PointQuery<T> &point,
+                                      const I &intersector, const BVHTraceOptions &options) const;
+
 
   template <class I>
   bool TestLeafNodeIntersections(
@@ -2403,6 +2441,23 @@ inline bool IntersectRayAABB<double>(double *tminOut,  // [out]
 }
 
 template <typename T>
+inline bool IntersectSphereAABB(T *tminOut,  // [out]
+                             T *tmaxOut,  // [out]
+                             T min_t, T max_t, const T bmin[3], const T bmax[3],
+                             real3<T> position, T radius) {
+  (void)tminOut;
+  (void)tmaxOut;
+  (void)min_t;
+  (void)max_t;
+  (void)bmin;
+  (void)bmax;
+  (void)position;
+  (void)radius;
+
+  // TODO: Implement
+}
+
+template <typename T>
 template <class I>
 inline bool BVHAccel<T>::TestLeafNode(const BVHNode<T> &node, const Ray<T> &ray,
                                       const I &intersector) const {
@@ -2437,6 +2492,18 @@ inline bool BVHAccel<T>::TestLeafNode(const BVHNode<T> &node, const Ray<T> &ray,
   }
 
   return hit;
+}
+
+template <typename T>
+template <class I>
+bool BVHAccel<T>::FindClosestPointInLeaf(const BVHNode<T> &node, const PointQuery<T> &point,
+                                      const I &intersector, const BVHTraceOptions &options) const {
+  // TODO: Implement
+  (void)node;
+  (void)point;
+  (void)intersector;
+  (void)options;
+  return false;
 }
 
 #if 0  // TODO(LTE): Implement
@@ -2634,6 +2701,60 @@ inline bool BVHAccel<T>::TestLeafNodeIntersections(
       }
     }
   }
+
+  return hit;
+}
+
+template <typename T>
+template <class I, class H>
+bool BVHAccel<T>::FindClosestPoint(const PointQuery<T> &point, const I &intersector, H *isect,
+                           const BVHTraceOptions &options) const {
+  const int kMaxStackDepth = 512;
+  (void)kMaxStackDepth;
+
+  T hit_t = point.max_t;
+
+  int node_stack_index = 0;
+  unsigned int node_stack[512];
+  node_stack[0] = 0;
+
+  // Init isect info as no hit
+  intersector.Update(hit_t, static_cast<unsigned int>(-1));
+
+  //intersector.PrepareTraversal(ray, options);
+
+  T min_t = std::numeric_limits<T>::max();
+  T max_t = -std::numeric_limits<T>::max();
+
+  while (node_stack_index >= 0) {
+    unsigned int index = node_stack[node_stack_index];
+    const BVHNode<T> &node = nodes_[index];
+
+    node_stack_index--;
+
+    bool hit = IntersectSphereAABB(&min_t, &max_t, point.min_t, hit_t, node.bmin,
+                                node.bmax, point.position, point.radius);
+
+    if (hit) {
+      // Branch node
+      if (node.flag == 0) {
+        // BVH traverse with point query has no luck to determine the traversal order.
+        int order_near = 0;
+        int order_far = 1;
+
+        // Traverse near first.
+        node_stack[++node_stack_index] = node.data[order_far];
+        node_stack[++node_stack_index] = node.data[order_near];
+      } else if (FindClosestPointInLeaf(node, point, intersector, options)) {  // Leaf node
+        hit_t = intersector.GetT();
+      }
+    }
+  }
+
+  assert(node_stack_index < kNANORT_MAX_STACK_DEPTH);
+
+  bool hit = (intersector.GetT() < point.max_t);
+  intersector.PostTraversal(point, hit, isect);
 
   return hit;
 }
