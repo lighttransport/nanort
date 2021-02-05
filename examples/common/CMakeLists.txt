@@ -6,13 +6,24 @@ target_compile_definitions(glew PUBLIC -DGLEW_STATIC)
 target_include_directories(glew PUBLIC ThirdPartyLibs/Glew)
 
 ## tinyexr ##
+
 add_library(tinyexr INTERFACE)
 target_include_directories(tinyexr INTERFACE ${CMAKE_CURRENT_LIST_DIR})
+
+## glm ##
+
+add_library(glm INTERFACE)
+target_include_directories(glm INTERFACE ${CMAKE_CURRENT_LIST_DIR}/glm)
 
 ## trackball ##
 
 add_library(trackball STATIC trackball.cc)
 target_include_directories(trackball PUBLIC ${CMAKE_CURRENT_LIST_DIR})
+
+## matrix ##
+
+add_library(matrix STATIC matrix.cc)
+target_include_directories(matrix PUBLIC ${CMAKE_CURRENT_LIST_DIR})
 
 ## windowing ##
 
@@ -48,6 +59,7 @@ add_library(imgui STATIC
   imgui/imgui_draw.cpp
   imgui/imgui_impl_btgui.cpp
   imgui/imgui_widgets.cpp
+  imgui/ImGuizmo.cpp
 )
 
 target_include_directories(imgui PUBLIC ${CMAKE_CURRENT_LIST_DIR}/imgui)
