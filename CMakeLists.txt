@@ -1,27 +1,26 @@
-cmake_minimum_required(VERSION 2.8.0)
-project(nanort)
+cmake_minimum_required(VERSION 3.1)
+
+set(CMAKE_BUILD_TYPE_INIT "Release")
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+project(nanort LANGUAGES C CXX)
 
 # ------------------------------------------------------------------------------
 # C++ settings
 # ------------------------------------------------------------------------------
 if (MSVC)
   # Increase compiler warning level.
-  set(CMAKE_CXX_STANDARD 11)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W4")
 endif()
 
 if (NOT MSVC)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O2 -Wall")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -Wall")
 endif()
 
-# ------------------------------------------------------------------------------
-# OpenMP
-# ------------------------------------------------------------------------------
-find_package(OpenMP)
-if (OPENMP_FOUND)
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-endif()
+set(nanort_DIR ${CMAKE_SOURCE_DIR})
+find_package(nanort REQUIRED)
 
 # ------------------------------------------------------------------------------
 # Output directories
