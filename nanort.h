@@ -404,6 +404,32 @@ inline T vdot(const real3<T> a, const real3<T> b) {
 }
 
 template <typename T>
+inline T vdot2(const real3<T> a) {
+  T d = a[0] * a[0] + a[1] * a[1] + a[2] * a[2];
+  return d * d;
+}
+
+template <typename T>
+inline real3<T> vclamp(const real3<T> a, const T low, const T high) {
+  real3<T> ret;
+  ret.x = std::max(low, std::min(high, a[0]));
+  ret.y = std::max(low, std::min(high, a[1]));
+  ret.z = std::max(low, std::min(high, a[2]));
+
+  return ret;
+}
+
+template <typename T>
+inline real3<T> vclamp(const real3<T> a, const real3<T> low, const real3<T> high) {
+  real3<T> ret;
+  ret.x = std::max(low[0], std::min(high[0], a[0]));
+  ret.y = std::max(low[1], std::min(high[1], a[1]));
+  ret.z = std::max(low[2], std::min(high[2], a[2]));
+
+  return ret;
+}
+
+template <typename T>
 inline real3<T> vsafe_inverse(const real3<T> v) {
   real3<T> r;
 
@@ -1235,6 +1261,184 @@ class TriangleIntersector {
 
   mutable real3<T> ray_org_;
   mutable RayCoeff ray_coeff_;
+  mutable BVHTraceOptions trace_options_;
+  mutable T t_min_;
+
+  mutable T t_;
+  mutable T u_;
+  mutable T v_;
+  mutable unsigned int prim_id_;
+};
+
+template<typename T>
+T glsl_sign(T x)
+{
+  if (x < static_cast<T>(0)) {
+    return -static_cast<T>(1);
+  } else if (x > static_cast<T>(0)) {
+    return static_cast<T>(1);
+  } else {
+    return static_cast<T>(0);
+  }
+}
+
+///
+/// Intersector for point query.
+///
+/// @tparam T Precision(float or double)
+/// @tparam H Intersection point information struct
+///
+template <typename T = float, class H = TriangleIntersection<T> >
+class TrianglePointQueryIntersector {
+ public:
+
+  // Initialize from mesh object.
+  // M: mesh class
+  template<class M>
+  TrianglePointQueryIntersector(const M &m)
+      : vertices_(m.GetVertices()),
+        faces_(m.GetFaces()),
+        vertex_stride_bytes_(m.GetVertexStrideBytes()) {}
+
+  template<class M>
+  TrianglePointQueryIntersector(const M *m)
+      : vertices_(m->GetVertices()),
+        faces_(m->GetFaces()),
+        vertex_stride_bytes_(m->GetVertexStrideBytes()) {}
+
+  TrianglePointQueryIntersector(const T *vertices, const unsigned int *faces,
+                      const size_t vertex_stride_bytes)  // e.g.
+                                                         // vertex_stride_bytes
+                                                         // = 12 = sizeof(float)
+                                                         // * 3
+      : vertices_(vertices),
+        faces_(faces),
+        vertex_stride_bytes_(vertex_stride_bytes) {}
+
+  /// Find nearest hit distance from the point to `prim_index` th primitive, and return hit
+  /// distance `t`, barycentric coordinate `u` and `v` if found a nearest hit.
+  /// Returns true if there's intersection.
+  bool QueryDistance(T *t_inout, const unsigned int prim_index) const {
+    if ((prim_index < trace_options_.prim_ids_range[0]) ||
+        (prim_index >= trace_options_.prim_ids_range[1])) {
+      return false;
+    }
+
+    // Self-intersection test.
+    if (prim_index == trace_options_.skip_prim_id) {
+      return false;
+    }
+
+    const unsigned int f0 = faces_[3 * prim_index + 0];
+    const unsigned int f1 = faces_[3 * prim_index + 1];
+    const unsigned int f2 = faces_[3 * prim_index + 2];
+
+    const real3<T> p0(get_vertex_addr(vertices_, f0 + 0, vertex_stride_bytes_));
+    const real3<T> p1(get_vertex_addr(vertices_, f1 + 0, vertex_stride_bytes_));
+    const real3<T> p2(get_vertex_addr(vertices_, f2 + 0, vertex_stride_bytes_));
+
+    // https://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
+    // and
+    // 3D Distance from a Point to a Triangle. Mark W. Jones
+    // http://cs.swan.ac.uk/~csmark/PDFS/1995_3D_distance_point_to_triangle
+    // and
+    // Distance Between Point and Triangle in 3D
+    // https://www.geometrictools.com/Documentation/DistancePoint3Triangle3.pdf
+
+    real3<T> ba = p1 - p0;
+    real3<T> pa = position_ - p0;
+    real3<T> cb = p2 - p1;
+    real3<T> pb = position_ - p1;
+    real3<T> ac = p0 - p2;
+    real3<T> pc = position_ - p2;
+
+    real3<T> nor = vcross(ba, ac);
+
+    T dotA = vdot(vcross(ba, nor), pa);
+    T dotB = vdot(vcross(cb, nor), pb);
+    T dotC = vdot(vcross(ac, nor), pc);
+
+
+    T signs = glsl_sign(dotA) + glsl_sign(dotB) + glsl_sign(dotC);
+
+    T t2;
+
+    real3<T> dir; // Direction vector from the point to the triangle.
+
+    if (signs < 2.0) {
+     // the distance to the triangle is the distance to the closest edge or vertex to the position.
+     t2 = std::min( std::min(
+     vdot2(ba*vclamp(dot(ba,pa)/vdot2(ba),static_cast<T>(0),static_cast<T>(1))-pa),
+     vdot2(cb*vclamp(dot(cb,pb)/vdot2(cb),static_cast<T>(0),static_cast<T>(1))-pb) ),
+     vdot2(ac*vclamp(dot(ac,pc)/vdot2(ac),static_cast<T>(0),static_cast<T>(1))-pc) );
+    } else {
+      // a projected point is onto the triangle.
+      // direction = nor.
+      t2 = vdot(nor,pa)*vdot(nor,pa)/vdot2(nor);
+      dir = nor;
+    }
+
+    T tt = std::sqrt(t2);
+
+    // TODO: Implement
+
+    (*t_inout) = tt;
+    // Use Möller-Trumbore style barycentric coordinates
+    // U + V + W = 1.0 and interp(p) = U * p0 + V * p1 + W * p2
+    // We want interp(p) = (1 - u - v) * p0 + u * v1 + v * p2;
+    // => u = V, v = W.
+    u_ = V * rcpDet;
+    v_ = W * rcpDet;
+
+    return true;
+  }
+
+  /// Returns the nearest hit distance.
+  T GetT() const { return t_; }
+
+  /// Update is called when initializing intersection and nearest hit is found.
+  void Update(T t, unsigned int prim_idx) const {
+    t_ = t;
+    prim_id_ = prim_idx;
+  }
+
+  /// Prepare BVH traversal (e.g. compute inverse ray direction)
+  /// This function is called only once in BVH traversal.
+  void PrepareTraversal(const PointQuery<T> &point,
+                        const BVHTraceOptions &trace_options) const {
+    position_[0] = point.position[0];
+    position_[1] = point.position[1];
+    position_[2] = point.position[2];
+
+    radius_ = point.radius_;
+
+    trace_options_ = trace_options;
+
+    t_min_ = ray.min_t;
+
+    u_ = static_cast<T>(0);
+    v_ = static_cast<T>(0);
+  }
+
+  /// Post BVH traversal stuff.
+  /// Fill `isect` if there is a hit.
+  void PostTraversal(const Ray<T> &ray, bool hit, H *isect) const {
+    if (hit && isect) {
+      (*isect).t = t_;
+      (*isect).u = u_;
+      (*isect).v = v_;
+      (*isect).prim_id = prim_id_;
+    }
+    (void)ray;
+  }
+
+ private:
+  const T *vertices_;
+  const unsigned int *faces_;
+  const size_t vertex_stride_bytes_;
+
+  mutable real3<T> position_;
+  mutable T radius_;
   mutable BVHTraceOptions trace_options_;
   mutable T t_min_;
 
@@ -2441,20 +2645,24 @@ inline bool IntersectRayAABB<double>(double *tminOut,  // [out]
 }
 
 template <typename T>
-inline bool IntersectSphereAABB(T *tminOut,  // [out]
-                             T *tmaxOut,  // [out]
-                             T min_t, T max_t, const T bmin[3], const T bmax[3],
+inline bool IntersectSphereAABB(const T bmin[3], const T bmax[3],
                              real3<T> position, T radius) {
-  (void)tminOut;
-  (void)tmaxOut;
-  (void)min_t;
-  (void)max_t;
-  (void)bmin;
-  (void)bmax;
-  (void)position;
-  (void)radius;
 
-  // TODO: Implement
+  // Get clamped position
+  T x = std::max(bmin[0], std::min(position.x, bmax[0]));
+  T y = std::max(bmin[1], std::min(position.y, bmax[1]));
+  T z = std::max(bmin[2], std::min(position.z, bmax[2]));
+
+  // point in sphere test.
+  T dist2 = (x - position.x) * (x - position.x) +
+            (y - position.y) * (y - position.y) +
+            (z - position.z) * (z - position.z);
+
+  if (dist2 < (radius * radius)) {
+    return true;
+  }
+
+  return false;
 }
 
 template <typename T>
@@ -2732,8 +2940,7 @@ bool BVHAccel<T>::FindClosestPoint(const PointQuery<T> &point, const I &intersec
 
     node_stack_index--;
 
-    bool hit = IntersectSphereAABB(&min_t, &max_t, point.min_t, hit_t, node.bmin,
-                                node.bmax, point.position, point.radius);
+    bool hit = IntersectSphereAABB(node.bmin, node.bmax, point.position, point.radius);
 
     if (hit) {
       // Branch node
