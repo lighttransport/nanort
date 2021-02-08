@@ -1,10 +1,8 @@
 set(BUILD_TARGET "bidir_path_tracer")
 
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories("../common")
-
 file(GLOB SOURCES "*.cc" "*.h")
 add_executable(${BUILD_TARGET} ${SOURCES})
+target_link_libraries(${BUILD_TARGET} PRIVATE nanort::nanort tinyexr)
 
 source_group("Source Files" FILES ${SOURCES})
 
