@@ -1,8 +1,8 @@
 # Curves(Bezier) renderer.
 
-Use line approximation method to find intersection between ray and Bezier curve. 
+Use Nakamaru and Ohno method to find an intersection between ray and Bezier curve. 
 
 # TODO
 
-* [ ] Use accurate ray - curve intersection(Nakamaru and Ohno method)
+* [x] Use accurate ray - curve intersection(Nakamaru and Ohno method)
 * [ ] Support accurate variable width.
