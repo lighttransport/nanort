@@ -22,7 +22,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-
 #ifdef _MSC_VER
 #pragma warning(disable : 4018)
 #pragma warning(disable : 4244)
@@ -35,11 +34,10 @@ THE SOFTWARE.
 #include "render.h"
 
 #include <chrono>  // C++11
+#include <iostream>
 #include <sstream>
 #include <thread>  // C++11
 #include <vector>
-
-#include <iostream>
 
 #include "../../nanort.h"
 #include "matrix.h"
@@ -49,7 +47,6 @@ THE SOFTWARE.
 
 #define TINYOBJLOADER_IMPLEMENTATION
 #include "tiny_obj_loader.h"
-
 #include "trackball.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -178,106 +175,35 @@ inline void CalcNormal(float3& N, float3 v0, float3 v1, float3 v2) {
   float3 v10 = v1 - v0;
   float3 v20 = v2 - v0;
 
-  N = vcross(v10, v20); // CCW
-  //N = vcross(v20, v10); // CW
+  N = vcross(v10, v20);  // CCW
+  // N = vcross(v20, v10); // CW
   N = vnormalize(N);
 }
 
-void BuildCameraFrame(float3* origin, float3* corner, float3* u, float3* v,
-                      float quat[4], float eye[3], float lookat[3], float up[3],
-                      float fov, int width, int height) {
-  float e[4][4];
-
-  Matrix::LookAt(e, eye, lookat, up);
-
+void BuildCameraFrame(float3& origin, float3& corner, float3& u, float3& v,
+                      const float quat[4], const float eye[3],
+                      const float lookat[3], const float up[3], float fov,
+                      int width, int height) {
   float r[4][4];
   build_rotmatrix(r, quat);
 
-  float3 lo;
-  lo[0] = lookat[0] - eye[0];
-  lo[1] = lookat[1] - eye[1];
-  lo[2] = lookat[2] - eye[2];
-  float dist = vlength(lo);
+  float dist = std::abs(eye[2]);
 
-  float dir[3];
-  dir[0] = 0.0;
-  dir[1] = 0.0;
-  dir[2] = dist;
+  // the distance to plane where each pixel is shifted by 1 unit
+  const float flen =
+      (0.5f * (float)height / tanf(0.5f * (float)(fov * kPI / 180.0f)));
+  // do for each component
+  for (int i = 0; i < 3; i++) {
+    // u, v and dir are just the individual columns of the rotation matrix
+    u[i] = r[i][0];
+    v[i] = r[i][1];
+    float dir_i = r[i][2];
 
-  Matrix::Inverse(r);
-
-  float rr[4][4];
-  float re[4][4];
-  float zero[3] = {0.0f, 0.0f, 0.0f};
-  float localUp[3] = {0.0f, 1.0f, 0.0f};
-  Matrix::LookAt(re, dir, zero, localUp);
-
-  // translate
-  re[3][0] += eye[0];  // 0.0; //lo[0];
-  re[3][1] += eye[1];  // 0.0; //lo[1];
-  re[3][2] += (eye[2] - dist);
-
-  // rot -> trans
-  Matrix::Mult(rr, r, re);
-
-  float m[4][4];
-  for (int j = 0; j < 4; j++) {
-    for (int i = 0; i < 4; i++) {
-      m[j][i] = rr[j][i];
-    }
-  }
-
-  float vzero[3] = {0.0f, 0.0f, 0.0f};
-  float eye1[3];
-  Matrix::MultV(eye1, m, vzero);
-
-  float lookat1d[3];
-  dir[2] = -dir[2];
-  Matrix::MultV(lookat1d, m, dir);
-  float3 lookat1(lookat1d[0], lookat1d[1], lookat1d[2]);
-
-  float up1d[3];
-  Matrix::MultV(up1d, m, up);
-
-  float3 up1(up1d[0], up1d[1], up1d[2]);
-
-  // absolute -> relative
-  up1[0] -= eye1[0];
-  up1[1] -= eye1[1];
-  up1[2] -= eye1[2];
-  // printf("up1(after) = %f, %f, %f\n", up1[0], up1[1], up1[2]);
-
-  // Use original up vector
-  // up1[0] = up[0];
-  // up1[1] = up[1];
-  // up1[2] = up[2];
-
-  {
-    float flen =
-        (0.5f * (float)height / tanf(0.5f * (float)(fov * kPI / 180.0f)));
-    float3 look1;
-    look1[0] = lookat1[0] - eye1[0];
-    look1[1] = lookat1[1] - eye1[1];
-    look1[2] = lookat1[2] - eye1[2];
-    // vcross(u, up1, look1);
-    // flip
-    (*u) = nanort::vcross(look1, up1);
-    (*u) = vnormalize((*u));
-
-    (*v) = vcross(look1, (*u));
-    (*v) = vnormalize((*v));
-
-    look1 = vnormalize(look1);
-    look1[0] = flen * look1[0] + eye1[0];
-    look1[1] = flen * look1[1] + eye1[1];
-    look1[2] = flen * look1[2] + eye1[2];
-    (*corner)[0] = look1[0] - 0.5f * (width * (*u)[0] + height * (*v)[0]);
-    (*corner)[1] = look1[1] - 0.5f * (width * (*u)[1] + height * (*v)[1]);
-    (*corner)[2] = look1[2] - 0.5f * (width * (*u)[2] + height * (*v)[2]);
-
-    (*origin)[0] = eye1[0];
-    (*origin)[1] = eye1[1];
-    (*origin)[2] = eye1[2];
+    origin[i] = lookat[i] + dir_i * dist;
+    float look_i = -dir_i * flen;
+    // The lower right corner is relative to zero. The half-pixel offsets (-10.5)
+    // account for the center of a pixel.
+    corner[i] = look_i - 0.5f * ((width - 0.5) * u[i] + (height - 0.5) * v[i]);
   }
 }
 
@@ -298,6 +224,8 @@ nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
   ray.org[1] = origin[1];
   ray.org[2] = origin[2];
   ray.dir[0] = dir[0];
+  ray.dir[1] = dir[1];
+  ray.dir[2] = dir[2];
 
   return ray;
 }
@@ -313,7 +241,7 @@ void FetchTexture(int tex_idx, float u, float v, float* col) {
   col[2] = texture.image[idx_offset + 2] / 255.f;
 }
 
-static std::string GetBaseDir(const std::string &filepath) {
+static std::string GetBaseDir(const std::string& filepath) {
   if (filepath.find_last_of("/\\") != std::string::npos)
     return filepath.substr(0, filepath.find_last_of("/\\"));
   return "";
@@ -357,9 +285,8 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
 
   auto t_start = std::chrono::system_clock::now();
 
-
-  bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, filename,
-                              basepath, /* triangulate */ true);
+  bool ret = tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                              filename, basepath, /* triangulate */ true);
 
   auto t_end = std::chrono::system_clock::now();
   std::chrono::duration<double, std::milli> ms = t_end - t_start;
@@ -865,13 +792,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
   int height = config.height;
 
   // camera
-  float eye[3] = {config.eye[0], config.eye[1], config.eye[2]};
-  float look_at[3] = {config.look_at[0], config.look_at[1], config.look_at[2]};
-  float up[3] = {config.up[0], config.up[1], config.up[2]};
-  float fov = config.fov;
   float3 origin, corner, u, v;
-  BuildCameraFrame(&origin, &corner, &u, &v, quat, eye, look_at, up, fov, width,
-                   height);
+  BuildCameraFrame(origin, corner, u, v, quat, config.eye, config.look_at,
+                   config.up, config.fov, width, height);
 
   auto kCancelFlagCheckMilliSeconds = 300;
 
@@ -917,12 +840,11 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           ray.org[1] = origin[1];
           ray.org[2] = origin[2];
 
-          float u0 = pcg32_random(&rng);
-          float u1 = pcg32_random(&rng);
+          float du = pcg32_random(&rng);
+          float dv = pcg32_random(&rng);
 
           float3 dir;
-          dir = corner + (float(x) + u0) * u +
-                (float(config.height - y - 1) + u1) * v;
+          dir = corner + (float(x) + du) * u + (float(y) + dv) * v;
           dir = vnormalize(dir);
           ray.dir[0] = dir[0];
           ray.dir[1] = dir[1];
@@ -938,22 +860,17 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           bool hit = gAccel.Traverse(ray, triangle_intersector, &isect);
           if (hit) {
             float3 p;
-            p[0] =
-                ray.org[0] + isect.t * ray.dir[0];
-            p[1] =
-                ray.org[1] + isect.t * ray.dir[1];
-            p[2] =
-                ray.org[2] + isect.t * ray.dir[2];
+            p[0] = ray.org[0] + isect.t * ray.dir[0];
+            p[1] = ray.org[1] + isect.t * ray.dir[1];
+            p[2] = ray.org[2] + isect.t * ray.dir[2];
 
             config.positionImage[4 * (y * config.width + x) + 0] = p.x();
             config.positionImage[4 * (y * config.width + x) + 1] = p.y();
             config.positionImage[4 * (y * config.width + x) + 2] = p.z();
             config.positionImage[4 * (y * config.width + x) + 3] = 1.0f;
 
-            config.varycoordImage[4 * (y * config.width + x) + 0] =
-                isect.u;
-            config.varycoordImage[4 * (y * config.width + x) + 1] =
-                isect.v;
+            config.varycoordImage[4 * (y * config.width + x) + 0] = isect.u;
+            config.varycoordImage[4 * (y * config.width + x) + 1] = isect.v;
             config.varycoordImage[4 * (y * config.width + x) + 2] = 0.0f;
             config.varycoordImage[4 * (y * config.width + x) + 3] = 1.0f;
 
@@ -971,8 +888,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               n2[0] = gMesh.facevarying_normals[9 * prim_id + 6];
               n2[1] = gMesh.facevarying_normals[9 * prim_id + 7];
               n2[2] = gMesh.facevarying_normals[9 * prim_id + 8];
-              N = Lerp3(n0, n1, n2, isect.u,
-                        isect.v);
+              N = Lerp3(n0, n1, n2, isect.u, isect.v);
             } else {
               unsigned int f0, f1, f2;
               f0 = gMesh.faces[3 * prim_id + 0];
@@ -1000,12 +916,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
                 0.5f * N[2] + 0.5f;
             config.normalImage[4 * (y * config.width + x) + 3] = 1.0f;
 
-            config.depthImage[4 * (y * config.width + x) + 0] =
-                isect.t;
-            config.depthImage[4 * (y * config.width + x) + 1] =
-                isect.t;
-            config.depthImage[4 * (y * config.width + x) + 2] =
-                isect.t;
+            config.depthImage[4 * (y * config.width + x) + 0] = isect.t;
+            config.depthImage[4 * (y * config.width + x) + 1] = isect.t;
+            config.depthImage[4 * (y * config.width + x) + 2] = isect.t;
             config.depthImage[4 * (y * config.width + x) + 3] = 1.0f;
 
             float3 vcol(1.0f, 1.0f, 1.0f);
@@ -1026,8 +939,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               c2[1] = gMesh.vertex_colors[3 * f2 + 1];
               c2[2] = gMesh.vertex_colors[3 * f2 + 2];
 
-              vcol = Lerp3(c0, c1, c2, isect.u,
-                         isect.v);
+              vcol = Lerp3(c0, c1, c2, isect.u, isect.v);
 
               config.vertexColorImage[4 * (y * config.width + x) + 0] = vcol[0];
               config.vertexColorImage[4 * (y * config.width + x) + 1] = vcol[1];
@@ -1044,8 +956,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               uv2[0] = gMesh.facevarying_uvs[6 * prim_id + 4];
               uv2[1] = gMesh.facevarying_uvs[6 * prim_id + 5];
 
-              UV = Lerp3(uv0, uv1, uv2, isect.u,
-                         isect.v);
+              UV = Lerp3(uv0, uv1, uv2, isect.u, isect.v);
 
               config.texcoordImage[4 * (y * config.width + x) + 0] = UV[0];
               config.texcoordImage[4 * (y * config.width + x) + 1] = UV[1];
@@ -1054,8 +965,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             float NdotV = fabsf(vdot(N, dir));
 
             // Fetch material & texture
-            unsigned int material_id =
-                gMesh.material_ids[isect.prim_id];
+            unsigned int material_id = gMesh.material_ids[isect.prim_id];
 
             if (material_id < gMaterials.size()) {
               config.materialIDImage[(y * config.width + x)] = material_id;
@@ -1067,7 +977,6 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
             float specular_col[3] = {0.0f, 0.0f, 0.0f};
 
             if (material_id < gMaterials.size()) {
-
               int diffuse_texid = gMaterials[material_id].diffuse_texid;
               if (diffuse_texid >= 0) {
                 FetchTexture(diffuse_texid, UV[0], UV[1], diffuse_col);
