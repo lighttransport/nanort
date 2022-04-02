@@ -274,12 +274,12 @@ void mouseMoveCallback(float x, float y) {
     if (gTabPressed) {
       // dolly: the scale should depend on the current
       // distance to look-at point
-      const float dolly_scale = 1.0 * gRenderConfig.eye[2] / float(w);
-      gRenderConfig.eye[2] += dolly_scale * (gMousePosY - y);
+      const float dolly_scale = 1.0 * gRenderConfig.distance / float(w);
+      gRenderConfig.distance += dolly_scale * (gMousePosY - y);
     } else if (gShiftPressed) {
       // pan: move camera in local x-y-plane (the drawing plane). The scale
       // should depend on the distance to look-at point
-      const float trans_scale = 1.0f * gRenderConfig.eye[2];
+      const float trans_scale = 1.0f * gRenderConfig.distance;
       float r[4][4];
       build_rotmatrix(r, gCurrQuat);
       Matrix::Inverse(r);
@@ -585,10 +585,7 @@ int main(int argc, char** argv) {
       //  RequestRender();
       //}
       // ImGui::InputFloat("intensity", &f);
-      if (ImGui::InputFloat3("eye", gRenderConfig.eye)) {
-        RequestRender();
-      }
-      if (ImGui::InputFloat3("up", gRenderConfig.up)) {
+      if (ImGui::InputFloat("distance", &gRenderConfig.distance)) {
         RequestRender();
       }
       if (ImGui::InputFloat3("look_at", gRenderConfig.look_at)) {

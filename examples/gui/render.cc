@@ -181,13 +181,13 @@ inline void CalcNormal(float3& N, float3 v0, float3 v1, float3 v2) {
 }
 
 void BuildCameraFrame(float3& origin, float3& corner, float3& u, float3& v,
-                      const float quat[4], const float eye[3],
-                      const float lookat[3], const float up[3], float fov,
+                      const float quat[4], const float distance,
+                      const float lookat[3], float fov,
                       int width, int height) {
   float r[4][4];
   build_rotmatrix(r, quat);
 
-  float dist = std::abs(eye[2]);
+  float dist = std::abs(distance);
 
   // the distance to plane where each pixel is shifted by 1 unit
   const float flen =
@@ -793,8 +793,8 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 
   // camera
   float3 origin, corner, u, v;
-  BuildCameraFrame(origin, corner, u, v, quat, config.eye, config.look_at,
-                   config.up, config.fov, width, height);
+  BuildCameraFrame(origin, corner, u, v, quat, config.distance, config.look_at,
+                   config.fov, width, height);
 
   auto kCancelFlagCheckMilliSeconds = 300;
 

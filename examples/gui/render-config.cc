@@ -48,31 +48,10 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
-  config->eye[0] = 0.0f;
-  config->eye[1] = 0.0f;
-  config->eye[2] = 5.0f;
-  if (o.find("eye") != o.end()) {
-    if (o["eye"].is<picojson::array>()) {
-      picojson::array arr = o["eye"].get<picojson::array>();
-      if (arr.size() == 3) {
-        config->eye[0] = static_cast<float>(arr[0].get<double>());
-        config->eye[1] = static_cast<float>(arr[1].get<double>());
-        config->eye[2] = static_cast<float>(arr[2].get<double>());
-      }
-    }
-  }
-
-  config->up[0] = 0.0f;
-  config->up[1] = 1.0f;
-  config->up[2] = 0.0f;
-  if (o.find("up") != o.end()) {
-    if (o["up"].is<picojson::array>()) {
-      picojson::array arr = o["up"].get<picojson::array>();
-      if (arr.size() == 3) {
-        config->up[0] = static_cast<float>(arr[0].get<double>());
-        config->up[1] = static_cast<float>(arr[1].get<double>());
-        config->up[2] = static_cast<float>(arr[2].get<double>());
-      }
+  config->distance = 0.0f;
+  if (o.find("distance") != o.end()) {
+    if (o["distance"].is<double>()) {
+      config->distance = static_cast<float>(o["distance"].get<double>());
     }
   }
 

@@ -11,9 +11,8 @@ typedef struct {
   int height;
 
   // camera
-  float eye[3];
-  float up[3];
   float look_at[3];
+  float distance; // distance from look_at
   float fov;  // vertical fov in degree.
 
   // render pass
