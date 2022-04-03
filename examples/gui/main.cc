@@ -69,6 +69,7 @@ THE SOFTWARE.
 #include "render-config.h"
 #include "render.h"
 #include "trackball.h"
+#include "matrix.h"
 
 #ifdef WIN32
 #undef min
@@ -92,6 +93,7 @@ bool gMouseLeftDown = false;
 int gShowBufferMode = SHOW_BUFFER_COLOR;
 bool gTabPressed = false;
 bool gShiftPressed = false;
+bool gCtrlPressed = false;
 float gShowPositionScale = 1.0f;
 float gShowDepthRange[2] = {10.0f, 20.f};
 bool gShowDepthPeseudoColor = true;
@@ -237,14 +239,20 @@ void keyboardCallback(int keycode, int state) {
   printf("hello key %d, state %d(ctrl %d)\n", keycode, state,
          window->isModifierKeyPressed(B3G_CONTROL));
   // if (keycode == 'q' && window && window->isModifierKeyPressed(B3G_SHIFT)) {
-  if (keycode == 27) {
+  if (keycode == 27) {  // ESC: exit
     if (window) window->setRequestExit();
   } else if (keycode == ' ') {
+    // SPACE: reset rotation. Q: how to retrigger a redraw?
     trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+    RequestRender();
   } else if (keycode == 9) {
+    // TAB: binding to dolly (move camera in local z-direction)
     gTabPressed = (state == 1);
   } else if (keycode == B3G_SHIFT) {
+    // SHIFT: binding to pan (move camera in local x-y plane)
     gShiftPressed = (state == 1);
+  } else if (keycode == B3G_CONTROL) {
+    gCtrlPressed = (state == 1);
   }
 
   ImGui_ImplBtGui_SetKeyState(keycode, (state == 1));
@@ -257,24 +265,36 @@ void keyboardCallback(int keycode, int state) {
 }
 
 void mouseMoveCallback(float x, float y) {
-  if (gMouseLeftDown) {
+  if (gMouseLeftDown) {  // mouse left click
     float w = static_cast<float>(gRenderConfig.width);
     float h = static_cast<float>(gRenderConfig.height);
 
     float y_offset = gHeight - h;
 
     if (gTabPressed) {
-      const float dolly_scale = 0.1f;
-      gRenderConfig.eye[2] += dolly_scale * (gMousePosY - y);
-      gRenderConfig.look_at[2] += dolly_scale * (gMousePosY - y);
+      // dolly: the scale should depend on the current
+      // distance to look-at point
+      const float dolly_scale = 1.0 * gRenderConfig.distance / float(w);
+      gRenderConfig.distance += dolly_scale * (gMousePosY - y);
     } else if (gShiftPressed) {
-      const float trans_scale = 0.02f;
-      gRenderConfig.eye[0] += trans_scale * (gMousePosX - x);
-      gRenderConfig.eye[1] -= trans_scale * (gMousePosY - y);
-      gRenderConfig.look_at[0] += trans_scale * (gMousePosX - x);
-      gRenderConfig.look_at[1] -= trans_scale * (gMousePosY - y);
+      // pan: move camera in local x-y-plane (the drawing plane). The scale
+      // should depend on the distance to look-at point
+      const float trans_scale = 1.0f * gRenderConfig.distance;
+      float r[4][4];
+      build_rotmatrix(r, gCurrQuat);
+      Matrix::Inverse(r);
 
-    } else {
+      // project the vector into the camera frame-of-reference
+      float pan2d[3] = {trans_scale * float(gMousePosX - x) / float(w),
+                        -trans_scale * float(gMousePosY - y) / float(h), 0.0};
+      float pan3d[3];
+      Matrix::MultV(pan3d, r, pan2d);
+
+      gRenderConfig.look_at[0] += pan3d[0];
+      gRenderConfig.look_at[1] += pan3d[1];
+      gRenderConfig.look_at[2] += pan3d[2];
+
+    } else {  // trackball
       // Adjust y.
       trackball(gPrevQuat, (2.f * gMousePosX - w) / (float)w,
                 (h - 2.f * (gMousePosY - y_offset)) / (float)h,
@@ -304,6 +324,24 @@ void mouseButtonCallback(int button, int state, float x, float y) {
     if (state) {
       gMouseLeftDown = true;
       trackball(gPrevQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+      if (gCtrlPressed) {  // set new look-at point
+        int xPic = int(x);
+        int yPic = gHeight - int(y);
+        if (xPic > 0 && xPic < gRenderConfig.width && yPic > 0 &&
+            yPic < gRenderConfig.height) {
+          float depth =
+              gRenderConfig
+                  .depthImage[4 * (yPic * gRenderConfig.width + xPic) + 0];
+          if (depth > 0) {
+            for (int i = 0; i < 3; i++)
+              gRenderConfig.look_at[i] =
+                  gRenderConfig
+                      .positionImage[4 * (yPic * gRenderConfig.width + xPic) +
+                                     i];
+            RequestRender();
+          }
+        }
+      }
     } else
       gMouseLeftDown = false;
   }
@@ -428,6 +466,7 @@ void Display(int width, int height) {
     }
   }
 
+  // draw rendered image at lower left corner
   glRasterPos2i(-1, -1);
   glDrawPixels(width, height, GL_RGBA, GL_FLOAT,
                static_cast<const GLvoid*>(&buf.at(0)));
@@ -546,10 +585,7 @@ int main(int argc, char** argv) {
       //  RequestRender();
       //}
       // ImGui::InputFloat("intensity", &f);
-      if (ImGui::InputFloat3("eye", gRenderConfig.eye)) {
-        RequestRender();
-      }
-      if (ImGui::InputFloat3("up", gRenderConfig.up)) {
+      if (ImGui::InputFloat("distance", &gRenderConfig.distance)) {
         RequestRender();
       }
       if (ImGui::InputFloat3("look_at", gRenderConfig.look_at)) {
