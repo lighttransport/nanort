@@ -200,6 +200,28 @@ See `examples` directory for example renderer using `NanoRT`.
 * [x] [examples/embree-api](examples/embree-api) NanoRT implementation of Embree API.
 * [x] [examples/ptex](examples/ptex) Ptex texturing.
 
+### Screenshots
+Raytracing allows to implement different camera models quite easily. See [examples/gui](examples/gui) for different camera
+models which can be set via the `config.json` or the GUI itself:
+* `perspective`\
+  ![](examples/gui/screenshot/00_camera_perspective_fov45.png)
+* `orthographic`\
+  ![](examples/gui/screenshot/01_camera_orthographic.png)
+* `spherical` FoV 120 & 180:\
+  ![](examples/gui/screenshot/02_camera_spherical_fov120.png)
+  ![](examples/gui/screenshot/02_camera_spherical_fov180.png)
+* `spherical-panorama` FoV 120 & 180:\
+  ![](examples/gui/screenshot/03_camera_spherical-panorama_fov120.png)
+  ![](examples/gui/screenshot/03_camera_spherical-panorama_fov180.png)
+* `cylindrical`: FoV 90 & 120:\
+  ![](examples/gui/screenshot/04_camera_cylindrical_90.png)
+  ![](examples/gui/screenshot/04_camera_cylindrical_120.png)
+* `fish-eye`: FoV 120 & 180:\
+  ![](examples/gui/screenshot/05_camera_fish-eye_120.png)
+  ![](examples/gui/screenshot/05_camera_fish-eye_180.png)
+* `fish-eye MKX22`: nonlinear fish-eye lens "iZugar MKX22 Fisheye Lens" with fixed FoV 220:\
+  ![](examples/gui/screenshot/06_camera_fish-eye_MKX22.png)
+
 ### Custom geometry
 
 Here is an example of custom geometry.

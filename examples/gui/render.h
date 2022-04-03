@@ -25,9 +25,9 @@ class Renderer {
   bool BuildBVH();
 
   /// Returns false when the rendering was canceled.
-  bool Render(float* rgba, float* aux_rgba, int *sample_counts, float quat[4],
+  bool Render(float* rgba, float* aux_rgba, int* sample_counts,
               const RenderConfig& config, std::atomic<bool>& cancel_flag);
 };
-};
+}  // namespace example
 
 #endif  // EXAMPLE_RENDER_H_
