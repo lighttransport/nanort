@@ -3,17 +3,29 @@
 
 #include <string>
 
+namespace Camera {
+class BaseCamera;
+}
+
 namespace example {
 
-typedef struct {
+struct RenderConfig {
   // framebuffer
   int width;
   int height;
 
   // camera
-  float look_at[3];
-  float distance; // distance from look_at
-  float fov;  // vertical fov in degree.
+  float look_at[3];  // the current look-at point.
+  //! the current quaternion for rotation definition.
+  float quat[4];
+  float distance;  // distance from look_at point.
+  float fov;       // vertical fov in degree.
+
+  //! The current selection of the camera in the Camera::gCameraTypes string
+  //! array.
+  int cameraTypeSelection = 0;
+  //! The camera object.
+  Camera::BaseCamera *camera = nullptr;
 
   // render pass
   int pass;
@@ -32,12 +44,11 @@ typedef struct {
   std::string obj_filename;
   std::string eson_filename;
   float scene_scale;
-
-} RenderConfig;
+};
 
 /// Loads config from JSON file.
 bool LoadRenderConfig(example::RenderConfig *config, const char *filename);
 
-}  // namespace
+}  // namespace example
 
 #endif  // RENDER_CONFIG_H

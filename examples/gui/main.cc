@@ -63,6 +63,7 @@ THE SOFTWARE.
 #include <mutex>   // C++11
 #include <thread>  // C++11
 
+#include "camera.h"
 #include "imgui.h"
 #include "imgui_impl_btgui.h"
 
@@ -94,10 +95,10 @@ int gShowBufferMode = SHOW_BUFFER_COLOR;
 bool gTabPressed = false;
 bool gShiftPressed = false;
 bool gCtrlPressed = false;
+bool gAltPressed = false;
 float gShowPositionScale = 1.0f;
 float gShowDepthRange[2] = {10.0f, 20.f};
 bool gShowDepthPeseudoColor = true;
-float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
 example::Renderer gRenderer;
@@ -110,13 +111,13 @@ std::mutex gMutex;
 
 std::vector<float> gDisplayRGBA;  // Accumurated image.
 std::vector<float> gRGBA;
-std::vector<float> gAuxRGBA;        // Auxiliary buffer
-std::vector<int> gSampleCounts;     // Sample num counter for each pixel.
-std::vector<float> gNormalRGBA;     // For visualizing normal
-std::vector<float> gPositionRGBA;   // For visualizing position
-std::vector<float> gDepthRGBA;      // For visualizing depth
-std::vector<float> gTexCoordRGBA;   // For visualizing texcoord
-std::vector<float> gVaryCoordRGBA;  // For visualizing varycentric coord
+std::vector<float> gAuxRGBA;          // Auxiliary buffer
+std::vector<int> gSampleCounts;       // Sample num counter for each pixel.
+std::vector<float> gNormalRGBA;       // For visualizing normal
+std::vector<float> gPositionRGBA;     // For visualizing position
+std::vector<float> gDepthRGBA;        // For visualizing depth
+std::vector<float> gTexCoordRGBA;     // For visualizing texcoord
+std::vector<float> gVaryCoordRGBA;    // For visualizing varycentric coord
 std::vector<float> gVertexColorRGBA;  // For visualizing vertex color
 std::vector<int> gMaterialID;  // For visualizing material id(-1 = invalid)
 
@@ -162,7 +163,7 @@ void RenderThread() {
 
     bool ret =
         gRenderer.Render(&gRGBA.at(0), &gAuxRGBA.at(0), &gSampleCounts.at(0),
-                         gCurrQuat, gRenderConfig, gRenderCancel);
+                         gRenderConfig, gRenderCancel);
 
     if (ret) {
       std::lock_guard<std::mutex> guard(gMutex);
@@ -183,37 +184,37 @@ void InitRender(example::RenderConfig* rc) {
 
   rc->max_passes = 128;
 
-  gSampleCounts.resize(rc->width * rc->height);
+  gSampleCounts.resize(rc->width * static_cast<size_t>(rc->height));
   std::fill(gSampleCounts.begin(), gSampleCounts.end(), 0.0);
 
-  gDisplayRGBA.resize(rc->width * rc->height * 4);
+  gDisplayRGBA.resize(rc->width * static_cast<size_t>(rc->height) * 4);
   std::fill(gDisplayRGBA.begin(), gDisplayRGBA.end(), 0.0);
 
-  gRGBA.resize(rc->width * rc->height * 4);
+  gRGBA.resize(rc->width * static_cast<size_t>(rc->height) * 4);
   std::fill(gRGBA.begin(), gRGBA.end(), 0.0);
 
-  gAuxRGBA.resize(rc->width * rc->height * 4);
+  gAuxRGBA.resize(rc->width * static_cast<size_t>(rc->height) * 4);
   std::fill(gAuxRGBA.begin(), gAuxRGBA.end(), 0.0);
 
-  gNormalRGBA.resize(rc->width * rc->height * 4);
+  gNormalRGBA.resize(rc->width * static_cast<size_t>(rc->height) * 4);
   std::fill(gNormalRGBA.begin(), gNormalRGBA.end(), 0.0);
 
-  gPositionRGBA.resize(rc->width * rc->height * 4);
+  gPositionRGBA.resize(rc->width * static_cast<size_t>(rc->height) * 4);
   std::fill(gPositionRGBA.begin(), gPositionRGBA.end(), 0.0);
 
-  gDepthRGBA.resize(rc->width * rc->height * 4);
+  gDepthRGBA.resize(rc->width * static_cast<size_t>(rc->height) * 4);
   std::fill(gDepthRGBA.begin(), gDepthRGBA.end(), 0.0);
 
-  gTexCoordRGBA.resize(rc->width * rc->height * 4);
+  gTexCoordRGBA.resize(rc->width * static_cast<size_t>(rc->height) * 4);
   std::fill(gTexCoordRGBA.begin(), gTexCoordRGBA.end(), 0.0);
 
-  gVaryCoordRGBA.resize(rc->width * rc->height * 4);
+  gVaryCoordRGBA.resize(rc->width * static_cast<size_t>(rc->height) * 4);
   std::fill(gVaryCoordRGBA.begin(), gVaryCoordRGBA.end(), 0.0);
 
-  gVertexColorRGBA.resize(rc->width * rc->height * 4);
+  gVertexColorRGBA.resize(rc->width * static_cast<size_t>(rc->height) * 4);
   std::fill(gVertexColorRGBA.begin(), gVertexColorRGBA.end(), 0.0);
 
-  gMaterialID.resize(rc->width * rc->height);
+  gMaterialID.resize(rc->width * static_cast<size_t>(rc->height));
   std::fill(gMaterialID.begin(), gMaterialID.end(), -1);
 
   rc->normalImage = &gNormalRGBA.at(0);
@@ -224,7 +225,7 @@ void InitRender(example::RenderConfig* rc) {
   rc->vertexColorImage = &gVertexColorRGBA.at(0);
   rc->materialIDImage = &gMaterialID.at(0);
 
-  trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+  trackball(gRenderConfig.quat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 void checkErrors(std::string desc) {
@@ -236,14 +237,14 @@ void checkErrors(std::string desc) {
 }
 
 void keyboardCallback(int keycode, int state) {
-  printf("hello key %d, state %d(ctrl %d)\n", keycode, state,
-         window->isModifierKeyPressed(B3G_CONTROL));
+  //printf("hello key %d, state %d(ctrl %d)\n", keycode, state,
+  //       window->isModifierKeyPressed(B3G_CONTROL));
   // if (keycode == 'q' && window && window->isModifierKeyPressed(B3G_SHIFT)) {
   if (keycode == 27) {  // ESC: exit
     if (window) window->setRequestExit();
   } else if (keycode == ' ') {
     // SPACE: reset rotation. Q: how to retrigger a redraw?
-    trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+    trackball(gRenderConfig.quat, 0.0f, 0.0f, 0.0f, 0.0f);
     RequestRender();
   } else if (keycode == 9) {
     // TAB: binding to dolly (move camera in local z-direction)
@@ -251,7 +252,11 @@ void keyboardCallback(int keycode, int state) {
   } else if (keycode == B3G_SHIFT) {
     // SHIFT: binding to pan (move camera in local x-y plane)
     gShiftPressed = (state == 1);
+  } else if (keycode == B3G_ALT) {
+    // ALT: binding to field-of-view (open/close the vertical field of view)
+    gAltPressed = (state == 1);
   } else if (keycode == B3G_CONTROL) {
+    // CTRL+click: binding to set new look-at-point
     gCtrlPressed = (state == 1);
   }
 
@@ -264,6 +269,11 @@ void keyboardCallback(int keycode, int state) {
   }
 }
 
+template <typename T>
+T saturate(const T& val, const T& minVal, const T& maxVal) {
+  return std::max<T>(minVal, std::min<T>(maxVal, val));
+}
+
 void mouseMoveCallback(float x, float y) {
   if (gMouseLeftDown) {  // mouse left click
     float w = static_cast<float>(gRenderConfig.width);
@@ -274,33 +284,36 @@ void mouseMoveCallback(float x, float y) {
     if (gTabPressed) {
       // dolly: the scale should depend on the current
       // distance to look-at point
-      const float dolly_scale = 1.0 * gRenderConfig.distance / float(w);
+      const float dolly_scale = 1.0 * gRenderConfig.distance / w;
       gRenderConfig.distance += dolly_scale * (gMousePosY - y);
     } else if (gShiftPressed) {
       // pan: move camera in local x-y-plane (the drawing plane). The scale
       // should depend on the distance to look-at point
       const float trans_scale = 1.0f * gRenderConfig.distance;
       float r[4][4];
-      build_rotmatrix(r, gCurrQuat);
+      build_rotmatrix(r, gRenderConfig.quat);
       Matrix::Inverse(r);
 
       // project the vector into the camera frame-of-reference
-      float pan2d[3] = {trans_scale * float(gMousePosX - x) / float(w),
-                        -trans_scale * float(gMousePosY - y) / float(h), 0.0};
+      float pan2d[3] = {trans_scale * float(gMousePosX - x) / w,
+                        -trans_scale * float(gMousePosY - y) / h, 0.0};
       float pan3d[3];
       Matrix::MultV(pan3d, r, pan2d);
-
-      gRenderConfig.look_at[0] += pan3d[0];
-      gRenderConfig.look_at[1] += pan3d[1];
-      gRenderConfig.look_at[2] += pan3d[2];
-
+      for (int i = 0; i < 3; i++) gRenderConfig.look_at[i] += pan3d[i];
+    } else if (gAltPressed) {
+      // alter field-of-view
+      const float fov_scale = 0.5;
+      // Spherical projections would also support larger than +/- 90 vertical
+      // field of view. In that case (fov > 180), the image would repeat
+      gRenderConfig.fov =
+          saturate<float>(gRenderConfig.fov + fov_scale * (gMousePosY - y), 0.1, 180);
     } else {  // trackball
       // Adjust y.
       trackball(gPrevQuat, (2.f * gMousePosX - w) / (float)w,
                 (h - 2.f * (gMousePosY - y_offset)) / (float)h,
                 (2.f * x - w) / (float)w,
                 (h - 2.f * (y - y_offset)) / (float)h);
-      add_quats(gPrevQuat, gCurrQuat, gCurrQuat);
+      add_quats(gPrevQuat, gRenderConfig.quat, gRenderConfig.quat);
     }
     RequestRender();
   }
@@ -472,6 +485,7 @@ void Display(int width, int height) {
                static_cast<const GLvoid*>(&buf.at(0)));
 }
 
+
 int main(int argc, char** argv) {
   std::string config_filename = "config.json";
 
@@ -588,8 +602,38 @@ int main(int argc, char** argv) {
       if (ImGui::InputFloat("distance", &gRenderConfig.distance)) {
         RequestRender();
       }
-      if (ImGui::InputFloat3("look_at", gRenderConfig.look_at)) {
+      //ImGui::SameLine();
+      if (ImGui::InputFloat("FoV", &gRenderConfig.fov, 1.0f, 5.0f, 2)) {
+        gRenderConfig.fov = saturate<float>(gRenderConfig.fov, 0.1, 180);
         RequestRender();
+      }
+
+      if (ImGui::InputFloat3("look-at", gRenderConfig.look_at)) {
+        RequestRender();
+      }
+
+      // shortcut namespace
+      namespace cr = Camera::Registry;
+      // set camera type
+      if (ImGui::BeginCombo(
+              "camera type",
+              cr::cameraTypes[gRenderConfig.cameraTypeSelection].typeName)) {
+        for (int i = 0; i < IM_ARRAYSIZE(cr::cameraTypes); ++i) {
+          bool is_selected =
+              cr::cameraTypes[gRenderConfig.cameraTypeSelection].typeName ==
+              cr::cameraTypes[i].typeName;
+          if (ImGui::Selectable(cr::cameraTypes[i].typeName, is_selected)) {
+            Camera::setCameraFromIdx(gRenderConfig, i);
+            printf("current selection: %d (%s)\n",
+                   gRenderConfig.cameraTypeSelection,
+                   cr::cameraTypes[gRenderConfig.cameraTypeSelection].typeName);
+            RequestRender();
+          }
+          // You may set the initial focus when opening the combo (scrolling +
+          // for keyboard navigation support)
+          if (is_selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
       }
 
       ImGui::RadioButton("color", &gShowBufferMode, SHOW_BUFFER_COLOR);
@@ -604,9 +648,11 @@ int main(int argc, char** argv) {
       ImGui::SameLine();
       ImGui::RadioButton("varycoord", &gShowBufferMode, SHOW_BUFFER_VARYCOORD);
       ImGui::SameLine();
-      ImGui::RadioButton("vertex col", &gShowBufferMode, SHOW_BUFFER_VERTEXCOLOR);
+      ImGui::RadioButton("vertex col", &gShowBufferMode,
+                         SHOW_BUFFER_VERTEXCOLOR);
       ImGui::SameLine();
-      ImGui::RadioButton("material id", &gShowBufferMode, SHOW_BUFFER_MATERIALID);
+      ImGui::RadioButton("material id", &gShowBufferMode,
+                         SHOW_BUFFER_MATERIALID);
 
       ImGui::InputFloat("show pos scale", &gShowPositionScale);
 

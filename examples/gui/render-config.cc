@@ -1,9 +1,10 @@
 #include "render-config.h"
 
-#include "picojson.h"
-
 #include <fstream>
 #include <istream>
+
+#include "camera.h"
+#include "picojson.h"
 
 namespace example {
 
@@ -90,6 +91,12 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
+  if (o.find("camera_type") != o.end()) {
+    Camera::setCameraFromStr(*config, o["camera_type"].get<std::string>());
+  } else {
+    Camera::setCameraFromIdx(*config, 0);
+  }
+
   return true;
 }
-}
+}  // namespace example

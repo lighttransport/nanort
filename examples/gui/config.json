@@ -4,5 +4,26 @@
   "height" : 512,
   "distance" : 15,
   "look_at" : [0, 5, 0],
-  "dummy" : 0
+  "dummy" : 0,
+
+  "camera_type" : "perspective",
+  "fov" : 45.0,
+
+  "/camera_type" : "orthographic",
+  "/fov" : 45.0,
+
+  "/camera_type" : "cylindrical",
+  "/fov" : 45.0,
+
+  "/camera_type" : "spherical",
+  "/fov" : 180.0,
+
+  "/camera_type" : "spherical-panorama",
+  "/fov" : 180.0,
+
+  "/camera_type" : "fish-eye",
+  "/fov" : 180.0,
+
+  "/camera_type" : "fish-eye MKX22",
+  "/fov" : 180.0
 }

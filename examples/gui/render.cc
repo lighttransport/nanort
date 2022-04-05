@@ -46,6 +46,7 @@ THE SOFTWARE.
 #include "eson.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
+#include "camera.h"
 #include "tiny_obj_loader.h"
 #include "trackball.h"
 
@@ -75,7 +76,8 @@ float pcg32_random(pcg32_state_t* rng) {
   rng->state = oldstate * 6364136223846793005ULL + rng->inc;
   unsigned int xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
   unsigned int rot = oldstate >> 59u;
-  unsigned int ret = (xorshifted >> rot) | (xorshifted << ((-static_cast<int>(rot)) & 31));
+  unsigned int ret =
+      (xorshifted >> rot) | (xorshifted << ((-static_cast<int>(rot)) & 31));
 
   return (float)((double)ret / (double)4294967296.0);
 }
@@ -98,10 +100,9 @@ typedef struct {
   std::vector<float> facevarying_tangents;   /// [xyz] * 3(triangle) * num_faces
   std::vector<float> facevarying_binormals;  /// [xyz] * 3(triangle) * num_faces
   std::vector<float> facevarying_uvs;        /// [xy]  * 3(triangle) * num_faces
-  std::vector<float>
-      vertex_colors;                         /// [rgb] * num_vertices
-  std::vector<unsigned int> faces;         /// triangle x num_faces
-  std::vector<unsigned int> material_ids;  /// index x num_faces
+  std::vector<float> vertex_colors;          /// [rgb] * num_vertices
+  std::vector<unsigned int> faces;           /// triangle x num_faces
+  std::vector<unsigned int> material_ids;    /// index x num_faces
 } Mesh;
 
 struct Material {
@@ -178,56 +179,6 @@ inline void CalcNormal(float3& N, float3 v0, float3 v1, float3 v2) {
   N = vcross(v10, v20);  // CCW
   // N = vcross(v20, v10); // CW
   N = vnormalize(N);
-}
-
-void BuildCameraFrame(float3& origin, float3& corner, float3& u, float3& v,
-                      const float quat[4], const float distance,
-                      const float lookat[3], float fov,
-                      int width, int height) {
-  float r[4][4];
-  build_rotmatrix(r, quat);
-
-  float dist = std::abs(distance);
-
-  // the distance to plane where each pixel is shifted by 1 unit
-  const float flen =
-      (0.5f * (float)height / tanf(0.5f * (float)(fov * kPI / 180.0f)));
-  // do for each component
-  for (int i = 0; i < 3; i++) {
-    // u, v and dir are just the individual columns of the rotation matrix
-    u[i] = r[i][0];
-    v[i] = r[i][1];
-    float dir_i = r[i][2];
-
-    origin[i] = lookat[i] + dir_i * dist;
-    float look_i = -dir_i * flen;
-    // The lower right corner is relative to zero. The half-pixel offsets (-10.5)
-    // account for the center of a pixel.
-    corner[i] = look_i - 0.5f * ((width - 0.5) * u[i] + (height - 0.5) * v[i]);
-  }
-}
-
-nanort::Ray<float> GenerateRay(const float3& origin, const float3& corner,
-                               const float3& du, const float3& dv, float u,
-                               float v) {
-  float3 dir;
-
-  dir[0] = (corner[0] + u * du[0] + v * dv[0]) - origin[0];
-  dir[1] = (corner[1] + u * du[1] + v * dv[1]) - origin[1];
-  dir[2] = (corner[2] + u * du[2] + v * dv[2]) - origin[2];
-  dir = vnormalize(dir);
-
-  float3 org;
-
-  nanort::Ray<float> ray;
-  ray.org[0] = origin[0];
-  ray.org[1] = origin[1];
-  ray.org[2] = origin[2];
-  ray.dir[0] = dir[0];
-  ray.dir[1] = dir[1];
-  ray.dir[2] = dir[2];
-
-  return ray;
 }
 
 void FetchTexture(int tex_idx, float u, float v, float* col) {
@@ -338,7 +289,7 @@ bool LoadObj(Mesh& mesh, const char* filename, float scale) {
   // mesh.facevarying_tangents = NULL;
   // mesh.facevarying_binormals = NULL;
 
-  //size_t vertexIdxOffset = 0;
+  // size_t vertexIdxOffset = 0;
   size_t faceIdxOffset = 0;
 
   for (size_t i = 0; i < attrib.vertices.size(); i++) {
@@ -729,7 +680,8 @@ bool Renderer::LoadEsonMesh(const char* eson_filename) {
 
     texture.width = static_cast<int>(v.Get(pf + "width").Get<int64_t>());
     texture.height = static_cast<int>(v.Get(pf + "height").Get<int64_t>());
-    texture.components = static_cast<int>(v.Get(pf + "components").Get<int64_t>());
+    texture.components =
+        static_cast<int>(v.Get(pf + "components").Get<int64_t>());
 
     size_t n_elem = texture.width * texture.height * texture.components;
     texture.image = new unsigned char[n_elem];
@@ -751,15 +703,15 @@ bool Renderer::BuildBVH() {
 
   auto t_start = std::chrono::system_clock::now();
 
-  nanort::TriangleMesh<float> triangle_mesh(gMesh.vertices.data(),
-                                            gMesh.faces.data(), sizeof(float) * 3);
-  nanort::TriangleSAHPred<float> triangle_pred(gMesh.vertices.data(),
-                                               gMesh.faces.data(), sizeof(float) * 3);
+  nanort::TriangleMesh<float> triangle_mesh(
+      gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
+  nanort::TriangleSAHPred<float> triangle_pred(
+      gMesh.vertices.data(), gMesh.faces.data(), sizeof(float) * 3);
 
   printf("num_triangles = %lu\n", gMesh.num_faces);
 
-  bool ret = gAccel.Build(gMesh.num_faces, triangle_mesh,
-                          triangle_pred, build_options);
+  bool ret = gAccel.Build(gMesh.num_faces, triangle_mesh, triangle_pred,
+                          build_options);
   assert(ret);
 
   auto t_end = std::chrono::system_clock::now();
@@ -782,7 +734,7 @@ bool Renderer::BuildBVH() {
 }
 
 bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
-                      float quat[4], const RenderConfig& config,
+                      const RenderConfig& config,
                       std::atomic<bool>& cancelFlag) {
   if (!gAccel.IsValid()) {
     return false;
@@ -792,9 +744,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
   int height = config.height;
 
   // camera
-  float3 origin, corner, u, v;
-  BuildCameraFrame(origin, corner, u, v, quat, config.distance, config.look_at,
-                   config.fov, width, height);
+  config.camera->setTransformation(config);
 
   auto kCancelFlagCheckMilliSeconds = 300;
 
@@ -836,19 +786,17 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
 
         for (int x = 0; x < config.width; x++) {
           nanort::Ray<float> ray;
-          ray.org[0] = origin[0];
-          ray.org[1] = origin[1];
-          ray.org[2] = origin[2];
 
           float du = pcg32_random(&rng);
           float dv = pcg32_random(&rng);
+          float duv[2] = {float(x) + du, float(y) + dv};
+
+          // camera model generates the ray based on current xy-position in image coordinates duv
+          config.camera->generateRay(ray, duv);
 
           float3 dir;
-          dir = corner + (float(x) + du) * u + (float(y) + dv) * v;
+          for (int i = 0; i < 3; i++) dir[i] = ray.dir[i];
           dir = vnormalize(dir);
-          ray.dir[0] = dir[0];
-          ray.dir[1] = dir[1];
-          ray.dir[2] = dir[2];
 
           float kFar = 1.0e+30f;
           ray.min_t = 0.0f;
@@ -1074,6 +1022,6 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
   }
 
   return (!cancelFlag);
-};
+}
 
 }  // namespace example

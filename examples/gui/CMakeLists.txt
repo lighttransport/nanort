@@ -6,6 +6,11 @@ set(SOURCES
     render.cc
     render-config.cc
     matrix.cc
+    camera.cc
+    render.h
+    render-config.h
+    matrix.h
+    camera.h
 )
 
 add_executable(${BUILD_TARGET} ${SOURCES})
