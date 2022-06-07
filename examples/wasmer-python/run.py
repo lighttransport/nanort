@@ -2,36 +2,45 @@
 from wasmer import engine, wasi, ImportObject, Function, Store, Memory, MemoryType, Module, Instance, Float32Array
 from wasmer_compiler_cranelift import Compiler
 
-def host_functions(store):
+class RuntimeHelper:
+    def __init__(self, store):
+        self.store = store
+        self.memory = None
 
-    import_object = ImportObject()
+    def set_memory(self, memory):
+        self.memory = memory
 
-    def myabort():
-        pass
+    def host_functions(self):
 
-    def mymemcpy_big(dest: 'i32', src: 'i32', n: 'i32'):
-        print("memcpy big")
-        pass
+        import_object = ImportObject()
 
-    def myresize_heap(a: 'i32') -> int:
-        print("resize_heap")
-        pass
+        def myabort():
+            pass
 
-    abort_host_function = Function(store, myabort)
-    memcpy_big_host_function = Function(store, mymemcpy_big)
-    resize_heap_host_function = Function(store, myresize_heap)
+        def mymemcpy_big(dest: 'i32', src: 'i32', n: 'i32'):
+            print("memcpy big: dest {}, src {}, n {}".format(dest, src, n))
+            buf = bytearray(self.memory.buffer)
+            buf[dest:dest+n] = buf[src:src+n]
 
-    # Now let's register the `sum` import inside the `env` namespace.
-    import_object.register(
-        "env",
-        {
-            "abort": abort_host_function,
-            "emscripten_memcpy_big": memcpy_big_host_function,
-            "emscripten_resize_heap": resize_heap_host_function,
-        },
-    )
+        def myresize_heap(a: 'i32') -> int:
+            print("resize_heap: a {}".format(a))
+            raise "TODO"
 
-    return import_object
+        abort_host_function = Function(self.store, myabort)
+        memcpy_big_host_function = Function(self.store, mymemcpy_big)
+        resize_heap_host_function = Function(self.store, myresize_heap)
+
+        # Now let's register the `sum` import inside the `env` namespace.
+        import_object.register(
+            "env",
+            {
+                "abort": abort_host_function,
+                "emscripten_memcpy_big": memcpy_big_host_function,
+                "emscripten_resize_heap": resize_heap_host_function,
+            },
+        )
+
+        return import_object
 
 # Let's define the store, that holds the engine, that holds the compiler.
 store = Store(engine.Universal(Compiler))
@@ -48,25 +57,35 @@ print(module)
 
 #import_object = wasi_env.generate_import_object(store, wasi_version)
 
-import_object = host_functions(store)
+helper = RuntimeHelper(store)
+
+import_object = helper.host_functions()
 
 # Now the module is compiled, we can instantiate it.
 instance = Instance(module, import_object)
 
+m = instance.exports.memory
+helper.set_memory(m)
+
 #input_pointer = instance.exports.allocate(4 * 4)
 #print(input_pointer)
 
-m = instance.exports.memory
-print(m.size)
-m.grow(2)
-print(m.size)
+#print(m.size)
+#m.grow(2)
+#print(m.size)
 
-f32_view = m.float32_view(1)
+bt = bytearray(m.buffer)
+f32_view = m.float32_view(0)
 f32_view[0] = 1.0
 f32_view[1] = 2.0
 f32_view[2] = 3.3
 f32_view[3] = 4.4
 print(f32_view)
 
-instance.exports.func
-print(instance.exports)
+ret = instance.exports.func(0, 4, 16)
+print(ret)
+
+#f32_view = m.float32_view(0)
+
+print("out", f32_view[4])
+#print(instance.exports)

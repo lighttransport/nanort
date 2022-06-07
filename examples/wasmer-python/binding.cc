@@ -2,6 +2,7 @@
 #include <string>
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -13,20 +14,28 @@
 extern "C" {
 #endif
 
-//void *EMSCRIPTEN_KEEPALIVE allocate(size_t n)
-//{
-//  void *ptr = malloc(n);
-//  return ptr;
-//}
+void *EMSCRIPTEN_KEEPALIVE allocate(size_t n)
+{
+  void *ptr = malloc(n);
+  return ptr;
+}
 
-float EMSCRIPTEN_KEEPALIVE func(const float *a, size_t n) { //, float *b) {
+float EMSCRIPTEN_KEEPALIVE func(float *a, size_t n, float *out) { //, float *b) {
   std::vector<float> buf;
-  buf.resize(n);
+  buf.resize(1024*1024*1);
+
+  memcpy(buf.data(), buf.data(), 1024*1024*sizeof(float));
 
   float sum = 0.0f;
   for (size_t i = 0; i < n; i++) {
     sum += a[i];
   }
+
+  //printf("muda\n");
+  //std::cout << "bora\n";
+
+  out[0] = sum;
+  //a[0] = sum;
 
   return sum;
 }
