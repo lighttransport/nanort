@@ -6,6 +6,11 @@
 #include <iostream>
 #include <vector>
 
+#if defined(NANORT_USE_CPP11_FEATURE)
+#include <thread>
+#include <mutex>
+#endif
+
 #define NOMINMAX
 #include "tiny_obj_loader.h"
 
@@ -775,11 +780,29 @@ int main(int argc, char **argv) {
 
   srand(0);
 
+
 // Shoot rays.
+#if defined(NANORT_USE_CPP11_FEATURE)
+
+  size_t num_threads = std::max(size_t(1), size_t(std::thread::hardware_concurrency()));
+  std::vector<std::thread> workers;
+  std::atomic<uint32_t> i(0);
+  std::atomic<uint32_t> tcount(0); // thread_id counter
+
+  std::cout << "# of threads = " << std::to_string(num_threads) << "\n";
+
+  for (size_t t = 0; t < num_threads; t++) {
+    workers.emplace_back(std::thread([&]() { 
+      uint32_t y = 0;
+      uint32_t tid = tcount++;
+      while ((y = i++) < height) {
+    
+#else
 #ifdef _OPENMP
 #pragma omp parallel for schedule(dynamic, 1)
 #endif
   for (int y = 0; y < height; y++) {
+#endif
     for (int x = 0; x < width; x++) {
       float3 finalColor = float3(0, 0, 0);
       for (int i = 0; i < SPP; ++i) {
@@ -968,8 +991,25 @@ int main(int argc, char **argv) {
       rgb[3 * ((height - y - 1) * width + x) + 2] = finalColor[2];
     }
 
-    progressBar(y + 1, height);
+#if defined(NANORT_USE_CPP11_FEATURE)
+    if (tid == 0) { // master thread
+#endif
+      progressBar(y + 1, height);
+#if defined(NANORT_USE_CPP11_FEATURE)
+    }
+#endif
+
+#if defined(NANORT_USE_CPP11_FEATURE)
+  } // while
+  })); // lambda
+  } // for num_threads
+
+  for (auto &t : workers) {
+    t.join();
   }
+#else
+  }
+#endif
 
   // Save image.
   SaveImage("render.exr", &rgb.at(0), width, height);
