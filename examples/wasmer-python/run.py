@@ -26,9 +26,14 @@ class RuntimeHelper:
             print("resize_heap: a {}".format(a))
             raise "TODO"
 
+        def myfd_write(a: 'i32', b: 'i32', c: 'i32', d: 'i32') -> int:
+            print("fd_write")
+
         abort_host_function = Function(self.store, myabort)
         memcpy_big_host_function = Function(self.store, mymemcpy_big)
         resize_heap_host_function = Function(self.store, myresize_heap)
+
+        fd_write_host_function = Function(self.store, myfd_write)
 
         # Now let's register the `sum` import inside the `env` namespace.
         import_object.register(
@@ -38,6 +43,13 @@ class RuntimeHelper:
                 "emscripten_memcpy_big": memcpy_big_host_function,
                 "emscripten_resize_heap": resize_heap_host_function,
             },
+        )
+
+        import_object.register(
+            "wasi_snapshot_preview1",
+            {
+                "fd_write": fd_write_host_function,
+            }
         )
 
         return import_object
@@ -52,8 +64,8 @@ wasm_bytes = open('a.out.wasm', 'rb').read()
 module = Module(store, wasm_bytes)
 print(module)
 
-#wasi_version = wasi.get_version(module, strict=True)
-#print("WASI version", wasi_version)
+wasi_version = wasi.get_version(module, strict=True)
+print("WASI version", wasi_version)
 
 #import_object = wasi_env.generate_import_object(store, wasi_version)
 

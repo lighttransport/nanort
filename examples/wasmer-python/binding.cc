@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <mutex>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -32,7 +33,7 @@ float EMSCRIPTEN_KEEPALIVE func(float *a, size_t n, float *out) { //, float *b) 
   }
 
   //printf("muda\n");
-  //std::cout << "bora\n";
+  std::cout << "bora\n";
 
   out[0] = sum;
   //a[0] = sum;
