@@ -503,9 +503,9 @@ class CurvePred {
   }
 
  private:
-  mutable int axis_;
-  mutable float pos_;
-  const float *vertices_;
+  mutable int axis_{0};
+  mutable float pos_{0.0f};
+  const float *vertices_{nullptr};
 };
 
 // -----------------------------------------------------
@@ -552,6 +552,48 @@ class CurveGeometry {
                                 radiuss_[4 * prim_index + i],
                             (*bmax)[2]);
     }
+  }
+
+  void BoundingBoxAndCenter(float3 *bmin, float3 *bmax, float3 *center, unsigned int prim_index) const {
+    (*bmin)[0] =
+        vertices_[3 * (4 * prim_index + 0) + 0] - radiuss_[4 * prim_index];
+    (*bmin)[1] =
+        vertices_[3 * (4 * prim_index + 0) + 1] - radiuss_[4 * prim_index];
+    (*bmin)[2] =
+        vertices_[3 * (4 * prim_index + 0) + 2] - radiuss_[4 * prim_index];
+    (*bmax)[0] =
+        vertices_[3 * (4 * prim_index + 0) + 0] + radiuss_[4 * prim_index];
+    (*bmax)[1] =
+        vertices_[3 * (4 * prim_index + 0) + 1] + radiuss_[4 * prim_index];
+    (*bmax)[2] =
+        vertices_[3 * (4 * prim_index + 0) + 2] + radiuss_[4 * prim_index];
+    for (int i = 1; i < 4; i++) {
+      (*bmin)[0] = std::min(vertices_[3 * (4 * prim_index + i) + 0] -
+                                radiuss_[4 * prim_index + i],
+                            (*bmin)[0]);
+      (*bmin)[1] = std::min(vertices_[3 * (4 * prim_index + i) + 1] -
+                                radiuss_[4 * prim_index + i],
+                            (*bmin)[1]);
+      (*bmin)[2] = std::min(vertices_[3 * (4 * prim_index + i) + 2] -
+                                radiuss_[4 * prim_index + i],
+                            (*bmin)[2]);
+      (*bmax)[0] = std::max(vertices_[3 * (4 * prim_index + i) + 0] +
+                                radiuss_[4 * prim_index + i],
+                            (*bmax)[0]);
+      (*bmax)[1] = std::max(vertices_[3 * (4 * prim_index + i) + 1] +
+                                radiuss_[4 * prim_index + i],
+                            (*bmax)[1]);
+      (*bmax)[2] = std::max(vertices_[3 * (4 * prim_index + i) + 2] +
+                                radiuss_[4 * prim_index + i],
+                            (*bmax)[2]);
+    }
+
+    float3 p0(&vertices_[3 * (4 * prim_index + 0)]);
+    float3 p1(&vertices_[3 * (4 * prim_index + 1)]);
+    float3 p2(&vertices_[3 * (4 * prim_index + 2)]);
+    float3 p3(&vertices_[3 * (4 * prim_index + 3)]);
+
+    (*center) = (p0 + p1 + p2 + p3) / 4.0f;
   }
 
   const float *vertices_;

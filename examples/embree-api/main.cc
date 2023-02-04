@@ -221,8 +221,8 @@ int main(int argc, char **argv) {
       ray.org[2] = 20.0f;
 
       float dir[3], ndir[3];
-      dir[0] = (x / float(width)) - 0.5f;
-      dir[1] = (y / float(height)) - 0.5f;
+      dir[0] = (float(x) / float(width)) - 0.5f;
+      dir[1] = (float(y) / float(height)) - 0.5f;
       dir[2] = -1.0f;
       vnormalize(ndir, dir);
       ray.dir[0] = ndir[0];

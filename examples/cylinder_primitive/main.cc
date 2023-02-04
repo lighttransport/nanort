@@ -163,6 +163,46 @@ class CylinderGeometry {
         (*bmax)[2]);
   }
 
+  void BoundingBoxAndCenter(nanort::real3<float> *bmin, nanort::real3<float> *bmax, nanort::real3<float> *center,
+                   unsigned int prim_index) const {
+    (*bmin)[0] =
+        vertices_[3 * (2 * prim_index + 0) + 0] - radiuss_[2 * prim_index + 0];
+    (*bmin)[1] =
+        vertices_[3 * (2 * prim_index + 0) + 1] - radiuss_[2 * prim_index + 0];
+    (*bmin)[2] =
+        vertices_[3 * (2 * prim_index + 0) + 2] - radiuss_[2 * prim_index + 0];
+    (*bmax)[0] =
+        vertices_[3 * (2 * prim_index + 0) + 0] + radiuss_[2 * prim_index + 0];
+    (*bmax)[1] =
+        vertices_[3 * (2 * prim_index + 0) + 1] + radiuss_[2 * prim_index + 0];
+    (*bmax)[2] =
+        vertices_[3 * (2 * prim_index + 0) + 2] + radiuss_[2 * prim_index + 0];
+
+    (*bmin)[0] = std::min(
+        vertices_[3 * (2 * prim_index + 1) + 0] - radiuss_[2 * prim_index + 1],
+        (*bmin)[0]);
+    (*bmin)[1] = std::min(
+        vertices_[3 * (2 * prim_index + 1) + 1] - radiuss_[2 * prim_index + 1],
+        (*bmin)[1]);
+    (*bmin)[2] = std::min(
+        vertices_[3 * (2 * prim_index + 1) + 2] - radiuss_[2 * prim_index + 1],
+        (*bmin)[2]);
+    (*bmax)[0] = std::max(
+        vertices_[3 * (2 * prim_index + 1) + 0] + radiuss_[2 * prim_index + 1],
+        (*bmax)[0]);
+    (*bmax)[1] = std::max(
+        vertices_[3 * (2 * prim_index + 1) + 1] + radiuss_[2 * prim_index + 1],
+        (*bmax)[1]);
+    (*bmax)[2] = std::max(
+        vertices_[3 * (2 * prim_index + 1) + 2] + radiuss_[2 * prim_index + 1],
+        (*bmax)[2]);
+
+    nanort::real3<float> p0(&vertices_[3 * (2 * prim_index + 0)]);
+    nanort::real3<float> p1(&vertices_[3 * (2 * prim_index + 1)]);
+
+    (*center) = (p0 + p1) / 2.0f;
+  }
+
   const float *vertices_;
   const float *radiuss_;
   mutable nanort::real3<float> ray_org_;
