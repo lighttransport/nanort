@@ -527,7 +527,7 @@ class NodeBBoxPred {
 
     (*nodes_)[i].GetWorldBoundingBox(bmin, bmax);
 
-    T center = bmax[axis] - bmin[axis];
+    T center = (bmin[axis] + bmax[axis]) / T(2.0);
 
     return (center < pos);
   }
@@ -555,6 +555,20 @@ class NodeBBoxGeometry {
     (*bmax)[0] = b[0];
     (*bmax)[1] = b[1];
     (*bmax)[2] = b[2];
+  }
+
+  void BoundingBoxAndCenter(nanort::real3<T> *bmin, nanort::real3<T> *bmax, nanort::real3<T> *center,
+                   unsigned int prim_index) const {
+    T a[3], b[3];
+    (*nodes_)[prim_index].GetWorldBoundingBox(a, b);
+    (*bmin)[0] = a[0];
+    (*bmin)[1] = a[1];
+    (*bmin)[2] = a[2];
+    (*bmax)[0] = b[0];
+    (*bmax)[1] = b[1];
+    (*bmax)[2] = b[2];
+
+    (*center) = ((*bmax) + (*bmin)) / T(2.0);
   }
 
   const std::vector<Node<T, M> > *nodes_;

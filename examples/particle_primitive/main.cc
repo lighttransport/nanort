@@ -1,11 +1,25 @@
 #include "nanort.h"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+#endif
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #include <stdint.h>
 
 namespace {
+
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+#endif
 
 // PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
 // Licensed under Apache License 2.0 (NO WARRANTY, etc. see website)
@@ -25,7 +39,7 @@ float pcg32_random(pcg32_state_t *rng) {
   unsigned int rot = oldstate >> 59u;
   unsigned int ret = (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
 
-  return (float)((double)ret / (double)4294967296.0);
+  return float(double(ret) / double(4294967296.0));
 }
 
 void pcg32_srandom(pcg32_state_t *rng, uint64_t initstate, uint64_t initseq) {
@@ -57,6 +71,10 @@ void SaveImagePNG(const char *filename, const float *rgb, int width,
     exit(-1);
   }
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 typedef nanort::real3<float> float3;
 
@@ -106,6 +124,21 @@ class SphereGeometry {
     (*bmax)[2] = vertices_[3 * prim_index + 2] + radiuss_[prim_index];
   }
 
+  /// Compute bounding box and prim's center for `prim_index`th sphere.
+  /// This function is called for each primitive in BVH build.
+  void BoundingBoxAndCenter(float3 *bmin, float3 *bmax, float3 *center, unsigned int prim_index) const {
+    (*bmin)[0] = vertices_[3 * prim_index + 0] - radiuss_[prim_index];
+    (*bmin)[1] = vertices_[3 * prim_index + 1] - radiuss_[prim_index];
+    (*bmin)[2] = vertices_[3 * prim_index + 2] - radiuss_[prim_index];
+    (*bmax)[0] = vertices_[3 * prim_index + 0] + radiuss_[prim_index];
+    (*bmax)[1] = vertices_[3 * prim_index + 1] + radiuss_[prim_index];
+    (*bmax)[2] = vertices_[3 * prim_index + 2] + radiuss_[prim_index];
+
+    (*center)[0] = vertices_[3 * prim_index + 0];
+    (*center)[1] = vertices_[3 * prim_index + 1];
+    (*center)[2] = vertices_[3 * prim_index + 2];
+  }
+
   const float *vertices_;
   const float *radiuss_;
   mutable float3 ray_org_;
@@ -149,25 +182,25 @@ class SphereIntersector {
     float3 oc = ray_org_ - center;
 
     float a = vdot(ray_dir_, ray_dir_);
-    float b = 2.0 * vdot(ray_dir_, oc);
+    float b = 2.0f * vdot(ray_dir_, oc);
     float c = vdot(oc, oc) - radius * radius;
 
-    float disc = b * b - 4.0 * a * c;
+    float disc = b * b - 4.0f * a * c;
 
     float t0, t1;
 
-    if (disc < 0.0) {  // no roots
+    if (disc < 0.0f) {  // no roots
       return false;
-    } else if (disc == 0.0) {
-      t0 = t1 = -0.5 * (b / a);
+    } else if (std::fabs(disc) < std::numeric_limits<float>::epsilon()) {
+      t0 = t1 = -0.5f * (b / a);
     } else {
       // compute q as described above
       float distSqrt = sqrt(disc);
       float q;
       if (b < 0)
-        q = (-b - distSqrt) / 2.0;
+        q = (-b - distSqrt) / 2.0f;
       else
-        q = (-b + distSqrt) / 2.0;
+        q = (-b + distSqrt) / 2.0f;
 
       // compute t0 and t1
       t0 = q / a;
@@ -233,6 +266,8 @@ class SphereIntersector {
   /// `hit` = true if there is something hit.
   void PostTraversal(const nanort::Ray<float> &ray, bool hit,
                      SphereIntersection *isect) const {
+    (void)ray;
+
     if (hit) {
       float3 hitP = ray_org_ + t_ * ray_dir_;
       float3 center = float3(&vertices_[3 * prim_id_]);
@@ -240,8 +275,8 @@ class SphereIntersector {
 
       isect->t = t_;
       isect->prim_id = prim_id_;
-      isect->u = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
-      isect->v = acos(n[1]) / M_PI;
+      isect->u = float(atan2(double(n[0]), double(n[2])) + M_PI) * 0.5f * float(1.0 / M_PI);
+      isect->v = float(acos(double(n[1])) / M_PI);
     }
   }
 
@@ -281,11 +316,15 @@ void GenerateRandomSpheres(float *vertices, float *radiuss, size_t n,
     vertices[3 * i + 2] = z * (bmax[2] - bmin[2]) + bmin[2];
 
     // Adjust radius according to # of primitives.
-    radiuss[i] = bsize / sqrt((double)n);
+    radiuss[i] = bsize / float(sqrt(double(n)));
   }
 }
 
 }  // namespace
+
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Weverything"
+#endif
 
 int main(int argc, char **argv) {
   int width = 512;
@@ -296,7 +335,7 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  size_t n = atoi(argv[1]);
+  size_t n = size_t(atoi(argv[1]));
 
   nanort::BVHBuildOptions<float> options;  // Use default option
   options.cache_bbox = false;

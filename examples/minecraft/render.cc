@@ -123,6 +123,22 @@ class CubeGeometry {
     (*bmax)[2] = vertices_[3 * prim_index + 2] + widths_[prim_index];
   }
 
+  /// Compute bounding box and prim's center for `prim_index`th cube.
+  /// This function is called for each primitive in BVH build.
+  void BoundingBoxAndCenter(float3* bmin, float3* bmax, float3 *center, unsigned int prim_index) const {
+    (*bmin)[0] = vertices_[3 * prim_index + 0] - widths_[prim_index];
+    (*bmin)[1] = vertices_[3 * prim_index + 1] - widths_[prim_index];
+    (*bmin)[2] = vertices_[3 * prim_index + 2] - widths_[prim_index];
+    (*bmax)[0] = vertices_[3 * prim_index + 0] + widths_[prim_index];
+    (*bmax)[1] = vertices_[3 * prim_index + 1] + widths_[prim_index];
+    (*bmax)[2] = vertices_[3 * prim_index + 2] + widths_[prim_index];
+
+    // center = vertex position
+    (*center)[0] = vertices_[3 * prim_index + 0];
+    (*center)[1] = vertices_[3 * prim_index + 1];
+    (*center)[2] = vertices_[3 * prim_index + 2];
+  }
+
   const float* vertices_;
   const float* widths_;
   mutable float3 ray_org_;
