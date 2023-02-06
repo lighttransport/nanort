@@ -47,6 +47,11 @@ Path tracing example contributed by https://github.com/daseyb
 * OSPRay NanoRT module https://github.com/jeffamstutz/module_nanort/
 * Your project here!
 
+## Projects similar/related to NanoRT
+
+* bvh: C++17 BVH Construction and Traversal Library https://github.com/madmann91/bvh
+* BlazeRT: double precision ray tracer for scientific or engineering applications https://github.com/cstatz/blazert
+
 ## API
 
 `nanort::Ray` represents ray. The origin `org`, the direction `dir` (not necessarily normalized), the minimum hit distance `min_t`(usually 0.0) and the maximum hit distance `max_t` (usually too far, e.g. 1.0e+30) must be filled before shooting ray.
