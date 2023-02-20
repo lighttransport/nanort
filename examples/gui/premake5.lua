@@ -8,6 +8,7 @@ sources = {
    "render.cc",
    "render-config.cc",
    "matrix.cc",
+   "camera.cc",
    "../common/trackball.cc",
    "../common/imgui/imgui.cpp",
    "../common/imgui/imgui_draw.cpp",
