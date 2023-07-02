@@ -130,7 +130,7 @@ typedef enum {
 template <typename T, size_t stack_capacity>
 class StackAllocator : public std::allocator<T> {
  public:
-  typedef typename std::allocator<T>::pointer pointer;
+  typedef T* pointer;
   typedef typename std::allocator<T>::size_type size_type;
 
   // Backing store for the allocator. The container owner is responsible for
@@ -198,7 +198,11 @@ class StackAllocator : public std::allocator<T> {
       source_->used_stack_buffer_ = true;
       return source_->stack_buffer();
     } else {
+#if __cplusplus >= 201703L
+      return std::allocator_traits<std::allocator<T>>::allocate(*this, n, hint);
+#else
       return std::allocator<T>::allocate(n, hint);
+#endif
     }
   }
 
