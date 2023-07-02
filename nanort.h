@@ -198,7 +198,11 @@ class StackAllocator : public std::allocator<T> {
       source_->used_stack_buffer_ = true;
       return source_->stack_buffer();
     } else {
+#if __cplusplus >= 201703L
+      return std::allocator_traits<std::allocator<T>>::allocate(*this, n, hint);
+#else
       return std::allocator<T>::allocate(n, hint);
+#endif
     }
   }
 
