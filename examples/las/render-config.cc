@@ -42,6 +42,13 @@ bool LoadRenderConfig(example::RenderConfig* config, const char* filename) {
     }
   }
 
+  config->radius_scale = 1.0f;
+  if (o.find("radius_scale") != o.end()) {
+    if (o["radius_scale"].is<double>()) {
+      config->radius_scale = static_cast<float>(o["radius_scale"].get<double>());
+    }
+  }
+
   if (o.find("max_points") != o.end()) {
     if (o["max_points"].is<double>()) {
       config->max_points = static_cast<uint32_t>(o["max_points"].get<double>());

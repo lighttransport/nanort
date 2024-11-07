@@ -13,7 +13,7 @@ class Renderer {
   ~Renderer() {}
 
   /// Loads LAS data.
-  bool LoadLAS(const char* las_filename, float scene_scale, uint32_t max_points = ~0u);
+  bool LoadLAS(const char* las_filename, float scene_scale, float radius_scale, uint32_t max_points = ~0u);
 
   /// Builds bvh.
   bool BuildBVH();

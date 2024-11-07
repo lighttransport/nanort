@@ -33,6 +33,7 @@ THE SOFTWARE.
 
 #include <iostream>
 
+#define NANORT_USE_CPP11_FEATURE
 #include "../../nanort.h"
 #include "matrix.h"
 
@@ -442,7 +443,7 @@ static std::string GetFilePathExtension(const std::string& FileName) {
   return "";
 }
 
-bool LoadLASData(Particles* particles, const char* filename, float scale, uint32_t max_points) {
+bool LoadLASData(Particles* particles, const char* filename, float scene_scale, float radius_scale, uint32_t max_points) {
 
 #if defined(LASRENDER_USE_PDAL)
   //std::ifstream ifs;
@@ -531,7 +532,7 @@ bool LoadLASData(Particles* particles, const char* filename, float scale, uint32
     invsize = bsize[2];
   }
 
-  invsize = 1.0f / invsize;
+  invsize = radius_scale / invsize;
   printf("invsize = %f\n", invsize);
 
   // Centerize & scaling 
@@ -636,8 +637,8 @@ bool LoadLASData(Particles* particles, const char* filename, float scale, uint32
 #endif
 }
 
-bool Renderer::LoadLAS(const char* las_filename, float scene_scale, uint32_t max_points) {
-  return LoadLASData(&gParticles, las_filename, scene_scale, max_points);
+bool Renderer::LoadLAS(const char* las_filename, float scene_scale, float  radius_scale, uint32_t max_points) {
+  return LoadLASData(&gParticles, las_filename, scene_scale, radius_scale, max_points);
 }
 
 bool Renderer::BuildBVH() {

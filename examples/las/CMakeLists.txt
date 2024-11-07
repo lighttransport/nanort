@@ -11,7 +11,9 @@ set(TARGET lasrender)
 option(LASRENDER_USE_PDAL "Use PDAL instead of libLAS" ON)
 
 find_package(OpenGL REQUIRED)
-find_package(GLEW REQUIRED)
+#find_package(GLEW REQUIRED)
+
+add_subdirectory(${PROJECT_SOURCE_DIR}/../common/glfw glfw)
 
 set(SOURCES 
    main.cc
@@ -22,7 +24,9 @@ set(SOURCES
    ${PROJECT_SOURCE_DIR}/../common/imgui/imgui.cpp
    ${PROJECT_SOURCE_DIR}/../common/imgui/imgui_draw.cpp
    ${PROJECT_SOURCE_DIR}/../common/imgui/imgui_widgets.cpp
-   ${PROJECT_SOURCE_DIR}/../common/imgui/imgui_impl_btgui.cpp
+   ${PROJECT_SOURCE_DIR}/../common/imgui/imgui_tables.cpp
+   ${PROJECT_SOURCE_DIR}/../common/imgui/imgui_impl_glfw.cpp
+   ${PROJECT_SOURCE_DIR}/../common/imgui/imgui_impl_opengl3.cpp
   )
 
 if (MSVC)
@@ -53,7 +57,7 @@ if (APPLE)
 elseif(UNIX)
   target_link_libraries(${TARGET} X11)
 endif()
-target_link_libraries(${TARGET} ${DEP_LIBS} OpenGL::GL GLEW::glew ${CMAKE_DL_LIBS})
+target_link_libraries(${TARGET} ${DEP_LIBS} OpenGL::GL glfw ${CMAKE_DL_LIBS})
 target_include_directories(${TARGET} PRIVATE ${PROJECT_SOURCE_DIR}/../common/)
 target_include_directories(${TARGET} PRIVATE ${PROJECT_SOURCE_DIR}/../common/imgui)
 target_include_directories(${TARGET} PRIVATE ${GLEW_INCLUDE_DIRS})

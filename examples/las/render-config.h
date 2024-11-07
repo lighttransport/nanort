@@ -27,8 +27,8 @@ struct RenderLayer {
 
 struct RenderConfig {
   // framebuffer
-  int width;
-  int height;
+  int width{800};
+  int height{600};
 
   // camera
   float eye[3];
@@ -37,12 +37,13 @@ struct RenderConfig {
   float fov;  // vertical fov in degree.
 
   // render pass
-  int pass;
-  int max_passes;
+  int pass{0};
+  int max_passes{1};
 
   // Scene input info
   std::string las_filename;
-  float scene_scale;
+  float scene_scale{1.0f};
+  float radius_scale{1.0f};
   uint32_t max_points{~0u};
 
 };

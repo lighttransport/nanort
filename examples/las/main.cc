@@ -22,16 +22,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
-#define USE_OPENGL2
-#include "OpenGLWindow/OpenGLInclude.h"
-#ifdef _WIN32
-#include "OpenGLWindow/Win32OpenGLWindow.h"
-#elif defined __APPLE__
-#include "OpenGLWindow/MacOpenGLWindow.h"
-#else
-// assume linux
-#include "OpenGLWindow/X11OpenGLWindow.h"
+#include <stdio.h>
+
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+#define GL_SILENCE_DEPRECATION
+#if defined(IMGUI_IMPL_OPENGL_ES2)
+#include <GLES2/gl2.h>
 #endif
+#include <GLFW/glfw3.h>  // Will drag system OpenGL headers
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -48,23 +48,19 @@ THE SOFTWARE.
 #endif
 
 #include <algorithm>
+#include <atomic>  // C++11
 #include <cassert>
+#include <chrono>  // C++11
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <limits>
+#include <mutex>  // C++11
 #include <string>
-#include <vector>
-
-#include <atomic>  // C++11
-#include <chrono>  // C++11
-#include <mutex>   // C++11
 #include <thread>  // C++11
-
-#include "imgui.h"
-#include "imgui_impl_btgui.h"
+#include <vector>
 
 #include "render-config.h"
 #include "render.h"
@@ -111,15 +107,16 @@ struct UIParam {
 
 UIParam gUIParam;
 
-b3gDefaultOpenGLWindow* window = 0;
-int gWidth = 512;
-int gHeight = 512;
-int gMousePosX = -1, gMousePosY = -1;
-bool gMouseLeftDown = false;
-bool gTabPressed = false;
-bool gShiftPressed = false;
-float gCurrQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+struct UIState {
+  int width = 512;
+  int height = 512;
+  int mousePosX = -1, mousePosY = -1;
+  bool mouseLeftDown = false;
+  bool tabPressed = false;
+  bool shiftPressed = false;
+  float currQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+  float prevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+};
 
 example::Renderer gRenderer;
 
@@ -142,7 +139,7 @@ void RequestRender() {
   gRenderCancel = true;
 }
 
-void RenderThread() {
+void RenderThread(UIState* state) {
   {
     std::lock_guard<std::mutex> guard(gMutex);
     gRenderConfig.pass = 0;
@@ -172,7 +169,7 @@ void RenderThread() {
     // gRenderCancel may be set to true in main loop.
     // Render() will repeatedly check this flag inside the rendering loop.
 
-    bool ret = gRenderer.Render(&gRenderLayer, gCurrQuat, gRenderConfig,
+    bool ret = gRenderer.Render(&gRenderLayer, state->currQuat, gRenderConfig,
                                 gRenderCancel);
 
     if (ret) {
@@ -189,7 +186,8 @@ void RenderThread() {
   }
 }
 
-void InitRender(example::RenderConfig* rc, example::RenderLayer* layer) {
+void InitRender(example::RenderConfig* rc, example::RenderLayer* layer,
+                UIState* state) {
   rc->pass = 0;
 
   rc->max_passes = 128;
@@ -221,9 +219,113 @@ void InitRender(example::RenderConfig* rc, example::RenderLayer* layer) {
   layer->varycoord.resize(rc->width * rc->height * 4);
   std::fill(layer->varycoord.begin(), layer->varycoord.end(), 0.0);
 
-  trackball(gCurrQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+  trackball(state->currQuat, 0.0f, 0.0f, 0.0f, 0.0f);
 }
 
+static void glfw_error_callback(int error, const char* description) {
+  fprintf(stderr, "GLFW Error %d: %s\n", error, description);
+}
+
+void glfw_key_callback(GLFWwindow* window, int key, int scancode, int action,
+                  int mods) {
+  (void)scancode;
+  //std::cout << "key " << key << ", scan " << scancode << ", action " << action << ", mods " << mods << "\n";
+
+  ImGuiIO& io = ImGui::GetIO();
+  if (io.WantCaptureKeyboard) {
+    return;
+  }
+
+  if (key == GLFW_KEY_Q && action == GLFW_PRESS && (mods & GLFW_MOD_CONTROL)) {
+    glfwSetWindowShouldClose(window, GLFW_TRUE);
+  }
+
+  UIState *state = reinterpret_cast<UIState*>(glfwGetWindowUserPointer(window));
+  if (!state) {
+    std::cerr << "User pointer is not set.\n";
+  }
+
+  if ((key == GLFW_KEY_LEFT_SHIFT) || (key == GLFW_KEY_RIGHT_SHIFT)) {
+    if (state) {
+      state->shiftPressed = (action != GLFW_RELEASE);
+    }
+
+  }
+
+  if (key == GLFW_KEY_TAB) {
+    if (state) {
+      state->tabPressed = (action != GLFW_RELEASE);
+    }
+
+  }
+
+  if (key == ' ') {
+    trackball(state->currQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+    RequestRender();
+  }
+
+}
+
+static void glfw_mouse_button_callback(GLFWwindow* window, int button, int action,
+
+                           int mods) {
+  (void)mods;
+
+  auto* state = reinterpret_cast<UIState*>(glfwGetWindowUserPointer(window));
+
+  if (state) {
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+      state->mouseLeftDown = true;
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_FALSE)
+      state->mouseLeftDown = false;
+  }
+}
+
+void glfw_cursor_pos_callback(GLFWwindow *window, double mouse_x,
+                                double mouse_y) {
+  auto state = reinterpret_cast<UIState *>(glfwGetWindowUserPointer(window));
+  if (!state) {
+    std::cerr << "??? UserPointer not found in cursor_pos_callback.\n";
+    return;
+  }
+
+  if (!ImGui::GetIO().WantCaptureMouse) {
+    if (state->mouseLeftDown) {
+
+      float w = state->width;
+      float h = state->height;
+
+      float y_offset = state->height - h;
+
+      if (state->tabPressed) {
+        const float dolly_scale = 0.1;
+        gRenderConfig.eye[2] += dolly_scale * (state->mousePosY - mouse_y);
+        gRenderConfig.look_at[2] += dolly_scale * (state->mousePosY - mouse_y);
+      } else if (state->shiftPressed) {
+        const float trans_scale = 0.02;
+        gRenderConfig.eye[0] += trans_scale * (state->mousePosX - mouse_x);
+        gRenderConfig.eye[1] -= trans_scale * (state->mousePosY - mouse_y);
+        gRenderConfig.look_at[0] += trans_scale * (state->mousePosX - mouse_x);
+        gRenderConfig.look_at[1] -= trans_scale * (state->mousePosY - mouse_y);
+
+      } else {
+        // Adjust y.
+        trackball(state->prevQuat, (2.f * state->mousePosX - w) / (float)w,
+                  (h - 2.f * (state->mousePosY - y_offset)) / (float)h,
+                  (2.f * mouse_x - w) / (float)w,
+                  (h - 2.f * (mouse_y - y_offset)) / (float)h);
+        add_quats(state->prevQuat, state->currQuat, state->currQuat);
+      }
+      RequestRender();
+    }
+  }
+
+  state->mousePosX = mouse_x;
+  state->mousePosY = mouse_y;
+}
+
+
+#if 0
 void checkErrors(std::string desc) {
   GLenum e = glGetError();
   if (e != GL_NO_ERROR) {
@@ -289,36 +391,7 @@ void mouseMoveCallback(float x, float y) {
   gMousePosX = (int)x;
   gMousePosY = (int)y;
 }
-
-void mouseButtonCallback(int button, int state, float x, float y) {
-  ImGui_ImplBtGui_SetMouseButtonState(button, (state == 1));
-
-  ImGuiIO& io = ImGui::GetIO();
-  if (io.WantCaptureMouse || io.WantCaptureKeyboard) {
-    return;
-  }
-
-  // left button
-  if (button == 0) {
-    if (state) {
-      gMouseLeftDown = true;
-      trackball(gPrevQuat, 0.0f, 0.0f, 0.0f, 0.0f);
-    } else
-      gMouseLeftDown = false;
-  }
-}
-
-void resizeCallback(float width, float height) {
-  GLfloat h = (GLfloat)height / (GLfloat)width;
-  GLfloat xmax, znear, zfar;
-
-  znear = 1.0f;
-  zfar = 1000.0f;
-  xmax = znear * 0.5f;
-
-  gWidth = width;
-  gHeight = height;
-}
+#endif
 
 inline float pesudoColor(float v, int ch) {
   if (ch == 0) {  // red
@@ -419,8 +492,9 @@ int main(int argc, char** argv) {
     }
 
     // Load .las model
-    bool las_ret = gRenderer.LoadLAS(gRenderConfig.las_filename.c_str(),
-                                         gRenderConfig.scene_scale, gRenderConfig.max_points);
+    bool las_ret = gRenderer.LoadLAS(
+        gRenderConfig.las_filename.c_str(), gRenderConfig.scene_scale,
+        gRenderConfig.radius_scale, gRenderConfig.max_points);
     if (!las_ret) {
       fprintf(stderr, "Failed to load [ %s ]\n",
               gRenderConfig.las_filename.c_str());
@@ -428,65 +502,108 @@ int main(int argc, char** argv) {
     }
   }
 
+  glfwSetErrorCallback(glfw_error_callback);
+  if (!glfwInit()) {
+    std::cerr << "Failed to initialize glfw."
+              << "\n";
+    return -1;
+  }
+
+  // Decide GL+GLSL versions
+#if defined(IMGUI_IMPL_OPENGL_ES2)
+  // GL ES 2.0 + GLSL 100
+  const char* glsl_version = "#version 100";
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+#elif defined(__APPLE__)
+  // GL 3.2 + GLSL 150
+  const char* glsl_version = "#version 150";
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+  glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+ only
+  glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);            // Required on Mac
+#else
+  // GL 3.0 + GLSL 130
+  const char* glsl_version = "#version 130";
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+  // glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);  // 3.2+
+  // only glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // 3.0+ only
+#endif
+
+  // Create window with graphics context
+  GLFWwindow* window = glfwCreateWindow(
+      1280, 720, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
+  if (window == nullptr) return 1;
+  glfwMakeContextCurrent(window);
+  glfwSwapInterval(1);  // Enable vsync
+
+  // Setup Dear ImGui context
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO();
+  (void)io;
+  io.ConfigFlags |=
+      ImGuiConfigFlags_NavEnableKeyboard;  // Enable Keyboard Controls
+  io.ConfigFlags |=
+      ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
+
+  // Setup Dear ImGui style
+  ImGui::StyleColorsDark();
+  // ImGui::StyleColorsLight();
+
+  // Setup Platform/Renderer backends
+  ImGui_ImplGlfw_InitForOpenGL(window, true);
+#ifdef __EMSCRIPTEN__
+  ImGui_ImplGlfw_InstallEmscriptenCallbacks(window, "#canvas");
+#endif
+  ImGui_ImplOpenGL3_Init(glsl_version);
+
   gRenderer.BuildBVH();
 
-  window = new b3gDefaultOpenGLWindow;
-  b3gWindowConstructionInfo ci;
-#ifdef USE_OPENGL2
-  ci.m_openglVersion = 2;
-#endif
-  ci.m_width = 1024;
-  ci.m_height = 800;
-  window->createWindow(ci);
+  UIState ui_state;
+  glfwSetWindowUserPointer(window, &ui_state);
+  glfwSetKeyCallback(window, glfw_key_callback);
+  glfwSetMouseButtonCallback(window, glfw_mouse_button_callback);
+  glfwSetCursorPosCallback(window, glfw_cursor_pos_callback);
 
-  window->setWindowTitle("view");
-
-#ifndef __APPLE__
-#ifndef _WIN32
-  // some Linux implementations need the 'glewExperimental' to be true
-  glewExperimental = GL_TRUE;
-#endif
-  if (glewInit() != GLEW_OK) {
-    fprintf(stderr, "Failed to initialize GLEW\n");
-    exit(-1);
-  }
-
-  if (!GLEW_VERSION_2_1) {
-    fprintf(stderr, "OpenGL 2.1 is not available\n");
-    exit(-1);
-  }
-#endif
-
-  InitRender(&gRenderConfig, &gRenderLayer);
-
-  checkErrors("init");
-
-  window->setMouseButtonCallback(mouseButtonCallback);
-  window->setMouseMoveCallback(mouseMoveCallback);
-  checkErrors("mouse");
-  window->setKeyboardCallback(keyboardCallback);
-  checkErrors("keyboard");
-  window->setResizeCallback(resizeCallback);
-  checkErrors("resize");
+  InitRender(&gRenderConfig, &gRenderLayer, &ui_state);
 
   ImGui::CreateContext();
-  ImGui_ImplBtGui_Init(window);
 
-  ImGuiIO& io = ImGui::GetIO();
-  // io.Fonts->AddFontDefault();
-  io.Fonts->AddFontFromFileTTF("./Inconsolata-Regular.ttf", 22.0f);
+  // ImGuiIO& io = ImGui::GetIO();
+  //  io.Fonts->AddFontDefault();
+  // io.Fonts->AddFontFromFileTTF("./Inconsolata-Regular.ttf", 22.0f);
 
-  std::thread renderThread(RenderThread);
+  std::thread renderThread(RenderThread, &ui_state);
 
   // Trigger initial rendering request
   RequestRender();
 
-  while (!window->requestedExit()) {
-    window->startRendering();
+  ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-    checkErrors("begin frame");
+  while (!glfwWindowShouldClose(window)) {
+    // Poll and handle events (inputs, window resize, etc.)
+    // You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to
+    // tell if dear imgui wants to use your inputs.
+    // - When io.WantCaptureMouse is true, do not dispatch mouse input data to
+    // your main application, or clear/overwrite your copy of the mouse data.
+    // - When io.WantCaptureKeyboard is true, do not dispatch keyboard input
+    // data to your main application, or clear/overwrite your copy of the
+    // keyboard data. Generally you may always pass all inputs to dear imgui,
+    // and hide them from your application based on those two flags.
+    glfwPollEvents();
+    if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0) {
+      ImGui_ImplGlfw_Sleep(10);
+      continue;
+    }
 
-    ImGui_ImplBtGui_NewFrame(gMousePosX, gMousePosY);
+    // Start the Dear ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
     ImGui::Begin("UI");
     {
       static float col[3] = {0, 0, 0};
@@ -532,25 +649,21 @@ int main(int argc, char** argv) {
 
     ImGui::End();
 
-    glViewport(0, 0, window->getWidth(), window->getHeight());
-    glClearColor(0, 0.1, 0.2f, 1.0f);
+    // Rendering
+    ImGui::Render();
+    int display_w, display_h;
+    glfwGetFramebufferSize(window, &display_w, &display_h);
+    glViewport(0, 0, display_w, display_h);
+    glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w,
+                 clear_color.z * clear_color.w, clear_color.w);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-    checkErrors("clear");
 
     Display(gRenderConfig.width, gRenderConfig.height, gRenderConfig,
             gRenderLayer);
 
-    // Draw ImGui
-    {
-      float fb_scale = window->getRetinaScale();
-      glViewport(0, 0, fb_scale * window->getWidth(),
-                 fb_scale * window->getHeight());
-      ImGui::Render();
-      checkErrors("im render");
-    }
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-    window->endRendering();
+    glfwSwapBuffers(window);
 
     // Give some cycles to this thread.
     std::this_thread::sleep_for(std::chrono::milliseconds(16));
@@ -563,9 +676,13 @@ int main(int argc, char** argv) {
     renderThread.join();
   }
 
-  ImGui_ImplBtGui_Shutdown();
+  // Cleanup
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
-  delete window;
+
+  glfwDestroyWindow(window);
+  glfwTerminate();
 
   return EXIT_SUCCESS;
 }
