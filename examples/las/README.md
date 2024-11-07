@@ -17,13 +17,23 @@ Right-handed coorinate, Y up, counter clock-wise normal definition.
 
 * [x] Color
 
-## Build on Linux
+## Install pdal with conda(recommended)
 
-### PDAL
+Supports windows, linux and macOS
 
-Install pdal(you can use apt for Ubuntu).
+```
+$ conda create -n nanort-pdal python=3.10
+$ conda activate nanort-pdal
+$ conda install -c conda-forge nanort-pdal
+```
 
-Then,
+### Build on Windows(Visual Studio 2022)
+
+```
+> vcsetup.bat
+```
+
+### Build on Linux and macOS
 
 ```
 $ mkdir build
@@ -32,7 +42,7 @@ $ cmake ..
 $ make
 ```
 
-### liblas
+## liblas
 
 liblas support is deprecated, since PDAL is now recommended library to load las.
 (And you'll face some Boost problem if you build liblas from source)
@@ -44,7 +54,7 @@ Then,
     $ premake5 gmake
     $ make
 
-## Build on MacOSX
+### Build on MacOSX
 
 Install liblas using brew
 
@@ -68,8 +78,7 @@ Edit `config.json`, then run `lasrender`
 
 ## Licenses
 
-* btgui3 : zlib license.
-* glew : Modified BSD, MIT license.
+* glfw : zlib/libpng license.
 * picojson : 2-clause BSD license. See picojson.h for more details.
 * ImGui : MIT license.
 * stb : Public domain. See stb_*.h for more details.

@@ -278,19 +278,20 @@ class SphereIntersector
   /// This function is called only once in BVH traversal.
   /// `hit` = true if there is something hit.
   void PostTraversal(const nanort::Ray<float> &ray, bool hit, SphereIntersection *isect) const {
+    const float kPI = 3.141592f;
     if (hit) {
       float3 hitP = ray_org_ + t_ * ray_dir_;
       float3 center = float3(&vertices_[3*prim_id_]);
       float3 n = vnormalize(hitP - center);
       isect->t = t_;
       isect->prim_id = prim_id_;
-      isect->u = (atan2(n[0], n[2]) + M_PI) * 0.5 * (1.0 / M_PI);
-      isect->v = acos(n[1]) / M_PI;
+      isect->u = (atan2(n[0], n[2]) + kPI) * 0.5 * (1.0 / kPI);
+      isect->v = acos(n[1]) / kPI;
     } 
   }
 
-  const float *vertices_;
-  const float *radiuss_;
+  const float *vertices_{nullptr};
+  const float *radiuss_{nullptr};
   mutable float3 ray_org_;
   mutable float3 ray_dir_;
   mutable nanort::BVHTraceOptions trace_options_;
@@ -476,8 +477,8 @@ bool LoadLASData(Particles* particles, const char* filename, float scene_scale, 
   particles->radiuss.clear();
 
   float bmin[3], bmax[3];
-  bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<float>::max();
-  bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<float>::max();
+  bmin[0] = bmin[1] = bmin[2] = (std::numeric_limits<float>::max)();
+  bmax[0] = bmax[1] = bmax[2] = -(std::numeric_limits<float>::max)();
 
   bool hasColor = header.hasColor();
 
@@ -492,12 +493,12 @@ bool LoadLASData(Particles* particles, const char* filename, float scene_scale, 
         particles->vertices.push_back(y);
         particles->vertices.push_back(z);
 
-        bmin[0] = std::min(bmin[0], static_cast<float>(x));
-        bmin[1] = std::min(bmin[1], static_cast<float>(y));
-        bmin[2] = std::min(bmin[2], static_cast<float>(z));
-        bmax[0] = std::max(bmax[0], static_cast<float>(x));
-        bmax[1] = std::max(bmax[1], static_cast<float>(y));
-        bmax[2] = std::max(bmax[2], static_cast<float>(z));
+        bmin[0] = (std::min)(bmin[0], static_cast<float>(x));
+        bmin[1] = (std::min)(bmin[1], static_cast<float>(y));
+        bmin[2] = (std::min)(bmin[2], static_cast<float>(z));
+        bmax[0] = (std::max)(bmax[0], static_cast<float>(x));
+        bmax[1] = (std::max)(bmax[1], static_cast<float>(y));
+        bmax[2] = (std::max)(bmax[2], static_cast<float>(z));
 
         // TODO: Use hasDim(Id::Red)
         if (hasColor) {
@@ -707,7 +708,7 @@ bool Renderer::Render(RenderLayer* layer, float quat[4],
   std::vector<std::thread> workers;
   std::atomic<int> i(0);
 
-  uint32_t num_threads = std::max(1U, std::thread::hardware_concurrency());
+  uint32_t num_threads = (std::max)(1U, std::thread::hardware_concurrency());
 
   auto startT = std::chrono::system_clock::now();
 
