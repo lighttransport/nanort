@@ -758,6 +758,11 @@ class BVHAccel {
   bool Traverse(const Ray<T> &ray, const I &intersector, H *isect,
                 const BVHTraceOptions &options = BVHTraceOptions()) const;
 
+  template <class I, class H>
+  bool Traverse(const Ray<T> &ray, const I &intersector, H *isect,
+                const BVHTraceOptions &options, size_t *aabb_tests,
+                size_t *leaf_tests) const;
+
 #if 0
   /// Multi-hit ray traversal
   /// Returns `max_intersections` frontmost intersections
@@ -2543,6 +2548,83 @@ bool BVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
   intersector.PostTraversal(ray, hit, isect);
 
   return hit;
+}
+
+template <typename T>
+template <class I, class H>
+bool BVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
+                           const BVHTraceOptions &options,
+                           size_t *aabb_tests, size_t *leaf_tests) const {
+    const int kMaxStackDepth = 512;
+    (void)kMaxStackDepth;
+
+    T hit_t = ray.max_t;
+
+    int node_stack_index = 0;
+    unsigned int node_stack[512];
+    node_stack[0] = 0;
+
+    // Init isect info as no hit
+    intersector.Update(hit_t, static_cast<unsigned int>(-1));
+
+    intersector.PrepareTraversal(ray, options);
+
+    int dir_sign[3];
+    dir_sign[0] = ray.dir[0] < static_cast<T>(0.0) ? 1 : 0;
+    dir_sign[1] = ray.dir[1] < static_cast<T>(0.0) ? 1 : 0;
+    dir_sign[2] = ray.dir[2] < static_cast<T>(0.0) ? 1 : 0;
+
+    real3<T> ray_inv_dir;
+    real3<T> ray_dir;
+    ray_dir[0] = ray.dir[0];
+    ray_dir[1] = ray.dir[1];
+    ray_dir[2] = ray.dir[2];
+
+    ray_inv_dir = vsafe_inverse(ray_dir);
+
+    real3<T> ray_org;
+    ray_org[0] = ray.org[0];
+    ray_org[1] = ray.org[1];
+    ray_org[2] = ray.org[2];
+
+    T min_t = std::numeric_limits<T>::max();
+    T max_t = -std::numeric_limits<T>::max();
+
+    *aabb_tests = 0;
+    *leaf_tests = 0;
+
+    while (node_stack_index >= 0) {
+        unsigned int index = node_stack[node_stack_index];
+        const BVHNode<T> &node = nodes_[index];
+
+        node_stack_index--;
+
+        bool hit = IntersectRayAABB(&min_t, &max_t, ray.min_t, hit_t, node.bmin,
+                                    node.bmax, ray_org, ray_inv_dir, dir_sign);
+        (*aabb_tests)++;
+
+        if (hit) {
+            // Branch node
+            if (node.flag == 0) {
+                int order_near = dir_sign[node.axis];
+                int order_far = 1 - order_near;
+
+                // Traverse near first.
+                node_stack[++node_stack_index] = node.data[order_far];
+                node_stack[++node_stack_index] = node.data[order_near];
+            } else if (TestLeafNode(node, ray, intersector)) {  // Leaf node
+                hit_t = intersector.GetT();
+                (*leaf_tests)++;
+            }
+        }
+    }
+
+    assert(node_stack_index < kNANORT_MAX_STACK_DEPTH);
+
+    bool hit = (intersector.GetT() < ray.max_t);
+    intersector.PostTraversal(ray, hit, isect);
+
+    return hit;
 }
 
 template <typename T>
