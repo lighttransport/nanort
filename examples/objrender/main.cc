@@ -51,6 +51,10 @@
 
 #include <iostream>
 
+
+// Define this to report BVH traversal stats
+//#define REPORT_STATS
+
 namespace {
 
 // This class is NOT thread-safe timer!
@@ -643,6 +647,11 @@ int main(int argc, char **argv) {
 
   t.start();
 
+#ifdef REPORT_STATS
+  int total_aabb_tests = 0;
+  int total_leaf_tests = 0;
+#endif
+
 // Shoot rays.
 #ifdef _OPENMP
 #pragma omp parallel for
@@ -672,7 +681,21 @@ int main(int argc, char **argv) {
       nanort::TriangleIntersector<> triangle_intersector(
           mesh.vertices, mesh.faces, sizeof(float) * 3);
       nanort::TriangleIntersection<> isect;
+
+#ifdef REPORT_STATS
+      nanort::BVHTraceOptions trace_options;
+      //nanort::BVHTraceStatistics stats;
+      size_t num_aabb_tests = 0;
+      size_t num_leaf_tests = 0;
+      bool hit = accel.Traverse(ray, triangle_intersector, &isect, trace_options, &num_aabb_tests, &num_leaf_tests);
+      #pragma omp atomic
+      total_aabb_tests += num_aabb_tests;
+      #pragma omp atomic
+      total_leaf_tests += num_leaf_tests;
+#else
       bool hit = accel.Traverse(ray, triangle_intersector, &isect);
+#endif
+
       if (hit) {
         // Write your shader here.
         float3 normal(0.0f, 0.0f, 0.0f);
@@ -692,6 +715,12 @@ int main(int argc, char **argv) {
 
   t.end();
   printf("Render %f secs\n", t.msec() / 1000.0);
+
+#ifdef REPORT_STATS
+  size_t num_rays = width * height;
+  printf("Averate AABB tests per ray: %f\n", total_aabb_tests / float(num_rays));
+  printf("Averate leaf tests per ray: %f\n", total_leaf_tests / float(num_rays));
+#endif
 
   delete [] mesh.vertices;
   delete [] mesh.faces;
