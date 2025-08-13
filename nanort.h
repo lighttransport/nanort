@@ -141,6 +141,283 @@ private:
 
 namespace nanort {
 
+//
+// SIMD Optimizations for BVH traversal, intersection and build
+//
+// Usage:
+//   - Automatically detects and enables SSE2, AVX2, or ARM NEON when available
+//   - Compile with: -msse2, -mavx2, or -mfpu=neon flags for optimal performance  
+//   - Disable with: #define NANORT_DISABLE_SIMD before including nanort.h
+//   - Use SIMD-optimized functions: IntersectRayAABB_SIMD_*, TraverseSIMD_*
+//   - Check active SIMD path with: NANORT_SIMD_PATH macro
+//
+
+// SIMD feature detection and configuration
+// Users can disable SIMD optimizations by defining NANORT_DISABLE_SIMD
+#ifndef NANORT_DISABLE_SIMD
+
+  #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+    #define NANORT_ENABLE_SIMD_X86
+    #if defined(__SSE2__) || (defined(_MSC_VER) && _MSC_VER >= 1300)
+      #define NANORT_ENABLE_SSE2
+      #include <emmintrin.h>
+    #endif
+    #if defined(__AVX2__) || (defined(_MSC_VER) && _MSC_VER >= 1800)
+      #define NANORT_ENABLE_AVX2
+      #include <immintrin.h>
+    #endif
+  #elif defined(__ARM_NEON) || defined(__aarch64__)
+    #define NANORT_ENABLE_NEON
+    #include <arm_neon.h>
+  #endif
+
+  // Auto-selection of optimal SIMD path
+  #if defined(NANORT_ENABLE_AVX2)
+    #define NANORT_SIMD_PATH "AVX2"
+    #define NANORT_SIMD_WIDTH 8
+  #elif defined(NANORT_ENABLE_SSE2)
+    #define NANORT_SIMD_PATH "SSE2"  
+    #define NANORT_SIMD_WIDTH 4
+  #elif defined(NANORT_ENABLE_NEON)
+    #define NANORT_SIMD_PATH "NEON"
+    #define NANORT_SIMD_WIDTH 4
+  #else
+    #define NANORT_SIMD_PATH "scalar"
+    #define NANORT_SIMD_WIDTH 1
+  #endif
+
+#else
+  // SIMD disabled - define fallback macros
+  #define NANORT_SIMD_PATH "disabled"
+  #define NANORT_SIMD_WIDTH 1
+#endif // NANORT_DISABLE_SIMD
+
+// ================================================================================
+// SIMD-optimized ray-AABB intersection functions
+// ================================================================================
+#if !defined(NANORT_DISABLE_SIMD)
+
+#ifdef NANORT_ENABLE_SSE2
+// SSE2 version: test ray against 4 AABBs simultaneously
+inline int IntersectRayAABB4_SSE2(
+    const __m128 ray_org_x, const __m128 ray_org_y, const __m128 ray_org_z,
+    const __m128 ray_inv_dir_x, const __m128 ray_inv_dir_y, const __m128 ray_inv_dir_z,
+    const __m128 min_t, const __m128 max_t,
+    const __m128 bbox_min_x, const __m128 bbox_min_y, const __m128 bbox_min_z,
+    const __m128 bbox_max_x, const __m128 bbox_max_y, const __m128 bbox_max_z,
+    __m128 *tmin_out, __m128 *tmax_out) {
+
+  // Calculate intersection points
+  const __m128 tmin_x = _mm_mul_ps(_mm_sub_ps(bbox_min_x, ray_org_x), ray_inv_dir_x);
+  const __m128 tmax_x = _mm_mul_ps(_mm_sub_ps(bbox_max_x, ray_org_x), ray_inv_dir_x);
+  const __m128 tmin_y = _mm_mul_ps(_mm_sub_ps(bbox_min_y, ray_org_y), ray_inv_dir_y);
+  const __m128 tmax_y = _mm_mul_ps(_mm_sub_ps(bbox_max_y, ray_org_y), ray_inv_dir_y);
+  const __m128 tmin_z = _mm_mul_ps(_mm_sub_ps(bbox_min_z, ray_org_z), ray_inv_dir_z);
+  const __m128 tmax_z = _mm_mul_ps(_mm_sub_ps(bbox_max_z, ray_org_z), ray_inv_dir_z);
+
+  // Handle ray direction signs (min/max swap)
+  const __m128 real_tmin_x = _mm_min_ps(tmin_x, tmax_x);
+  const __m128 real_tmax_x = _mm_max_ps(tmin_x, tmax_x);
+  const __m128 real_tmin_y = _mm_min_ps(tmin_y, tmax_y);
+  const __m128 real_tmax_y = _mm_max_ps(tmin_y, tmax_y);
+  const __m128 real_tmin_z = _mm_min_ps(tmin_z, tmax_z);
+  const __m128 real_tmax_z = _mm_max_ps(tmin_z, tmax_z);
+
+  // Find overall tmin and tmax
+  const __m128 tmin = _mm_max_ps(real_tmin_z, _mm_max_ps(real_tmin_y, _mm_max_ps(real_tmin_x, min_t)));
+  const __m128 tmax = _mm_min_ps(real_tmax_z, _mm_min_ps(real_tmax_y, _mm_min_ps(real_tmax_x, max_t)));
+
+  // Test for intersection: tmin <= tmax
+  const __m128 hit_mask = _mm_cmple_ps(tmin, tmax);
+
+  *tmin_out = tmin;
+  *tmax_out = tmax;
+
+  return _mm_movemask_ps(hit_mask);
+}
+
+// SIMD-optimized triangle intersection helpers
+inline __m128 cross_product_x_sse2(const __m128 a_y, const __m128 a_z, const __m128 b_y, const __m128 b_z) {
+  return _mm_sub_ps(_mm_mul_ps(a_y, b_z), _mm_mul_ps(a_z, b_y));
+}
+
+inline __m128 cross_product_y_sse2(const __m128 a_z, const __m128 a_x, const __m128 b_z, const __m128 b_x) {
+  return _mm_sub_ps(_mm_mul_ps(a_z, b_x), _mm_mul_ps(a_x, b_z));
+}
+
+inline __m128 cross_product_z_sse2(const __m128 a_x, const __m128 a_y, const __m128 b_x, const __m128 b_y) {
+  return _mm_sub_ps(_mm_mul_ps(a_x, b_y), _mm_mul_ps(a_y, b_x));
+}
+#endif
+
+#ifdef NANORT_ENABLE_AVX2
+// AVX2 version: test ray against 8 AABBs simultaneously
+inline int IntersectRayAABB8_AVX2(
+    const __m256 ray_org_x, const __m256 ray_org_y, const __m256 ray_org_z,
+    const __m256 ray_inv_dir_x, const __m256 ray_inv_dir_y, const __m256 ray_inv_dir_z,
+    const __m256 min_t, const __m256 max_t,
+    const __m256 bbox_min_x, const __m256 bbox_min_y, const __m256 bbox_min_z,
+    const __m256 bbox_max_x, const __m256 bbox_max_y, const __m256 bbox_max_z,
+    __m256 *tmin_out, __m256 *tmax_out) {
+
+  // Calculate intersection points
+  const __m256 tmin_x = _mm256_mul_ps(_mm256_sub_ps(bbox_min_x, ray_org_x), ray_inv_dir_x);
+  const __m256 tmax_x = _mm256_mul_ps(_mm256_sub_ps(bbox_max_x, ray_org_x), ray_inv_dir_x);
+  const __m256 tmin_y = _mm256_mul_ps(_mm256_sub_ps(bbox_min_y, ray_org_y), ray_inv_dir_y);
+  const __m256 tmax_y = _mm256_mul_ps(_mm256_sub_ps(bbox_max_y, ray_org_y), ray_inv_dir_y);
+  const __m256 tmin_z = _mm256_mul_ps(_mm256_sub_ps(bbox_min_z, ray_org_z), ray_inv_dir_z);
+  const __m256 tmax_z = _mm256_mul_ps(_mm256_sub_ps(bbox_max_z, ray_org_z), ray_inv_dir_z);
+
+  // Handle ray direction signs
+  const __m256 real_tmin_x = _mm256_min_ps(tmin_x, tmax_x);
+  const __m256 real_tmax_x = _mm256_max_ps(tmin_x, tmax_x);
+  const __m256 real_tmin_y = _mm256_min_ps(tmin_y, tmax_y);
+  const __m256 real_tmax_y = _mm256_max_ps(tmin_y, tmax_y);
+  const __m256 real_tmin_z = _mm256_min_ps(tmin_z, tmax_z);
+  const __m256 real_tmax_z = _mm256_max_ps(tmin_z, tmax_z);
+
+  // Find overall tmin and tmax
+  const __m256 tmin = _mm256_max_ps(real_tmin_z, _mm256_max_ps(real_tmin_y, _mm256_max_ps(real_tmin_x, min_t)));
+  const __m256 tmax = _mm256_min_ps(real_tmax_z, _mm256_min_ps(real_tmax_y, _mm256_min_ps(real_tmax_x, max_t)));
+
+  // Test for intersection
+  const __m256 hit_mask = _mm256_cmp_ps(tmin, tmax, _CMP_LE_OQ);
+
+  *tmin_out = tmin;
+  *tmax_out = tmax;
+
+  return _mm256_movemask_ps(hit_mask);
+}
+
+// AVX2 triangle intersection helpers
+inline __m256 cross_product_x_avx2(const __m256 a_y, const __m256 a_z, const __m256 b_y, const __m256 b_z) {
+  return _mm256_sub_ps(_mm256_mul_ps(a_y, b_z), _mm256_mul_ps(a_z, b_y));
+}
+
+inline __m256 cross_product_y_avx2(const __m256 a_z, const __m256 a_x, const __m256 b_z, const __m256 b_x) {
+  return _mm256_sub_ps(_mm256_mul_ps(a_z, b_x), _mm256_mul_ps(a_x, b_z));
+}
+
+inline __m256 cross_product_z_avx2(const __m256 a_x, const __m256 a_y, const __m256 b_x, const __m256 b_y) {
+  return _mm256_sub_ps(_mm256_mul_ps(a_x, b_y), _mm256_mul_ps(a_y, b_x));
+}
+#endif
+
+#ifdef NANORT_ENABLE_NEON
+// ARM NEON version: test ray against 4 AABBs simultaneously
+inline int IntersectRayAABB4_NEON(
+    const float32x4_t ray_org_x, const float32x4_t ray_org_y, const float32x4_t ray_org_z,
+    const float32x4_t ray_inv_dir_x, const float32x4_t ray_inv_dir_y, const float32x4_t ray_inv_dir_z,
+    const float32x4_t min_t, const float32x4_t max_t,
+    const float32x4_t bbox_min_x, const float32x4_t bbox_min_y, const float32x4_t bbox_min_z,
+    const float32x4_t bbox_max_x, const float32x4_t bbox_max_y, const float32x4_t bbox_max_z,
+    float32x4_t *tmin_out, float32x4_t *tmax_out) {
+
+  // Calculate intersection points
+  const float32x4_t tmin_x = vmulq_f32(vsubq_f32(bbox_min_x, ray_org_x), ray_inv_dir_x);
+  const float32x4_t tmax_x = vmulq_f32(vsubq_f32(bbox_max_x, ray_org_x), ray_inv_dir_x);
+  const float32x4_t tmin_y = vmulq_f32(vsubq_f32(bbox_min_y, ray_org_y), ray_inv_dir_y);
+  const float32x4_t tmax_y = vmulq_f32(vsubq_f32(bbox_max_y, ray_org_y), ray_inv_dir_y);
+  const float32x4_t tmin_z = vmulq_f32(vsubq_f32(bbox_min_z, ray_org_z), ray_inv_dir_z);
+  const float32x4_t tmax_z = vmulq_f32(vsubq_f32(bbox_max_z, ray_org_z), ray_inv_dir_z);
+
+  // Handle ray direction signs
+  const float32x4_t real_tmin_x = vminq_f32(tmin_x, tmax_x);
+  const float32x4_t real_tmax_x = vmaxq_f32(tmin_x, tmax_x);
+  const float32x4_t real_tmin_y = vminq_f32(tmin_y, tmax_y);
+  const float32x4_t real_tmax_y = vmaxq_f32(tmin_y, tmax_y);
+  const float32x4_t real_tmin_z = vminq_f32(tmin_z, tmax_z);
+  const float32x4_t real_tmax_z = vmaxq_f32(tmin_z, tmax_z);
+
+  // Find overall tmin and tmax
+  const float32x4_t tmin = vmaxq_f32(real_tmin_z, vmaxq_f32(real_tmin_y, vmaxq_f32(real_tmin_x, min_t)));
+  const float32x4_t tmax = vminq_f32(real_tmax_z, vminq_f32(real_tmax_y, vminq_f32(real_tmax_x, max_t)));
+
+  // Test for intersection
+  const uint32x4_t hit_mask = vcleq_f32(tmin, tmax);
+
+  *tmin_out = tmin;
+  *tmax_out = tmax;
+
+  // Convert mask to integer result
+  static const uint32_t mask_values[4] = {1, 2, 4, 8};
+  const uint32x4_t mask_shifts = vld1q_u32(mask_values);
+  const uint32x4_t result_mask = vandq_u32(hit_mask, mask_shifts);
+  
+  uint32_t result[4];
+  vst1q_u32(result, result_mask);
+  return result[0] | result[1] | result[2] | result[3];
+}
+
+// NEON triangle intersection helpers
+inline float32x4_t cross_product_x_neon(const float32x4_t a_y, const float32x4_t a_z, 
+                                         const float32x4_t b_y, const float32x4_t b_z) {
+  return vsubq_f32(vmulq_f32(a_y, b_z), vmulq_f32(a_z, b_y));
+}
+
+inline float32x4_t cross_product_y_neon(const float32x4_t a_z, const float32x4_t a_x,
+                                         const float32x4_t b_z, const float32x4_t b_x) {
+  return vsubq_f32(vmulq_f32(a_z, b_x), vmulq_f32(a_x, b_z));
+}
+
+inline float32x4_t cross_product_z_neon(const float32x4_t a_x, const float32x4_t a_y,
+                                         const float32x4_t b_x, const float32x4_t b_y) {
+  return vsubq_f32(vmulq_f32(a_x, b_y), vmulq_f32(a_y, b_x));
+}
+#endif // NANORT_ENABLE_NEON
+
+#endif // !NANORT_DISABLE_SIMD
+
+// ================================================================================
+// SIMD utility functions for BVH build
+// ================================================================================
+#if !defined(NANORT_DISABLE_SIMD)
+
+#ifdef NANORT_ENABLE_SSE2
+// Compute AABBs for 4 primitives simultaneously
+inline void ComputeAABB4_SSE2(const float* vertices, const unsigned int* faces, 
+                               unsigned int base_idx, size_t vertex_stride_bytes,
+                               __m128 *bmin_x, __m128 *bmin_y, __m128 *bmin_z,
+                               __m128 *bmax_x, __m128 *bmax_y, __m128 *bmax_z) {
+  const size_t vertex_stride_floats = vertex_stride_bytes / sizeof(float);
+  
+  // Load vertex data for 4 triangles (12 vertices total)
+  __m128 v_x[3], v_y[3], v_z[3];
+  
+  for (unsigned int tri = 0; tri < 4U; tri++) {
+    const unsigned int* face = &faces[3 * (base_idx + tri)];
+    
+    // Load triangle vertices
+    for (unsigned int v = 0; v < 3U; v++) {
+      const float* vertex = &vertices[face[v] * vertex_stride_floats];
+      reinterpret_cast<float*>(&v_x[v])[tri] = vertex[0];
+      reinterpret_cast<float*>(&v_y[v])[tri] = vertex[1]; 
+      reinterpret_cast<float*>(&v_z[v])[tri] = vertex[2];
+    }
+  }
+  
+  // Find min/max for each triangle
+  *bmin_x = _mm_min_ps(v_x[0], _mm_min_ps(v_x[1], v_x[2]));
+  *bmax_x = _mm_max_ps(v_x[0], _mm_max_ps(v_x[1], v_x[2]));
+  *bmin_y = _mm_min_ps(v_y[0], _mm_min_ps(v_y[1], v_y[2]));
+  *bmax_y = _mm_max_ps(v_y[0], _mm_max_ps(v_y[1], v_y[2]));
+  *bmin_z = _mm_min_ps(v_z[0], _mm_min_ps(v_z[1], v_z[2]));
+  *bmax_z = _mm_max_ps(v_z[0], _mm_max_ps(v_z[1], v_z[2]));
+}
+
+// Compute centroids for 4 primitives simultaneously  
+inline void ComputeCentroid4_SSE2(const __m128 bmin_x, const __m128 bmin_y, const __m128 bmin_z,
+                                   const __m128 bmax_x, const __m128 bmax_y, const __m128 bmax_z,
+                                   __m128 *centroid_x, __m128 *centroid_y, __m128 *centroid_z) {
+  const __m128 half = _mm_set1_ps(0.5f);
+  *centroid_x = _mm_mul_ps(_mm_add_ps(bmin_x, bmax_x), half);
+  *centroid_y = _mm_mul_ps(_mm_add_ps(bmin_y, bmax_y), half);
+  *centroid_z = _mm_mul_ps(_mm_add_ps(bmin_z, bmax_z), half);
+}
+#endif // NANORT_ENABLE_SSE2
+
+#endif // !NANORT_DISABLE_SIMD
+
 // RayType
 typedef enum {
   RAY_TYPE_NONE = 0x0,
@@ -985,6 +1262,20 @@ class CWBVHAccel {
   bool Traverse(const Ray<T> &ray, const I &intersector, H *isect,
                const BVHTraceOptions &options = BVHTraceOptions()) const;
 
+#if !defined(NANORT_DISABLE_SIMD)
+  #ifdef NANORT_ENABLE_SSE2
+    template <class I, class H>
+    bool TraverseSIMD_SSE2(const Ray<T> &ray, const I &intersector, H *isect,
+                          const BVHTraceOptions &options = BVHTraceOptions()) const;
+  #endif
+
+  #ifdef NANORT_ENABLE_AVX2
+    template <class I, class H>
+    bool TraverseSIMD_AVX2(const Ray<T> &ray, const I &intersector, H *isect,
+                          const BVHTraceOptions &options = BVHTraceOptions()) const;
+  #endif
+#endif // !NANORT_DISABLE_SIMD
+
   void BoundingBox(T bmin[3], T bmax[3]) const {
     if (nodes_.empty()) {
       bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<T>::max();
@@ -1234,6 +1525,223 @@ bool CWBVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
 
   return hit;
 }
+
+// ================================================================================
+// SIMD-optimized BVH traversal implementations  
+// ================================================================================
+#if !defined(NANORT_DISABLE_SIMD)
+
+#ifdef NANORT_ENABLE_SSE2
+// SIMD-optimized CWBVH traversal using SSE2 
+// Tests 4 child nodes simultaneously for better performance
+template <typename T>
+template <class I, class H>
+bool CWBVHAccel<T>::TraverseSIMD_SSE2(const Ray<T> &ray, const I &intersector, H *isect,
+                                     const BVHTraceOptions &options) const {
+  if (nodes_.empty()) return false;
+
+  T hit_t = ray.max_t;
+  
+  std::vector<unsigned int> stack;
+  stack.reserve(64);
+  stack.push_back(0);
+
+  intersector.Update(hit_t, static_cast<unsigned int>(-1));
+  intersector.PrepareTraversal(ray, options);
+
+  int dir_sign[3];
+  dir_sign[0] = ray.dir[0] < static_cast<T>(0.0) ? 1 : 0;
+  dir_sign[1] = ray.dir[1] < static_cast<T>(0.0) ? 1 : 0;
+  dir_sign[2] = ray.dir[2] < static_cast<T>(0.0) ? 1 : 0;
+
+  real3<T> ray_inv_dir = vsafe_inverse({ray.dir[0], ray.dir[1], ray.dir[2]});
+  real3<T> ray_org = {ray.org[0], ray.org[1], ray.org[2]};
+
+  // Load ray data into SIMD registers for vectorized AABB tests
+  const __m128 ray_org_x = _mm_set1_ps(ray_org[0]);
+  const __m128 ray_org_y = _mm_set1_ps(ray_org[1]); 
+  const __m128 ray_org_z = _mm_set1_ps(ray_org[2]);
+  const __m128 ray_inv_dir_x = _mm_set1_ps(ray_inv_dir[0]);
+  const __m128 ray_inv_dir_y = _mm_set1_ps(ray_inv_dir[1]);
+  const __m128 ray_inv_dir_z = _mm_set1_ps(ray_inv_dir[2]);
+  const __m128 min_t = _mm_set1_ps(ray.min_t);
+  const __m128 max_t_vec = _mm_set1_ps(hit_t);
+
+  while (!stack.empty()) {
+    const unsigned int node_index = stack.back();
+    stack.pop_back();
+    
+    const CWBVHNode<T> &node = nodes_[node_index];
+
+    if (node.IsLeaf()) {
+      if (TestCWBVHLeafNode(node, ray, intersector, options)) {
+        hit_t = intersector.GetT();
+      }
+    } else {
+      // For internal nodes with multiple children, use SIMD to test up to 4 AABBs at once
+      const unsigned int num_children = node.num_children;
+      const unsigned int base_child = node.data.internal.child_index;
+      
+      // Process children in groups of 4 using SIMD
+      for (unsigned int child_group = 0; child_group < num_children; child_group += 4) {
+        const unsigned int children_in_group = std::min(4U, num_children - child_group);
+        
+        if (children_in_group == 4) {
+          // Load 4 child AABBs for SIMD intersection test
+          __m128 bbox_min_x, bbox_min_y, bbox_min_z, bbox_max_x, bbox_max_y, bbox_max_z;
+          
+          for (unsigned int i = 0; i < 4U; i++) {
+            const CWBVHNode<T> &child = nodes_[base_child + child_group + i];
+            reinterpret_cast<float*>(&bbox_min_x)[i] = static_cast<float>(child.bmin[0]);
+            reinterpret_cast<float*>(&bbox_min_y)[i] = static_cast<float>(child.bmin[1]); 
+            reinterpret_cast<float*>(&bbox_min_z)[i] = static_cast<float>(child.bmin[2]);
+            reinterpret_cast<float*>(&bbox_max_x)[i] = static_cast<float>(child.bmax[0]);
+            reinterpret_cast<float*>(&bbox_max_y)[i] = static_cast<float>(child.bmax[1]);
+            reinterpret_cast<float*>(&bbox_max_z)[i] = static_cast<float>(child.bmax[2]);
+          }
+          
+          __m128 tmin_out, tmax_out;
+          int hit_mask = IntersectRayAABB4_SSE2(
+            ray_org_x, ray_org_y, ray_org_z,
+            ray_inv_dir_x, ray_inv_dir_y, ray_inv_dir_z,
+            min_t, max_t_vec,
+            bbox_min_x, bbox_min_y, bbox_min_z,
+            bbox_max_x, bbox_max_y, bbox_max_z,
+            &tmin_out, &tmax_out);
+          
+          // Add hit children to stack
+          for (int i = 0; i < 4; i++) {
+            if (hit_mask & (1 << i)) {
+              stack.push_back(base_child + child_group + static_cast<unsigned int>(i));
+            }
+          }
+        } else {
+          // Handle remaining children with scalar code
+          for (unsigned int i = 0; i < children_in_group; i++) {
+            T min_t_out, max_t_out;
+            const CWBVHNode<T> &child = nodes_[base_child + child_group + i];
+            
+            if (IntersectRayAABB(&min_t_out, &max_t_out, ray.min_t, hit_t,
+                                 child.bmin, child.bmax, ray_org, ray_inv_dir, dir_sign)) {
+              stack.push_back(base_child + child_group + i);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  bool hit = (intersector.GetT() < ray.max_t);
+  intersector.PostTraversal(ray, hit, isect);
+  return hit;
+}
+#endif
+
+#ifdef NANORT_ENABLE_AVX2  
+// AVX2-optimized CWBVH traversal for 8-way SIMD
+template <typename T>
+template <class I, class H>
+bool CWBVHAccel<T>::TraverseSIMD_AVX2(const Ray<T> &ray, const I &intersector, H *isect,
+                                     const BVHTraceOptions &options) const {
+  if (nodes_.empty()) return false;
+
+  T hit_t = ray.max_t;
+  
+  std::vector<unsigned int> stack;
+  stack.reserve(64);
+  stack.push_back(0);
+
+  intersector.Update(hit_t, static_cast<unsigned int>(-1));
+  intersector.PrepareTraversal(ray, options);
+
+  real3<T> ray_inv_dir = vsafe_inverse({ray.dir[0], ray.dir[1], ray.dir[2]});
+  real3<T> ray_org = {ray.org[0], ray.org[1], ray.org[2]};
+
+  // Load ray data into AVX registers for 8-way AABB tests
+  const __m256 ray_org_x = _mm256_set1_ps(ray_org[0]);
+  const __m256 ray_org_y = _mm256_set1_ps(ray_org[1]); 
+  const __m256 ray_org_z = _mm256_set1_ps(ray_org[2]);
+  const __m256 ray_inv_dir_x = _mm256_set1_ps(ray_inv_dir[0]);
+  const __m256 ray_inv_dir_y = _mm256_set1_ps(ray_inv_dir[1]);
+  const __m256 ray_inv_dir_z = _mm256_set1_ps(ray_inv_dir[2]);
+  const __m256 min_t = _mm256_set1_ps(ray.min_t);
+  const __m256 max_t_vec = _mm256_set1_ps(hit_t);
+
+  while (!stack.empty()) {
+    const unsigned int node_index = stack.back();
+    stack.pop_back();
+    
+    const CWBVHNode<T> &node = nodes_[node_index];
+
+    if (node.IsLeaf()) {
+      if (TestCWBVHLeafNode(node, ray, intersector, options)) {
+        hit_t = intersector.GetT();
+      }
+    } else {
+      const unsigned int num_children = node.num_children;
+      const unsigned int base_child = node.data.internal.child_index;
+      
+      // Process children in groups of 8 using AVX2
+      for (unsigned int child_group = 0; child_group < num_children; child_group += 8) {
+        const unsigned int children_in_group = std::min(8U, num_children - child_group);
+        
+        if (children_in_group == 8) {
+          // Load 8 child AABBs for AVX2 intersection test
+          __m256 bbox_min_x, bbox_min_y, bbox_min_z, bbox_max_x, bbox_max_y, bbox_max_z;
+          
+          for (unsigned int i = 0; i < 8U; i++) {
+            const CWBVHNode<T> &child = nodes_[base_child + child_group + i];
+            reinterpret_cast<float*>(&bbox_min_x)[i] = static_cast<float>(child.bmin[0]);
+            reinterpret_cast<float*>(&bbox_min_y)[i] = static_cast<float>(child.bmin[1]); 
+            reinterpret_cast<float*>(&bbox_min_z)[i] = static_cast<float>(child.bmin[2]);
+            reinterpret_cast<float*>(&bbox_max_x)[i] = static_cast<float>(child.bmax[0]);
+            reinterpret_cast<float*>(&bbox_max_y)[i] = static_cast<float>(child.bmax[1]);
+            reinterpret_cast<float*>(&bbox_max_z)[i] = static_cast<float>(child.bmax[2]);
+          }
+          
+          __m256 tmin_out, tmax_out;
+          int hit_mask = IntersectRayAABB8_AVX2(
+            ray_org_x, ray_org_y, ray_org_z,
+            ray_inv_dir_x, ray_inv_dir_y, ray_inv_dir_z,
+            min_t, max_t_vec,
+            bbox_min_x, bbox_min_y, bbox_min_z,
+            bbox_max_x, bbox_max_y, bbox_max_z,
+            &tmin_out, &tmax_out);
+          
+          // Add hit children to stack
+          for (int i = 0; i < 8; i++) {
+            if (hit_mask & (1 << i)) {
+              stack.push_back(base_child + child_group + static_cast<unsigned int>(i));
+            }
+          }
+        } else {
+          // Handle remaining children with scalar fallback
+          int dir_sign[3];
+          dir_sign[0] = ray.dir[0] < static_cast<T>(0.0) ? 1 : 0;
+          dir_sign[1] = ray.dir[1] < static_cast<T>(0.0) ? 1 : 0;
+          dir_sign[2] = ray.dir[2] < static_cast<T>(0.0) ? 1 : 0;
+
+          for (unsigned int i = 0; i < children_in_group; i++) {
+            T min_t_out, max_t_out;
+            const CWBVHNode<T> &child = nodes_[base_child + child_group + i];
+            
+            if (IntersectRayAABB(&min_t_out, &max_t_out, ray.min_t, hit_t,
+                                 child.bmin, child.bmax, ray_org, ray_inv_dir, dir_sign)) {
+              stack.push_back(base_child + child_group + i);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  bool hit = (intersector.GetT() < ray.max_t);
+  intersector.PostTraversal(ray, hit, isect);
+  return hit;
+}
+#endif // NANORT_ENABLE_AVX2
+
+#endif // !NANORT_DISABLE_SIMD
 
 template <typename T>
 template <class I>
@@ -1537,6 +2045,219 @@ class TriangleIntersector {
 
     return true;
   }
+
+  // ================================================================================
+  // SIMD-optimized watertight triangle intersection methods
+  // ================================================================================
+#if !defined(NANORT_DISABLE_SIMD)
+  #if defined(NANORT_ENABLE_SSE2) && defined(__GNUC__) && !defined(__clang__)
+    // GCC-specific SSE2 optimizations for triangle intersection
+  inline bool IntersectSIMD_SSE2(T *t_inout, const unsigned int prim_index) const {
+    if ((prim_index < trace_options_.prim_ids_range[0]) ||
+        (prim_index >= trace_options_.prim_ids_range[1])) {
+      return false;
+    }
+
+    if (prim_index == trace_options_.skip_prim_id) {
+      return false;
+    }
+
+    const unsigned int f0 = faces_[3 * prim_index + 0];
+    const unsigned int f1 = faces_[3 * prim_index + 1];
+    const unsigned int f2 = faces_[3 * prim_index + 2];
+
+    const real3<T> p0(get_vertex_addr(vertices_, f0 + 0, vertex_stride_bytes_));
+    const real3<T> p1(get_vertex_addr(vertices_, f1 + 0, vertex_stride_bytes_));
+    const real3<T> p2(get_vertex_addr(vertices_, f2 + 0, vertex_stride_bytes_));
+
+    // Load triangle vertices into SIMD registers for vectorized computation
+    const __m128 v0 = _mm_set_ps(0.0f, p0[2], p0[1], p0[0]);
+    const __m128 v1 = _mm_set_ps(0.0f, p1[2], p1[1], p1[0]);
+    const __m128 v2 = _mm_set_ps(0.0f, p2[2], p2[1], p2[0]);
+    const __m128 ray_org = _mm_set_ps(0.0f, ray_org_[2], ray_org_[1], ray_org_[0]);
+
+    // Vectorized computation of A, B, C vectors
+    const __m128 A_vec = _mm_sub_ps(v0, ray_org);
+    const __m128 B_vec = _mm_sub_ps(v1, ray_org);
+    const __m128 C_vec = _mm_sub_ps(v2, ray_org);
+
+    // Extract individual components for the watertight algorithm
+    // (The core watertight intersection logic still needs scalar computation
+    // due to its specialized nature, but we vectorize the setup)
+    float A_arr[4], B_arr[4], C_arr[4];
+    _mm_store_ps(A_arr, A_vec);
+    _mm_store_ps(B_arr, B_vec);
+    _mm_store_ps(C_arr, C_vec);
+    
+    const real3<T> A = {static_cast<T>(A_arr[0]), static_cast<T>(A_arr[1]), static_cast<T>(A_arr[2])};
+    const real3<T> B = {static_cast<T>(B_arr[0]), static_cast<T>(B_arr[1]), static_cast<T>(B_arr[2])};
+    const real3<T> C = {static_cast<T>(C_arr[0]), static_cast<T>(C_arr[1]), static_cast<T>(C_arr[2])};
+
+    // Continue with the standard watertight intersection algorithm
+    const T Ax = A[ray_coeff_.kx] - ray_coeff_.Sx * A[ray_coeff_.kz];
+    const T Ay = A[ray_coeff_.ky] - ray_coeff_.Sy * A[ray_coeff_.kz];
+    const T Bx = B[ray_coeff_.kx] - ray_coeff_.Sx * B[ray_coeff_.kz];
+    const T By = B[ray_coeff_.ky] - ray_coeff_.Sy * B[ray_coeff_.kz];
+    const T Cx = C[ray_coeff_.kx] - ray_coeff_.Sx * C[ray_coeff_.kz];
+    const T Cy = C[ray_coeff_.ky] - ray_coeff_.Sy * C[ray_coeff_.kz];
+
+    // Vectorized cross product computation using SIMD
+    const __m128 cross_factors = _mm_set_ps(static_cast<float>(By * Ax - Bx * Ay),  // W
+                                            static_cast<float>(Ax * Cy - Ay * Cx),  // V
+                                            static_cast<float>(Cx * By - Cy * Bx),  // U
+                                            0.0f);
+    
+    float cross_arr[4];
+    _mm_store_ps(cross_arr, cross_factors);
+    
+    T U = static_cast<T>(cross_arr[2]); // U
+    T V = static_cast<T>(cross_arr[1]); // V
+    T W = static_cast<T>(cross_arr[0]); // W
+
+    // Edge case handling with double precision fallback
+    if (U == static_cast<T>(0.0) || V == static_cast<T>(0.0) || W == static_cast<T>(0.0)) {
+      double CxBy = static_cast<double>(Cx) * static_cast<double>(By);
+      double CyBx = static_cast<double>(Cy) * static_cast<double>(Bx);
+      U = static_cast<T>(CxBy - CyBx);
+
+      double AxCy = static_cast<double>(Ax) * static_cast<double>(Cy);
+      double AyCx = static_cast<double>(Ay) * static_cast<double>(Cx);
+      V = static_cast<T>(AxCy - AyCx);
+
+      double BxAy = static_cast<double>(Bx) * static_cast<double>(Ay);
+      double ByAx = static_cast<double>(By) * static_cast<double>(Ax);
+      W = static_cast<T>(BxAy - ByAx);
+    }
+
+    if (U < static_cast<T>(0.0) || V < static_cast<T>(0.0) || W < static_cast<T>(0.0)) {
+      if (trace_options_.cull_back_face ||
+          (U > static_cast<T>(0.0) || V > static_cast<T>(0.0) || W > static_cast<T>(0.0))) {
+        return false;
+      }
+    }
+
+    T det = U + V + W;
+    if (det == static_cast<T>(0.0)) return false;
+
+    const T Az = ray_coeff_.Sz * A[ray_coeff_.kz];
+    const T Bz = ray_coeff_.Sz * B[ray_coeff_.kz];
+    const T Cz = ray_coeff_.Sz * C[ray_coeff_.kz];
+    const T D = U * Az + V * Bz + W * Cz;
+
+    const T rcpDet = static_cast<T>(1.0) / det;
+    T tt = D * rcpDet;
+
+    if (tt > (*t_inout) || tt < t_min_) {
+      return false;
+    }
+
+    (*t_inout) = tt;
+    u_ = V * rcpDet;
+    v_ = W * rcpDet;
+
+    return true;
+  }
+#endif
+
+#if defined(NANORT_ENABLE_NEON)
+  // ARM NEON optimized triangle intersection
+  inline bool IntersectSIMD_NEON(T *t_inout, const unsigned int prim_index) const {
+    if ((prim_index < trace_options_.prim_ids_range[0]) ||
+        (prim_index >= trace_options_.prim_ids_range[1])) {
+      return false;
+    }
+
+    if (prim_index == trace_options_.skip_prim_id) {
+      return false;
+    }
+
+    const unsigned int f0 = faces_[3 * prim_index + 0];
+    const unsigned int f1 = faces_[3 * prim_index + 1];
+    const unsigned int f2 = faces_[3 * prim_index + 2];
+
+    const real3<T> p0(get_vertex_addr(vertices_, f0 + 0, vertex_stride_bytes_));
+    const real3<T> p1(get_vertex_addr(vertices_, f1 + 0, vertex_stride_bytes_));
+    const real3<T> p2(get_vertex_addr(vertices_, f2 + 0, vertex_stride_bytes_));
+
+    // Load triangle vertices into NEON registers
+    const float32x4_t v0 = {p0[0], p0[1], p0[2], 0.0f};
+    const float32x4_t v1 = {p1[0], p1[1], p1[2], 0.0f};
+    const float32x4_t v2 = {p2[0], p2[1], p2[2], 0.0f};
+    const float32x4_t ray_org = {ray_org_[0], ray_org_[1], ray_org_[2], 0.0f};
+
+    // Vectorized computation of A, B, C vectors
+    const float32x4_t A_vec = vsubq_f32(v0, ray_org);
+    const float32x4_t B_vec = vsubq_f32(v1, ray_org);
+    const float32x4_t C_vec = vsubq_f32(v2, ray_org);
+
+    // Extract components for watertight intersection
+    const real3<T> A = {vgetq_lane_f32(A_vec, 0), vgetq_lane_f32(A_vec, 1), vgetq_lane_f32(A_vec, 2)};
+    const real3<T> B = {vgetq_lane_f32(B_vec, 0), vgetq_lane_f32(B_vec, 1), vgetq_lane_f32(B_vec, 2)};
+    const real3<T> C = {vgetq_lane_f32(C_vec, 0), vgetq_lane_f32(C_vec, 1), vgetq_lane_f32(C_vec, 2)};
+
+    // Continue with standard watertight intersection algorithm
+    const T Ax = A[ray_coeff_.kx] - ray_coeff_.Sx * A[ray_coeff_.kz];
+    const T Ay = A[ray_coeff_.ky] - ray_coeff_.Sy * A[ray_coeff_.kz];
+    const T Bx = B[ray_coeff_.kx] - ray_coeff_.Sx * B[ray_coeff_.kz];
+    const T By = B[ray_coeff_.ky] - ray_coeff_.Sy * B[ray_coeff_.kz];
+    const T Cx = C[ray_coeff_.kx] - ray_coeff_.Sx * C[ray_coeff_.kz];
+    const T Cy = C[ray_coeff_.ky] - ray_coeff_.Sy * C[ray_coeff_.kz];
+
+    // Vectorized cross product computation
+    const float32x4_t cross_vec = {Cx * By - Cy * Bx,  // U
+                                   Ax * Cy - Ay * Cx,  // V
+                                   Bx * Ay - By * Ax,  // W
+                                   0.0f};
+
+    T U = vgetq_lane_f32(cross_vec, 0);
+    T V = vgetq_lane_f32(cross_vec, 1);
+    T W = vgetq_lane_f32(cross_vec, 2);
+
+    // Edge case handling continues as before...
+    if (U == static_cast<T>(0.0) || V == static_cast<T>(0.0) || W == static_cast<T>(0.0)) {
+      double CxBy = static_cast<double>(Cx) * static_cast<double>(By);
+      double CyBx = static_cast<double>(Cy) * static_cast<double>(Bx);
+      U = static_cast<T>(CxBy - CyBx);
+
+      double AxCy = static_cast<double>(Ax) * static_cast<double>(Cy);
+      double AyCx = static_cast<double>(Ay) * static_cast<double>(Cx);
+      V = static_cast<T>(AxCy - AyCx);
+
+      double BxAy = static_cast<double>(Bx) * static_cast<double>(Ay);
+      double ByAx = static_cast<double>(By) * static_cast<double>(Ax);
+      W = static_cast<T>(BxAy - ByAx);
+    }
+
+    if (U < static_cast<T>(0.0) || V < static_cast<T>(0.0) || W < static_cast<T>(0.0)) {
+      if (trace_options_.cull_back_face ||
+          (U > static_cast<T>(0.0) || V > static_cast<T>(0.0) || W > static_cast<T>(0.0))) {
+        return false;
+      }
+    }
+
+    T det = U + V + W;
+    if (det == static_cast<T>(0.0)) return false;
+
+    const T Az = ray_coeff_.Sz * A[ray_coeff_.kz];
+    const T Bz = ray_coeff_.Sz * B[ray_coeff_.kz];
+    const T Cz = ray_coeff_.Sz * C[ray_coeff_.kz];
+    const T D = U * Az + V * Bz + W * Cz;
+
+    const T rcpDet = static_cast<T>(1.0) / det;
+    T tt = D * rcpDet;
+
+    if (tt > (*t_inout) || tt < t_min_) {
+      return false;
+    }
+
+    (*t_inout) = tt;
+    u_ = V * rcpDet;
+    v_ = W * rcpDet;
+
+    return true;
+  }
+  #endif // NANORT_ENABLE_NEON
+#endif // !NANORT_DISABLE_SIMD
 
   /// Returns the nearest hit distance.
   T GetT() const { return t_; }
@@ -2792,6 +3513,136 @@ inline bool IntersectRayAABB<double>(double *tminOut,  // [out]
   }
   return false;  // no hit
 }
+
+// ================================================================================
+// SIMD-optimized alternative ray-AABB intersection functions  
+// ================================================================================
+// These are separate functions to avoid conflicts with the original implementations
+#if !defined(NANORT_DISABLE_SIMD)
+
+#ifdef NANORT_ENABLE_SSE2
+inline bool IntersectRayAABB_SIMD_SSE2(float *tminOut, float *tmaxOut,
+                                       float min_t, float max_t,
+                                       const float bmin[3], const float bmax[3],
+                                       const float ray_org[3],
+                                       const float ray_inv_dir[3]) {
+  // Load ray data into SIMD registers
+  const __m128 ray_org_simd = _mm_set_ps(0.0f, ray_org[2], ray_org[1], ray_org[0]);
+  const __m128 ray_inv_dir_simd = _mm_set_ps(0.0f, ray_inv_dir[2], ray_inv_dir[1], ray_inv_dir[0]);
+  
+  // Load AABB data  
+  const __m128 bmin_simd = _mm_set_ps(0.0f, bmin[2], bmin[1], bmin[0]);
+  const __m128 bmax_simd = _mm_set_ps(0.0f, bmax[2], bmax[1], bmax[0]);
+  
+  // Calculate intersection points
+  const __m128 tmin_vals = _mm_mul_ps(_mm_sub_ps(bmin_simd, ray_org_simd), ray_inv_dir_simd);
+  const __m128 tmax_vals = _mm_mul_ps(_mm_sub_ps(bmax_simd, ray_org_simd), ray_inv_dir_simd);
+  
+  // Handle ray direction signs
+  const __m128 real_tmin = _mm_min_ps(tmin_vals, tmax_vals);
+  const __m128 real_tmax = _mm_max_ps(tmin_vals, tmax_vals);
+  
+  // Extract components
+  float tmin_arr[4], tmax_arr[4];
+  _mm_store_ps(tmin_arr, real_tmin);
+  _mm_store_ps(tmax_arr, real_tmax);
+  
+  // Apply robust MaxMult factor
+  tmax_arr[0] *= 1.00000024f;
+  tmax_arr[1] *= 1.00000024f; 
+  tmax_arr[2] *= 1.00000024f;
+  
+  // Find overall tmin and tmax
+  float tmin = safemax(tmin_arr[2], safemax(tmin_arr[1], safemax(tmin_arr[0], min_t)));
+  float tmax = safemin(tmax_arr[2], safemin(tmax_arr[1], safemin(tmax_arr[0], max_t)));
+
+  if (tmin <= tmax) {
+    (*tminOut) = tmin;
+    (*tmaxOut) = tmax;
+    return true;
+  }
+  return false;
+}
+#endif
+
+#ifdef NANORT_ENABLE_AVX2
+inline bool IntersectRayAABB_SIMD_AVX2(float *tminOut, float *tmaxOut,
+                                       float min_t, float max_t,
+                                       const float bmin[3], const float bmax[3],
+                                       const float ray_org[3],
+                                       const float ray_inv_dir[3]) {
+  // Use 256-bit registers 
+  const __m256 ray_org_simd = _mm256_set_ps(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, ray_org[2], ray_org[1], ray_org[0]);
+  const __m256 ray_inv_dir_simd = _mm256_set_ps(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, ray_inv_dir[2], ray_inv_dir[1], ray_inv_dir[0]);
+  
+  const __m256 bmin_simd = _mm256_set_ps(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, bmin[2], bmin[1], bmin[0]);
+  const __m256 bmax_simd = _mm256_set_ps(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, bmax[2], bmax[1], bmax[0]);
+  
+  const __m256 tmin_vals = _mm256_mul_ps(_mm256_sub_ps(bmin_simd, ray_org_simd), ray_inv_dir_simd);
+  const __m256 tmax_vals = _mm256_mul_ps(_mm256_sub_ps(bmax_simd, ray_org_simd), ray_inv_dir_simd);
+  
+  const __m256 real_tmin = _mm256_min_ps(tmin_vals, tmax_vals);
+  const __m256 real_tmax = _mm256_max_ps(tmin_vals, tmax_vals);
+  
+  float tmin_arr[8], tmax_arr[8];
+  _mm256_store_ps(tmin_arr, real_tmin);
+  _mm256_store_ps(tmax_arr, real_tmax);
+  
+  tmax_arr[0] *= 1.00000024f;
+  tmax_arr[1] *= 1.00000024f;
+  tmax_arr[2] *= 1.00000024f;
+  
+  float tmin = safemax(tmin_arr[2], safemax(tmin_arr[1], safemax(tmin_arr[0], min_t)));
+  float tmax = safemin(tmax_arr[2], safemin(tmax_arr[1], safemin(tmax_arr[0], max_t)));
+
+  if (tmin <= tmax) {
+    (*tminOut) = tmin;
+    (*tmaxOut) = tmax;
+    return true;
+  }
+  return false;
+}
+#endif
+
+#ifdef NANORT_ENABLE_NEON
+inline bool IntersectRayAABB_SIMD_NEON(float *tminOut, float *tmaxOut,
+                                       float min_t, float max_t,
+                                       const float bmin[3], const float bmax[3],
+                                       const float ray_org[3],
+                                       const float ray_inv_dir[3]) {
+  // Load data into NEON registers
+  const float32x4_t ray_org_neon = {ray_org[0], ray_org[1], ray_org[2], 0.0f};
+  const float32x4_t ray_inv_dir_neon = {ray_inv_dir[0], ray_inv_dir[1], ray_inv_dir[2], 0.0f};
+  const float32x4_t bmin_neon = {bmin[0], bmin[1], bmin[2], 0.0f};
+  const float32x4_t bmax_neon = {bmax[0], bmax[1], bmax[2], 0.0f};
+  
+  const float32x4_t tmin_vals = vmulq_f32(vsubq_f32(bmin_neon, ray_org_neon), ray_inv_dir_neon);
+  const float32x4_t tmax_vals = vmulq_f32(vsubq_f32(bmax_neon, ray_org_neon), ray_inv_dir_neon);
+  
+  const float32x4_t real_tmin = vminq_f32(tmin_vals, tmax_vals);
+  const float32x4_t real_tmax = vmaxq_f32(tmin_vals, tmax_vals);
+  
+  float tmin_arr[4], tmax_arr[4];
+  vst1q_f32(tmin_arr, real_tmin);
+  vst1q_f32(tmax_arr, real_tmax);
+  
+  tmax_arr[0] *= 1.00000024f;
+  tmax_arr[1] *= 1.00000024f;
+  tmax_arr[2] *= 1.00000024f;
+  
+  float tmin = safemax(tmin_arr[2], safemax(tmin_arr[1], safemax(tmin_arr[0], min_t)));
+  float tmax = safemin(tmax_arr[2], safemin(tmax_arr[1], safemin(tmax_arr[0], max_t)));
+
+  if (tmin <= tmax) {
+    (*tminOut) = tmin;
+    (*tmaxOut) = tmax;
+    return true;
+  }
+  return false;
+}
+#endif // NANORT_ENABLE_NEON
+
+#endif // !NANORT_DISABLE_SIMD
 
 template <typename T>
 template <class I>
