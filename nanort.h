@@ -859,6 +859,330 @@ class BVHAccel {
   unsigned int pad0_;
 };
 
+template <typename T>
+struct CWBVHNode {
+  T bmin[3];
+  T bmax[3];
+  
+  union {
+    struct {
+      unsigned int child_index;
+      unsigned int num_children;
+    } internal;
+    
+    struct {
+      unsigned int primitive_count;
+      unsigned int primitive_index;
+    } leaf;
+  } data;
+  
+  unsigned char meta_data;
+  unsigned char num_children;
+  unsigned char axis;
+  unsigned char flags;
+  
+  bool IsLeaf() const { return (flags & 1) != 0; }
+  void SetLeaf() { flags |= 1; }
+  void SetInternal() { flags &= ~1; }
+};
+
+template <typename T>
+struct CWBVHBuildOptions {
+  unsigned int branching_factor;
+  unsigned int min_leaf_primitives;
+  unsigned int max_tree_depth;
+  T compression_threshold;
+  bool enable_compression;
+  
+  CWBVHBuildOptions()
+      : branching_factor(8),
+        min_leaf_primitives(4),
+        max_tree_depth(64),
+        compression_threshold(static_cast<T>(0.1)),
+        enable_compression(true) {}
+};
+
+template <typename T>
+class CWBVHAccel {
+ public:
+  CWBVHAccel() {}
+  ~CWBVHAccel() {}
+
+  template <class Prim, class Pred>
+  bool Build(const unsigned int num_primitives, const Prim &p, const Pred &pred,
+             const CWBVHBuildOptions<T> &options = CWBVHBuildOptions<T>());
+
+  template <class I, class H>
+  bool Traverse(const Ray<T> &ray, const I &intersector, H *isect,
+               const BVHTraceOptions &options = BVHTraceOptions()) const;
+
+  void BoundingBox(T bmin[3], T bmax[3]) const {
+    if (nodes_.empty()) {
+      bmin[0] = bmin[1] = bmin[2] = std::numeric_limits<T>::max();
+      bmax[0] = bmax[1] = bmax[2] = -std::numeric_limits<T>::max();
+    } else {
+      bmin[0] = nodes_[0].bmin[0];
+      bmin[1] = nodes_[0].bmin[1];
+      bmin[2] = nodes_[0].bmin[2];
+      bmax[0] = nodes_[0].bmax[0];
+      bmax[1] = nodes_[0].bmax[1];
+      bmax[2] = nodes_[0].bmax[2];
+    }
+  }
+
+  bool IsValid() const { return nodes_.size() > 0; }
+
+ private:
+  template <class Prim>
+  unsigned int BuildWideTree(std::vector<CWBVHNode<T> > *out_nodes,
+                            const std::vector<BVHNode<T> > &binary_nodes,
+                            unsigned int node_index,
+                            const Prim &p);
+
+  template <class Prim>
+  void CompressNode(CWBVHNode<T> *node, const Prim &p);
+
+  template <class I>
+  bool TestCWBVHLeafNode(const CWBVHNode<T> &node, const Ray<T> &ray,
+                        const I &intersector) const;
+
+  std::vector<CWBVHNode<T> > nodes_;
+  std::vector<unsigned int> indices_;
+  CWBVHBuildOptions<T> options_;
+};
+
+template <typename T>
+template <class Prim, class Pred>
+bool CWBVHAccel<T>::Build(const unsigned int num_primitives, const Prim &p,
+                         const Pred &pred, const CWBVHBuildOptions<T> &options) {
+  options_ = options;
+  nodes_.clear();
+  indices_.clear();
+
+  if (num_primitives == 0) {
+    return false;
+  }
+
+  BVHAccel<T> binary_bvh;
+  BVHBuildOptions<T> binary_options;
+  binary_options.min_leaf_primitives = options.min_leaf_primitives;
+  binary_options.max_tree_depth = options.max_tree_depth;
+  
+  if (!binary_bvh.Build(num_primitives, p, pred, binary_options)) {
+    return false;
+  }
+
+  const std::vector<BVHNode<T> > &binary_nodes = binary_bvh.GetNodes();
+  const std::vector<unsigned int> &binary_indices = binary_bvh.GetIndices();
+  
+  indices_ = binary_indices;
+
+  BuildWideTree(&nodes_, binary_nodes, 0, p);
+
+  if (options.enable_compression) {
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+      CompressNode(&nodes_[i], p);
+    }
+  }
+
+  return true;
+}
+
+template <typename T>
+template <class Prim>
+unsigned int CWBVHAccel<T>::BuildWideTree(std::vector<CWBVHNode<T> > *out_nodes,
+                                          const std::vector<BVHNode<T> > &binary_nodes,
+                                          unsigned int node_index,
+                                          const Prim &p) {
+  if (node_index >= binary_nodes.size()) {
+    return static_cast<unsigned int>(-1);
+  }
+
+  const BVHNode<T> &binary_node = binary_nodes[node_index];
+  unsigned int current_index = static_cast<unsigned int>(out_nodes->size());
+  
+  CWBVHNode<T> wide_node;
+  wide_node.bmin[0] = binary_node.bmin[0];
+  wide_node.bmin[1] = binary_node.bmin[1];
+  wide_node.bmin[2] = binary_node.bmin[2];
+  wide_node.bmax[0] = binary_node.bmax[0];
+  wide_node.bmax[1] = binary_node.bmax[1];
+  wide_node.bmax[2] = binary_node.bmax[2];
+  wide_node.axis = static_cast<unsigned char>(binary_node.axis);
+  wide_node.flags = 0;
+  wide_node.meta_data = 0;
+
+  if (binary_node.flag == 1) {
+    wide_node.SetLeaf();
+    wide_node.data.leaf.primitive_count = binary_node.data[0];
+    wide_node.data.leaf.primitive_index = binary_node.data[1];
+    wide_node.num_children = 0;
+  } else {
+    wide_node.SetInternal();
+    
+    std::vector<unsigned int> children;
+    std::queue<unsigned int> to_process;
+    to_process.push(binary_node.data[0]);
+    to_process.push(binary_node.data[1]);
+    
+    while (!to_process.empty() && children.size() < options_.branching_factor) {
+      unsigned int child_idx = to_process.front();
+      to_process.pop();
+      
+      if (child_idx >= binary_nodes.size()) continue;
+      
+      const BVHNode<T> &child = binary_nodes[child_idx];
+      
+      if (child.flag == 1 || children.size() >= (options_.branching_factor - 2)) {
+        children.push_back(child_idx);
+      } else {
+        to_process.push(child.data[0]);
+        to_process.push(child.data[1]);
+      }
+    }
+    
+    wide_node.data.internal.child_index = static_cast<unsigned int>(out_nodes->size() + 1);
+    wide_node.data.internal.num_children = static_cast<unsigned int>(children.size());
+    wide_node.num_children = static_cast<unsigned char>(children.size());
+  }
+
+  out_nodes->push_back(wide_node);
+
+  if (!wide_node.IsLeaf()) {
+    std::vector<unsigned int> children;
+    std::queue<unsigned int> to_process;
+    to_process.push(binary_node.data[0]);
+    to_process.push(binary_node.data[1]);
+    
+    while (!to_process.empty() && children.size() < options_.branching_factor) {
+      unsigned int child_idx = to_process.front();
+      to_process.pop();
+      
+      if (child_idx >= binary_nodes.size()) continue;
+      
+      const BVHNode<T> &child = binary_nodes[child_idx];
+      
+      if (child.flag == 1 || children.size() >= (options_.branching_factor - 2)) {
+        children.push_back(child_idx);
+      } else {
+        to_process.push(child.data[0]);
+        to_process.push(child.data[1]);
+      }
+    }
+    
+    for (unsigned int child_idx : children) {
+      BuildWideTree(out_nodes, binary_nodes, child_idx, p);
+    }
+  }
+
+  return current_index;
+}
+
+template <typename T>
+template <class Prim>
+void CWBVHAccel<T>::CompressNode(CWBVHNode<T> *node, const Prim &) {
+  if (node->IsLeaf()) return;
+  
+  T extent[3] = {
+    node->bmax[0] - node->bmin[0],
+    node->bmax[1] - node->bmin[1],
+    node->bmax[2] - node->bmin[2]
+  };
+  
+  T max_extent = std::max({extent[0], extent[1], extent[2]});
+  
+  if (max_extent < options_.compression_threshold) {
+    node->meta_data |= 0x80;
+  }
+}
+
+template <typename T>
+template <class I, class H>
+bool CWBVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
+                            const BVHTraceOptions &options) const {
+  if (nodes_.empty()) return false;
+
+  T hit_t = ray.max_t;
+  
+  std::vector<unsigned int> stack;
+  stack.reserve(64);
+  stack.push_back(0);
+
+  // Init isect info as no hit
+  intersector.Update(hit_t, static_cast<unsigned int>(-1));
+  intersector.PrepareTraversal(ray, options);
+
+  int dir_sign[3];
+  dir_sign[0] = ray.dir[0] < static_cast<T>(0.0) ? 1 : 0;
+  dir_sign[1] = ray.dir[1] < static_cast<T>(0.0) ? 1 : 0;
+  dir_sign[2] = ray.dir[2] < static_cast<T>(0.0) ? 1 : 0;
+
+  real3<T> ray_inv_dir;
+  real3<T> ray_dir;
+  ray_dir[0] = ray.dir[0];
+  ray_dir[1] = ray.dir[1];
+  ray_dir[2] = ray.dir[2];
+
+  ray_inv_dir = vsafe_inverse(ray_dir);
+
+  real3<T> ray_org;
+  ray_org[0] = ray.org[0];
+  ray_org[1] = ray.org[1];
+  ray_org[2] = ray.org[2];
+
+  while (!stack.empty()) {
+    unsigned int node_index = stack.back();
+    stack.pop_back();
+
+    if (node_index >= nodes_.size()) continue;
+
+    const CWBVHNode<T> &node = nodes_[node_index];
+
+    T min_t = std::numeric_limits<T>::max();
+    T max_t = -std::numeric_limits<T>::max();
+
+    bool bbox_hit = IntersectRayAABB(&min_t, &max_t, ray.min_t, hit_t, 
+                                    node.bmin, node.bmax, ray_org, ray_inv_dir, dir_sign);
+
+    if (bbox_hit) {
+      if (node.IsLeaf()) {
+        if (TestCWBVHLeafNode(node, ray, intersector)) {
+          hit_t = intersector.GetT();
+        }
+      } else {
+        for (unsigned char i = 0; i < node.num_children; ++i) {
+          stack.push_back(node.data.internal.child_index + i);
+        }
+      }
+    }
+  }
+
+  bool hit = (intersector.GetT() < ray.max_t);
+  intersector.PostTraversal(ray, hit, isect);
+
+  return hit;
+}
+
+template <typename T>
+template <class I>
+bool CWBVHAccel<T>::TestCWBVHLeafNode(const CWBVHNode<T> &node, const Ray<T> &,
+                                     const I &intersector) const {
+  bool hit = false;
+
+  unsigned int num_primitives = node.data.leaf.primitive_count;
+  unsigned int offset = node.data.leaf.primitive_index;
+
+  for (unsigned int i = 0; i < num_primitives; i++) {
+    unsigned int prim_idx = indices_[i + offset];
+
+    if (intersector.Intersect(prim_idx)) {
+      hit = true;
+    }
+  }
+
+  return hit;
+}
+
 // Predefined SAH predicator for triangle.
 template <typename T = float>
 class TriangleSAHPred {
