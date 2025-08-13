@@ -672,7 +672,19 @@ int main(int argc, char **argv) {
       nanort::TriangleIntersector<> triangle_intersector(
           mesh.vertices, mesh.faces, sizeof(float) * 3);
       nanort::TriangleIntersection<> isect;
-      bool hit = accel.Traverse(ray, triangle_intersector, &isect);
+      
+      // Create trace options for profiling
+      nanort::BVHTraceOptions trace_options;
+      trace_options.ResetCounters();
+      
+      bool hit = accel.Traverse(ray, triangle_intersector, &isect, trace_options);
+      
+      // Print profiling statistics for the center pixel to verify profiling works
+      if (x == width/2 && y == height/2) {
+        printf("Profiling statistics for center pixel (%d,%d):\n", x, y);
+        printf("  Bounding box intersections: %lu\n", trace_options.bbox_intersections);
+        printf("  Primitive intersections: %lu\n", trace_options.primitive_intersections);
+      }
       if (hit) {
         // Write your shader here.
         float3 normal(0.0f, 0.0f, 0.0f);

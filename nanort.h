@@ -612,7 +612,10 @@ class BVHTraceOptions {
   unsigned int skip_prim_id;
 
   bool cull_back_face;
-  unsigned char pad[3];  ///< Padding (not used)
+  
+  // Profiling counters (mutable to allow modification in const methods)
+  mutable unsigned long bbox_intersections;
+  mutable unsigned long primitive_intersections;
 
   BVHTraceOptions() {
     prim_ids_range[0] = 0;
@@ -620,6 +623,14 @@ class BVHTraceOptions {
 
     skip_prim_id = static_cast<unsigned int>(-1);
     cull_back_face = false;
+    bbox_intersections = 0;
+    primitive_intersections = 0;
+  }
+  
+  // Reset profiling counters
+  void ResetCounters() const {
+    bbox_intersections = 0;
+    primitive_intersections = 0;
   }
 };
 
@@ -834,7 +845,7 @@ class BVHAccel {
 
   template <class I>
   bool TestLeafNode(const BVHNode<T> &node, const Ray<T> &ray,
-                    const I &intersector) const;
+                    const I &intersector, const BVHTraceOptions &options) const;
 
   template <class I>
   bool TestLeafNodeIntersections(
@@ -944,7 +955,7 @@ class CWBVHAccel {
 
   template <class I>
   bool TestCWBVHLeafNode(const CWBVHNode<T> &node, const Ray<T> &ray,
-                        const I &intersector) const;
+                        const I &intersector, const BVHTraceOptions &options) const;
 
   std::vector<CWBVHNode<T> > nodes_;
   std::vector<unsigned int> indices_;
@@ -1144,9 +1155,12 @@ bool CWBVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
     bool bbox_hit = IntersectRayAABB(&min_t, &max_t, ray.min_t, hit_t, 
                                     node.bmin, node.bmax, ray_org, ray_inv_dir, dir_sign);
 
+    // Count bounding box intersection tests
+    options.bbox_intersections++;
+
     if (bbox_hit) {
       if (node.IsLeaf()) {
-        if (TestCWBVHLeafNode(node, ray, intersector)) {
+        if (TestCWBVHLeafNode(node, ray, intersector, options)) {
           hit_t = intersector.GetT();
         }
       } else {
@@ -1166,7 +1180,7 @@ bool CWBVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
 template <typename T>
 template <class I>
 bool CWBVHAccel<T>::TestCWBVHLeafNode(const CWBVHNode<T> &node, const Ray<T> &,
-                                     const I &intersector) const {
+                                     const I &intersector, const BVHTraceOptions &options) const {
   bool hit = false;
 
   unsigned int num_primitives = node.data.leaf.primitive_count;
@@ -1174,6 +1188,9 @@ bool CWBVHAccel<T>::TestCWBVHLeafNode(const CWBVHNode<T> &node, const Ray<T> &,
 
   for (unsigned int i = 0; i < num_primitives; i++) {
     unsigned int prim_idx = indices_[i + offset];
+
+    // Count primitive intersection tests
+    options.primitive_intersections++;
 
     if (intersector.Intersect(prim_idx)) {
       hit = true;
@@ -2686,7 +2703,7 @@ inline bool IntersectRayAABB<double>(double *tminOut,  // [out]
 template <typename T>
 template <class I>
 inline bool BVHAccel<T>::TestLeafNode(const BVHNode<T> &node, const Ray<T> &ray,
-                                      const I &intersector) const {
+                                      const I &intersector, const BVHTraceOptions &options) const {
   bool hit = false;
 
   unsigned int num_primitives = node.data[0];
@@ -2706,6 +2723,9 @@ inline bool BVHAccel<T>::TestLeafNode(const BVHNode<T> &node, const Ray<T> &ray,
 
   for (unsigned int i = 0; i < num_primitives; i++) {
     unsigned int prim_idx = indices_[i + offset];
+
+    // Count primitive intersection tests
+    options.primitive_intersections++;
 
     T local_t = t;
     if (intersector.Intersect(&local_t, prim_idx)) {
@@ -2846,6 +2866,9 @@ bool BVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
     bool hit = IntersectRayAABB(&min_t, &max_t, ray.min_t, hit_t, node.bmin,
                                 node.bmax, ray_org, ray_inv_dir, dir_sign);
 
+    // Count bounding box intersection tests
+    options.bbox_intersections++;
+
     if (hit) {
       // Branch node
       if (node.flag == 0) {
@@ -2855,7 +2878,7 @@ bool BVHAccel<T>::Traverse(const Ray<T> &ray, const I &intersector, H *isect,
         // Traverse near first.
         node_stack[++node_stack_index] = node.data[order_far];
         node_stack[++node_stack_index] = node.data[order_near];
-      } else if (TestLeafNode(node, ray, intersector)) {  // Leaf node
+      } else if (TestLeafNode(node, ray, intersector, options)) {  // Leaf node
         hit_t = intersector.GetT();
       }
     }
