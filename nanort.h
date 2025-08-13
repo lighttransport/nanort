@@ -61,18 +61,76 @@ THE SOFTWARE.
 
 // Some constants
 #define kNANORT_MAX_STACK_DEPTH (512)
-#define kNANORT_MIN_PRIMITIVES_FOR_PARALLEL_BUILD (1024 * 8)
-#define kNANORT_SHALLOW_DEPTH (4)  // will create 2**N subtrees
+#define kNANORT_MIN_PRIMITIVES_FOR_PARALLEL_BUILD (2048)  // Reduced threshold for better parallelization
+#define kNANORT_SHALLOW_DEPTH (5)  // Increased for better work distribution (2^5 = 32 subtrees)
 
 #ifdef NANORT_USE_CPP11_FEATURE
 // Assume C++11 compiler has thread support.
 // In some situation (e.g. embedded system, JIT compilation), thread feature
 // may not be available though...
 #include <atomic>
+#include <condition_variable>
+#include <functional>
 #include <mutex>
+#include <queue>
 #include <thread>
 
 #define kNANORT_MAX_THREADS (256)
+
+// Simple thread pool for BVH construction
+class ThreadPool {
+public:
+  ThreadPool(size_t threads) : stop_(false) {
+    for (size_t i = 0; i < threads; ++i) {
+      workers_.emplace_back([this] {
+        for (;;) {
+          std::function<void()> task;
+          {
+            std::unique_lock<std::mutex> lock(queue_mutex_);
+            condition_.wait(lock, [this] { return stop_ || !tasks_.empty(); });
+            if (stop_ && tasks_.empty()) return;
+            task = std::move(tasks_.front());
+            tasks_.pop();
+          }
+          task();
+        }
+      });
+    }
+  }
+
+  template<class F>
+  void enqueue(F&& f) {
+    {
+      std::unique_lock<std::mutex> lock(queue_mutex_);
+      if (stop_) return;
+      tasks_.emplace(std::forward<F>(f));
+    }
+    condition_.notify_one();
+  }
+
+  void wait() {
+    std::unique_lock<std::mutex> lock(queue_mutex_);
+    condition_.wait(lock, [this] { return tasks_.empty(); });
+  }
+
+  ~ThreadPool() {
+    {
+      std::unique_lock<std::mutex> lock(queue_mutex_);
+      stop_ = true;
+    }
+    condition_.notify_all();
+    for (std::thread &worker : workers_) {
+      worker.join();
+    }
+  }
+
+private:
+  std::vector<std::thread> workers_;
+  std::queue<std::function<void()>> tasks_;
+  std::mutex queue_mutex_;
+  std::condition_variable condition_;
+  bool stop_;
+};
 
 // Parallel build should work well for C++11 version, thus force enable it.
 #ifndef NANORT_ENABLE_PARALLEL_BUILD
@@ -1809,66 +1867,79 @@ inline void ComputeBoundingBoxThreaded(real3<T> *bmin, real3<T> *bmax,
                                        unsigned int right_index, const P &p) {
   unsigned int n = right_index - left_index;
 
+  // Use a smaller threshold for threading to benefit from parallelism sooner
+  const size_t min_work_per_thread = 64;
   size_t num_threads = std::min(
       size_t(kNANORT_MAX_THREADS),
-      std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
+      std::max(size_t(1), std::min(size_t(std::thread::hardware_concurrency()),
+                                   n / min_work_per_thread)));
 
-  if (n < num_threads) {
-    num_threads = n;
+  if (num_threads <= 1 || n < min_work_per_thread * 2) {
+    // Fall back to serial version for small work
+    ComputeBoundingBox(bmin, bmax, indices, left_index, right_index, p);
+    return;
   }
 
+  // Align memory for better cache performance
+  struct alignas(64) LocalBounds {
+    T bmin[3];
+    T bmax[3];
+  };
+
+  std::vector<LocalBounds> local_bounds(num_threads);
   std::vector<std::thread> workers;
+  workers.reserve(num_threads);
 
-  size_t ndiv = n / num_threads;
-
-  std::vector<T> local_bmins(3 * num_threads);  // 3 = xyz
-  std::vector<T> local_bmaxs(3 * num_threads);  // 3 = xyz
+  const size_t work_per_thread = n / num_threads;
 
   for (size_t t = 0; t < num_threads; t++) {
-    workers.emplace_back(std::thread([&, t]() {
-      size_t si = left_index + t * ndiv;
-      size_t ei = (t == (num_threads - 1)) ? size_t(right_index) : std::min(left_index + (t + 1) * ndiv, size_t(right_index));
+    workers.emplace_back([&, t]() {
+      const size_t start = left_index + t * work_per_thread;
+      const size_t end = (t == num_threads - 1) 
+          ? right_index 
+          : std::min(left_index + (t + 1) * work_per_thread, size_t(right_index));
 
-      local_bmins[3 * t + 0] = std::numeric_limits<T>::infinity();
-      local_bmins[3 * t + 1] = std::numeric_limits<T>::infinity();
-      local_bmins[3 * t + 2] = std::numeric_limits<T>::infinity();
-      local_bmaxs[3 * t + 0] = -std::numeric_limits<T>::infinity();
-      local_bmaxs[3 * t + 1] = -std::numeric_limits<T>::infinity();
-      local_bmaxs[3 * t + 2] = -std::numeric_limits<T>::infinity();
+      LocalBounds& bounds = local_bounds[t];
+      bounds.bmin[0] = bounds.bmin[1] = bounds.bmin[2] = std::numeric_limits<T>::infinity();
+      bounds.bmax[0] = bounds.bmax[1] = bounds.bmax[2] = -std::numeric_limits<T>::infinity();
 
-      // for each face
-      for (size_t i = si; i < ei; i++) {
-        unsigned int idx = indices[i];
+      // Process primitives in chunks for better cache behavior
+      constexpr size_t chunk_size = 16;
+      for (size_t i = start; i < end; i += chunk_size) {
+        const size_t chunk_end = std::min(i + chunk_size, end);
+        
+        for (size_t j = i; j < chunk_end; j++) {
+          unsigned int idx = indices[j];
+          real3<T> bbox_min, bbox_max;
+          p.BoundingBox(&bbox_min, &bbox_max, idx);
 
-        real3<T> bbox_min, bbox_max;
-        p.BoundingBox(&bbox_min, &bbox_max, idx);
-
-        // xyz
-        for (size_t k = 0; k < 3; k++) {
-          local_bmins[3 * t + k] =
-              std::min(local_bmins[3 * t + k], bbox_min[int(k)]);
-          local_bmaxs[3 * t + k] =
-              std::max(local_bmaxs[3 * t + k], bbox_max[int(k)]);
+          bounds.bmin[0] = std::min(bounds.bmin[0], bbox_min[0]);
+          bounds.bmin[1] = std::min(bounds.bmin[1], bbox_min[1]);
+          bounds.bmin[2] = std::min(bounds.bmin[2], bbox_min[2]);
+          bounds.bmax[0] = std::max(bounds.bmax[0], bbox_max[0]);
+          bounds.bmax[1] = std::max(bounds.bmax[1], bbox_max[1]);
+          bounds.bmax[2] = std::max(bounds.bmax[2], bbox_max[2]);
         }
       }
-    }));
+    });
   }
 
-  for (auto &t : workers) {
-    t.join();
+  for (auto &worker : workers) {
+    worker.join();
   }
 
-  // merge bbox
-  for (size_t k = 0; k < 3; k++) {
-    (*bmin)[int(k)] = local_bmins[k];
-    (*bmax)[int(k)] = local_bmaxs[k];
-  }
+  // Merge results efficiently
+  (*bmin)[0] = (*bmin)[1] = (*bmin)[2] = std::numeric_limits<T>::infinity();
+  (*bmax)[0] = (*bmax)[1] = (*bmax)[2] = -std::numeric_limits<T>::infinity();
 
-  for (size_t t = 1; t < num_threads; t++) {
-    for (size_t k = 0; k < 3; k++) {
-      (*bmin)[int(k)] = std::min((*bmin)[int(k)], local_bmins[3 * t + k]);
-      (*bmax)[int(k)] = std::max((*bmax)[int(k)], local_bmaxs[3 * t + k]);
-    }
+  for (size_t t = 0; t < num_threads; t++) {
+    const LocalBounds& bounds = local_bounds[t];
+    (*bmin)[0] = std::min((*bmin)[0], bounds.bmin[0]);
+    (*bmin)[1] = std::min((*bmin)[1], bounds.bmin[1]);
+    (*bmin)[2] = std::min((*bmin)[2], bounds.bmin[2]);
+    (*bmax)[0] = std::max((*bmax)[0], bounds.bmax[0]);
+    (*bmax)[1] = std::max((*bmax)[1], bounds.bmax[1]);
+    (*bmax)[2] = std::max((*bmax)[2], bounds.bmax[2]);
   }
 }
 #endif
@@ -2248,31 +2319,43 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const Prim &p,
 
 #if defined(NANORT_USE_CPP11_FEATURE)
   {
+    // Only use threading for initialization if there's enough work
+    const size_t min_work_per_thread = 1024;
     size_t num_threads = std::min(
         size_t(kNANORT_MAX_THREADS),
-        std::max(size_t(1), size_t(std::thread::hardware_concurrency())));
+        std::max(size_t(1), std::min(size_t(std::thread::hardware_concurrency()),
+                                     n / min_work_per_thread)));
 
-    if (n < num_threads) {
-      num_threads = n;
-    }
+    if (num_threads <= 1 || n < min_work_per_thread * 2) {
+      // Serial initialization for small arrays
+      for (size_t k = 0; k < n; k++) {
+        indices_[k] = static_cast<unsigned int>(k);
+      }
+    } else {
+      std::vector<std::thread> workers;
+      workers.reserve(num_threads);
 
-    std::vector<std::thread> workers;
+      const size_t work_per_thread = n / num_threads;
 
-    size_t ndiv = n / num_threads;
+      for (size_t t = 0; t < num_threads; t++) {
+        workers.emplace_back([&, t]() {
+          const size_t start = t * work_per_thread;
+          const size_t end = (t == num_threads - 1) ? n : (t + 1) * work_per_thread;
 
-    for (size_t t = 0; t < num_threads; t++) {
-      workers.emplace_back(std::thread([&, t]() {
-        size_t si = t * ndiv;
-        size_t ei = (t == (num_threads - 1)) ? n : std::min((t + 1) * ndiv, size_t(n));
+          // Vectorized initialization in chunks
+          constexpr size_t chunk_size = 64;
+          for (size_t i = start; i < end; i += chunk_size) {
+            const size_t chunk_end = std::min(i + chunk_size, end);
+            for (size_t k = i; k < chunk_end; k++) {
+              indices_[k] = static_cast<unsigned int>(k);
+            }
+          }
+        });
+      }
 
-        for (size_t k = si; k < ei; k++) {
-          indices_[k] = static_cast<unsigned int>(k);
-        }
-      }));
-    }
-
-    for (auto &t : workers) {
-      t.join();
+      for (auto &worker : workers) {
+        worker.join();
+      }
     }
   }
 
@@ -2334,7 +2417,7 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const Prim &p,
 
     assert(shallow_node_infos_.size() > 0);
 
-    // Build deeper tree in parallel
+    // Build deeper tree in parallel with optimized load balancing
     std::vector<std::vector<BVHNode<T> > > local_nodes(
         shallow_node_infos_.size());
     std::vector<BVHBuildStatistics> local_stats(shallow_node_infos_.size());
@@ -2346,22 +2429,32 @@ bool BVHAccel<T>::Build(unsigned int num_primitives, const Prim &p,
       num_threads = shallow_node_infos_.size();
     }
 
-    std::vector<std::thread> workers;
-    std::atomic<uint32_t> i(0);
+    // Pre-allocate to reduce memory allocations during parallel execution
+    for (size_t i = 0; i < shallow_node_infos_.size(); i++) {
+      const size_t work_size = shallow_node_infos_[i].right_idx - shallow_node_infos_[i].left_idx;
+      local_nodes[i].reserve(work_size * 2);  // Rough estimate for node count
+    }
 
+    std::vector<std::thread> workers;
+    workers.reserve(num_threads);
+    std::atomic<uint32_t> work_counter(0);
+
+    // Use work-stealing approach with better granularity
     for (size_t t = 0; t < num_threads; t++) {
-      workers.emplace_back(std::thread([&]() {
+      workers.emplace_back([&]() {
+        // Create thread-local copy of Pred once per thread
+        const Pred local_pred = pred;
+        
         uint32_t idx = 0;
-        while ((idx = (i++)) < shallow_node_infos_.size()) {
-          // Create thread-local copy of Pred since some mutable variables are
-          // modified during SAH computation.
-          const Pred local_pred = pred;
-          unsigned int left_idx = shallow_node_infos_[size_t(idx)].left_idx;
-          unsigned int right_idx = shallow_node_infos_[size_t(idx)].right_idx;
-          BuildTree(&(local_stats[size_t(idx)]), &(local_nodes[size_t(idx)]),
+        while ((idx = work_counter.fetch_add(1, std::memory_order_relaxed)) < shallow_node_infos_.size()) {
+          const size_t task_idx = size_t(idx);
+          const unsigned int left_idx = shallow_node_infos_[task_idx].left_idx;
+          const unsigned int right_idx = shallow_node_infos_[task_idx].right_idx;
+          
+          BuildTree(&(local_stats[task_idx]), &(local_nodes[task_idx]),
                     left_idx, right_idx, options.shallow_depth, p, local_pred);
         }
-      }));
+      });
     }
 
     for (auto &t : workers) {
