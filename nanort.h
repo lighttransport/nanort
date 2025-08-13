@@ -1449,7 +1449,8 @@ void CWBVHAccel<T>::CompressNode(CWBVHNode<T> *node, const Prim &) {
     node->bmax[2] - node->bmin[2]
   };
   
-  T max_extent = std::max({extent[0], extent[1], extent[2]});
+  T max_extent = (std::max)(extent[0], extent[1]);
+  max_extent = (std::max)(max_extent, extent[2]);
   
   if (max_extent < options_.compression_threshold) {
     node->meta_data |= 0x80;

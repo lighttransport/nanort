@@ -306,7 +306,7 @@ void mouseMoveCallback(float x, float y) {
       // Spherical projections would also support larger than +/- 90 vertical
       // field of view. In that case (fov > 180), the image would repeat
       gRenderConfig.fov =
-          saturate<float>(gRenderConfig.fov + fov_scale * (gMousePosY - y), 0.1, 180);
+          saturate<float>(gRenderConfig.fov + fov_scale * (gMousePosY - y), 0.1f, 180.0f);
     } else {  // trackball
       // Adjust y.
       trackball(gPrevQuat, (2.f * gMousePosX - w) / (float)w,
@@ -604,7 +604,7 @@ int main(int argc, char** argv) {
       }
       //ImGui::SameLine();
       if (ImGui::InputFloat("FoV", &gRenderConfig.fov, 1.0f, 5.0f, 2)) {
-        gRenderConfig.fov = saturate<float>(gRenderConfig.fov, 0.1, 180);
+        gRenderConfig.fov = saturate<float>(gRenderConfig.fov, 0.1f, 180.0f);
         RequestRender();
       }
 

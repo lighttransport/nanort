@@ -795,7 +795,7 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
           config.camera->generateRay(ray, duv);
 
           float3 dir;
-          for (int i = 0; i < 3; i++) dir[i] = ray.dir[i];
+          for (int k = 0; k < 3; k++) dir[k] = ray.dir[k];
           dir = vnormalize(dir);
 
           float kFar = 1.0e+30f;

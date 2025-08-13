@@ -111,7 +111,7 @@ static int AppendExtensionToSpecBuf( const char *ext, char *specBuf, size_t spec
     
     if ( strlen(specBuf) > 0 )
     {
-        strncat( specBuf, SEP, specBufLen - strlen(specBuf) - 1 );
+        strncat_s( specBuf, specBufLen, SEP, _TRUNCATE );
         specBufLen += strlen(SEP);
     }
 
@@ -119,7 +119,8 @@ static int AppendExtensionToSpecBuf( const char *ext, char *specBuf, size_t spec
     int bytesWritten = sprintf_s( extWildcard, NFD_MAX_STRLEN, "*.%s", ext );
     assert( size_t(bytesWritten) == strlen(ext)+2 );
     
-    strncat( specBuf, extWildcard, specBufLen - strlen(specBuf) - 1 );
+    // Replaced unsafe strncat with secure variant to fix C4996 and C2220
+    strncat_s( specBuf, specBufLen, extWildcard, _TRUNCATE );
 
     return NFD_OKAY;
 }
@@ -164,7 +165,7 @@ static nfdresult_t AddFiltersToDialog( ::IFileDialog *fileOpenDialog, const char
     p_filterList = filterList;
     char typebuf[NFD_MAX_STRLEN] = {0};  /* one per comma or semicolon */
     char *p_typebuf = typebuf;
-    char filterName[NFD_MAX_STRLEN] = {0};
+    //char filterName[NFD_MAX_STRLEN] = {0};
 
     char specbuf[NFD_MAX_STRLEN] = {0}; /* one per semicolon */
 
