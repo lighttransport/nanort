@@ -1,0 +1,22 @@
+{
+  "name": "nanort-webgpu",
+  "version": "1.0.0",
+  "description": "NanoRT WebGPU ray traversal implementation",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test.js",
+    "example": "node example.js"
+  },
+  "dependencies": {
+    "webgpu": "^0.1.38"
+  },
+  "keywords": [
+    "raytracing",
+    "webgpu",
+    "nanort",
+    "bvh",
+    "compute-shader"
+  ],
+  "author": "NanoRT WebGPU",
+  "license": "MIT"
+}
