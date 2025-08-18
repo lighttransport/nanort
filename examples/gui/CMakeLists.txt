@@ -16,30 +16,34 @@ set(SOURCES
     ../common/imgui/imgui.cpp
     ../common/imgui/imgui_draw.cpp
     ../common/imgui/imgui_widgets.cpp
-    ../common/imgui/imgui_impl_btgui.cpp
-    ../common/ThirdPartyLibs/Glew/glew.c
+    ../common/imgui/imgui_tables.cpp
+    ../common/imgui/backends/imgui_impl_glfw.cpp
+    ../common/imgui/backends/imgui_impl_opengl3.cpp
 )
 
-if (WIN32)
-  list(APPEND SOURCES ../common/OpenGLWindow/Win32OpenGLWindow.cpp ../common/OpenGLWindow/Win32Window.cpp)
-else()
-endif()
+add_subdirectory(../common/glfw glfw)
 
 add_executable(${BUILD_TARGET} ${SOURCES})
 
 target_include_directories(${BUILD_TARGET} PRIVATE 
     ${CMAKE_CURRENT_SOURCE_DIR}
     ../common
-    ../common/OpenGLWindow
     ../common/imgui
-    ../common/ThirdPartyLibs/Glew
+    ../common/imgui/backends
+    ../common/glfw/include
 )
 
 if(WIN32)
     target_link_libraries(${BUILD_TARGET} PRIVATE opengl32 glu32)
+else()
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(${BUILD_TARGET} PRIVATE OpenGL::GL)
 endif()
 
-target_compile_definitions(${BUILD_TARGET} PRIVATE GLEW_STATIC)
-target_link_libraries(${BUILD_TARGET} PRIVATE nanort::nanort)
+target_link_libraries(${BUILD_TARGET} PRIVATE glfw nanort::nanort)
+target_compile_definitions(${BUILD_TARGET} PRIVATE 
+    IMGUI_IMPL_OPENGL_LOADER_GL3W=0
+    STBI_NO_SIMD
+)
 
 source_group("Source Files" FILES ${SOURCES})
