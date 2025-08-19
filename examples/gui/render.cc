@@ -986,9 +986,9 @@ bool Renderer::Render(float* rgba, float* aux_rgba, int* sample_counts,
               config.positionImage[4 * (y * config.width + x) + 1] = 0.0f;
               config.positionImage[4 * (y * config.width + x) + 2] = 0.0f;
               config.positionImage[4 * (y * config.width + x) + 3] = 0.0f;
-              config.depthImage[4 * (y * config.width + x) + 0] = 0.0f;
-              config.depthImage[4 * (y * config.width + x) + 1] = 0.0f;
-              config.depthImage[4 * (y * config.width + x) + 2] = 0.0f;
+              config.depthImage[4 * (y * config.width + x) + 0] = std::numeric_limits<float>::infinity();
+              config.depthImage[4 * (y * config.width + x) + 1] = std::numeric_limits<float>::infinity();
+              config.depthImage[4 * (y * config.width + x) + 2] = std::numeric_limits<float>::infinity();
               config.depthImage[4 * (y * config.width + x) + 3] = 0.0f;
               config.texcoordImage[4 * (y * config.width + x) + 0] = 0.0f;
               config.texcoordImage[4 * (y * config.width + x) + 1] = 0.0f;

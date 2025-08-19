@@ -82,7 +82,7 @@ THE SOFTWARE.
 GLFWwindow* gWindow = nullptr;
 int gWidth = 512;
 int gHeight = 512;
-int gMousePosX = -1, gMousePosY = -1;
+float gMousePosX = 0.0f, gMousePosY = 0.0f;
 bool gMouseLeftDown = false;
 int gShowBufferMode = SHOW_BUFFER_COLOR;
 bool gTabPressed = false;
@@ -90,7 +90,7 @@ bool gShiftPressed = false;
 bool gCtrlPressed = false;
 bool gAltPressed = false;
 float gShowPositionScale = 1.0f;
-float gShowDepthRange[2] = {10.0f, 20.f};
+float gShowDepthRange[2] = {0.0f, 10.f};
 bool gShowDepthPeseudoColor = true;
 float gPrevQuat[4] = {0.0f, 0.0f, 0.0f, 1.0f};
 
@@ -115,6 +115,28 @@ std::vector<float> gVertexColorRGBA;
 std::vector<int> gMaterialID;
 
 GLuint gTextureID = 0;
+
+// Pitch/Yaw camera control variables
+float gPitch = 0.0f; // degrees
+float gYaw = 0.0f;   // degrees
+const float kPitchMin = -89.0f, kPitchMax = 89.0f;
+const float kYawMin = -180.0f, kYawMax = 180.0f;
+
+// Convert pitch/yaw to quaternion
+void PitchYawToQuat(float pitch, float yaw, float quat[4]) {
+  const float kPI = 3.14159265358979323846f;
+  float pitchRad = pitch * float(kPI) / 180.0f;
+  float yawRad = yaw * float(kPI) / 180.0f;
+  float cy = cosf(yawRad * 0.5f);
+  float sy = sinf(yawRad * 0.5f);
+  float cp = cosf(pitchRad * 0.5f);
+  float sp = sinf(pitchRad * 0.5f);
+  // Yaw (Y axis), then Pitch (X axis)
+  quat[0] = sp * cy;         // x
+  quat[1] = cp * sy;         // y
+  quat[2] = -sp * sy;        // z
+  quat[3] = cp * cy;         // w
+}
 
 void RequestRender() {
   {
@@ -165,6 +187,12 @@ void RenderThread() {
   }
 }
 
+void UpdateCameraQuatFromPitchYaw() {
+  PitchYawToQuat(gPitch, gYaw, gRenderConfig.quat);
+  RequestRender();
+}
+
+
 void InitRender(example::RenderConfig* rc) {
   rc->pass = 0;
   rc->max_passes = 128;
@@ -188,7 +216,7 @@ void InitRender(example::RenderConfig* rc) {
   std::fill(gPositionRGBA.begin(), gPositionRGBA.end(), 0.0);
 
   gDepthRGBA.resize(rc->width * static_cast<size_t>(rc->height) * 4);
-  std::fill(gDepthRGBA.begin(), gDepthRGBA.end(), 0.0);
+  std::fill(gDepthRGBA.begin(), gDepthRGBA.end(), std::numeric_limits<float>::infinity());
 
   gTexCoordRGBA.resize(rc->width * static_cast<size_t>(rc->height) * 4);
   std::fill(gTexCoordRGBA.begin(), gTexCoordRGBA.end(), 0.0);
@@ -209,6 +237,10 @@ void InitRender(example::RenderConfig* rc) {
   rc->varycoordImage = &gVaryCoordRGBA.at(0);
   rc->vertexColorImage = &gVertexColorRGBA.at(0);
   rc->materialIDImage = &gMaterialID.at(0);
+
+  gPitch = 0.0f;
+  gYaw = 0.0f;
+  UpdateCameraQuatFromPitchYaw();
 
   trackball(gRenderConfig.quat, 0.0f, 0.0f, 0.0f, 0.0f);
 
@@ -232,7 +264,9 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
   if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
     glfwSetWindowShouldClose(window, GLFW_TRUE);
   } else if (key == GLFW_KEY_SPACE && action == GLFW_PRESS) {
-    trackball(gRenderConfig.quat, 0.0f, 0.0f, 0.0f, 0.0f);
+    gPitch = 0.0f;
+    gYaw = 0.0f;
+    UpdateCameraQuatFromPitchYaw();
     RequestRender();
   } else if (key == GLFW_KEY_TAB) {
     gTabPressed = (action == GLFW_PRESS || action == GLFW_REPEAT);
@@ -252,16 +286,16 @@ T saturate(const T& val, const T& minVal, const T& maxVal) {
 
 void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
   (void)window;
+
+  if (ImGui::GetIO().WantCaptureMouse) {
+    return;
+  }
   
- ImGuiIO& io = ImGui::GetIO(); 
-
-
   float x = static_cast<float>(xpos);
   float y = static_cast<float>(ypos);
 
-  io.AddMousePosEvent(x, y);
-
-  std::cout << "cursporPos: wantCapture " << ImGui::GetIO().WantCaptureMouse << "\n";
+  #if 0
+  //std::cout << "cursporPos: wantCapture " << ImGui::GetIO().WantCaptureMouse << "\n";
   
   if (gMouseLeftDown) { // && !ImGui::GetIO().WantCaptureMouse) {
     float w = static_cast<float>(gRenderConfig.width);
@@ -292,9 +326,44 @@ void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
     }
     RequestRender();
   }
+  #endif
 
   gMousePosX = (int)x;
   gMousePosY = (int)y;
+}
+
+void CameraControl(float x, float y) {
+  if (gMouseLeftDown) {
+    float w = static_cast<float>(gRenderConfig.width);
+    float h = static_cast<float>(gRenderConfig.height);
+    float dx = x - gMousePosX;
+    float dy = y - gMousePosY;
+    if (gCtrlPressed) {
+      const float dolly_scale = 1.0 * gRenderConfig.distance / w;
+      gRenderConfig.distance += dolly_scale * (gMousePosY - y);
+      RequestRender();
+    } else if (gShiftPressed) {
+      const float trans_scale = 1.0f * gRenderConfig.distance;
+      float r[4][4];
+      build_rotmatrix(r, gRenderConfig.quat);
+      Matrix::Inverse(r);
+      float pan2d[3] = {trans_scale * float(gMousePosX - x) / w,
+                        -trans_scale * float(gMousePosY - y) / h, 0.0};
+      float pan3d[3];
+      Matrix::MultV(pan3d, r, pan2d);
+      for (int i = 0; i < 3; i++) gRenderConfig.look_at[i] += pan3d[i];
+      RequestRender();
+    } else {
+      float sensitivity = 0.2f;
+      gYaw += dx * sensitivity;
+      gPitch += dy * sensitivity;
+      gPitch = saturate(gPitch, kPitchMin, kPitchMax);
+      gYaw = saturate(gYaw, kYawMin, kYawMax);
+      UpdateCameraQuatFromPitchYaw();
+    }
+  }
+  gMousePosX = x;
+  gMousePosY = y;
 }
 
 void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
@@ -309,10 +378,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
   //  return;
   //}
 
-  std::cout << "mouseButtonCallback: button=" << button << ", action=" << action
-            << ", mods=" << mods << "\n";
-  std::cout << std::fflush;
-
+#if 0
   //if (!ImGui::GetIO().WantCaptureMouse) {
     if (button == GLFW_MOUSE_BUTTON_LEFT) {
       if (action == GLFW_PRESS) {
@@ -323,6 +389,7 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
       }
     }
   //}
+#endif
 }
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
@@ -379,7 +446,29 @@ inline float pesudoColor(float v, int ch) {
   }
 }
 
+bool gUseDepthMinMaxFromImage = false;
+float gDepthImageMin = 0.0f, gDepthImageMax = 1.0f;
+
 void UpdateTexture(int width, int height) {
+  // Compute depth min/max from image if flag is set
+  if (gUseDepthMinMaxFromImage) {
+    gDepthImageMin = std::numeric_limits<float>::max();
+    gDepthImageMax = std::numeric_limits<float>::lowest();
+    for (int i = 0; i < width * height * 4; ++i) {
+      if (i % 4 == 3) continue;  // Skip alpha channel
+
+      float v = gDepthRGBA[i];
+      if (std::isfinite(v)) {
+        if (v < gDepthImageMin) gDepthImageMin = v;
+        if (v > gDepthImageMax) gDepthImageMax = v;
+      }
+    }
+    // If no valid values, fallback to default
+    if (!std::isfinite(gDepthImageMin) || !std::isfinite(gDepthImageMax)) {
+      gDepthImageMin = 0.0f;
+      gDepthImageMax = 1.0f;
+    }
+  }
   std::vector<unsigned char> buf(width * height * 4);
   
   if (gShowBufferMode == SHOW_BUFFER_COLOR) {
@@ -427,8 +516,9 @@ void UpdateTexture(int width, int height) {
       }
     }
   } else if (gShowBufferMode == SHOW_BUFFER_DEPTH) {
-    float d_min = std::min(gShowDepthRange[0], gShowDepthRange[1]);
-    float d_diff = fabsf(gShowDepthRange[1] - gShowDepthRange[0]);
+    float d_min = gUseDepthMinMaxFromImage ? gDepthImageMin : std::min(gShowDepthRange[0], gShowDepthRange[1]);
+    float d_max = gUseDepthMinMaxFromImage ? gDepthImageMax : std::max(gShowDepthRange[0], gShowDepthRange[1]);
+    float d_diff = fabsf(d_max - d_min);
     d_diff = std::max(d_diff, std::numeric_limits<float>::epsilon());
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
@@ -626,6 +716,23 @@ int main(int argc, char** argv) {
       ImGui::InputFloat("show pos scale", &gShowPositionScale);
       ImGui::InputFloat2("show depth range", gShowDepthRange);
       ImGui::Checkbox("show depth pesudo color", &gShowDepthPeseudoColor);
+      ImGui::Checkbox("Use depth min/max from image", &gUseDepthMinMaxFromImage);
+      if (gUseDepthMinMaxFromImage) {
+        ImGui::Text("Depth image min: %.6f", gDepthImageMin);
+        ImGui::Text("Depth image max: %.6f", gDepthImageMax);
+      }
+
+      if (ImGui::SliderFloat("Pitch", &gPitch, kPitchMin, kPitchMax)) {
+        UpdateCameraQuatFromPitchYaw();
+      }
+      if (ImGui::SliderFloat("Yaw", &gYaw, kYawMin, kYawMax)) {
+        UpdateCameraQuatFromPitchYaw();
+      }
+      if (ImGui::Button("Reset Pitch/Yaw")) {
+        gPitch = 0.0f;
+        gYaw = 0.0f;
+        UpdateCameraQuatFromPitchYaw();
+      }
     }
     ImGui::End();
 
@@ -638,7 +745,52 @@ int main(int argc, char** argv) {
     UpdateTexture(gRenderConfig.width, gRenderConfig.height);
 
     ImGui::Begin("Render"); //, nullptr, ImGuiWindowFlags_NoMove);
-    ImGui::Image((void*)(intptr_t)gTextureID, ImVec2(gRenderConfig.width, gRenderConfig.height));
+    ImGui::ImageButton("image", (void*)(intptr_t)gTextureID, ImVec2(gRenderConfig.width, gRenderConfig.height));
+
+  {
+    ImVec2 mousePositionAbsolute = ImGui::GetMousePos();
+    ImVec2 screenPositionAbsolute = ImGui::GetItemRectMin();
+    ImVec2 mousePositionRelative = ImVec2(mousePositionAbsolute.x - screenPositionAbsolute.x, mousePositionAbsolute.y - screenPositionAbsolute.y);
+
+    // If the emulator has focus, send it mouse button/keyboard events
+    if (ImGui::IsItemFocused())
+    {
+        if (!gMouseLeftDown && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+          gMousePosX = mousePositionRelative.x;
+          gMousePosY = mousePositionRelative.y;
+        }
+        gMouseLeftDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+
+        gShiftPressed = ImGui::IsKeyDown(ImGuiKey_LeftShift) ||
+                        ImGui::IsKeyDown(ImGuiKey_RightShift);
+
+        gCtrlPressed = ImGui::IsKeyDown(ImGuiKey_LeftCtrl);
+        gTabPressed = ImGui::IsKeyDown(ImGuiKey_Tab);
+
+    }
+    // When the emulator looses focus, release all buttons
+    else
+    {
+        gMouseLeftDown = false;
+        //SetEmulatorLeftMouseDownState(false);
+        // ...etc for other mouse buttons
+
+        gTabPressed = false;
+        gShiftPressed = false;
+        gCtrlPressed = false;
+        //for (int i = 0; i < IM_ARRAYSIZE(io.KeysDown); i++)
+        //{
+        //    SetEmulatorKeyState(i, false);
+        //}
+    }
+
+    if (ImGui::IsItemHovered())
+    {
+        CameraControl(mousePositionRelative.x, mousePositionRelative.y);
+    }
+
+  }
+
     ImGui::End();
 
     ImGui::Render();
