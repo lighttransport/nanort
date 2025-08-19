@@ -57,6 +57,7 @@ THE SOFTWARE.
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+//#include "imgui_impl_opengl3_loader.h"
 
 #include "camera.h"
 #include "render-config.h"
@@ -78,7 +79,7 @@ THE SOFTWARE.
 #define SHOW_BUFFER_VERTEXCOLOR (6)
 #define SHOW_BUFFER_MATERIALID (7)
 
-GLFWwindow* window = nullptr;
+GLFWwindow* gWindow = nullptr;
 int gWidth = 512;
 int gHeight = 512;
 int gMousePosX = -1, gMousePosY = -1;
@@ -215,13 +216,14 @@ void InitRender(example::RenderConfig* rc) {
   glBindTexture(GL_TEXTURE_2D, gTextureID);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  //glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
   (void)window;
   (void)scancode;
+  (void)mods;
 
   if (ImGui::GetIO().WantCaptureKeyboard) {
     return;
@@ -251,16 +253,23 @@ T saturate(const T& val, const T& minVal, const T& maxVal) {
 void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
   (void)window;
   
+ ImGuiIO& io = ImGui::GetIO(); 
+
+
   float x = static_cast<float>(xpos);
   float y = static_cast<float>(ypos);
+
+  io.AddMousePosEvent(x, y);
+
+  std::cout << "cursporPos: wantCapture " << ImGui::GetIO().WantCaptureMouse << "\n";
   
-  if (gMouseLeftDown && !ImGui::GetIO().WantCaptureMouse) {
+  if (gMouseLeftDown) { // && !ImGui::GetIO().WantCaptureMouse) {
     float w = static_cast<float>(gRenderConfig.width);
     float h = static_cast<float>(gRenderConfig.height);
 
     float y_offset = gHeight - h;
 
-    if (gTabPressed) {
+    if (gCtrlPressed) {
       const float dolly_scale = 1.0 * gRenderConfig.distance / w;
       gRenderConfig.distance += dolly_scale * (gMousePosY - y);
     } else if (gShiftPressed) {
@@ -274,9 +283,6 @@ void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
       float pan3d[3];
       Matrix::MultV(pan3d, r, pan2d);
       for (int i = 0; i < 3; i++) gRenderConfig.look_at[i] += pan3d[i];
-    } else if (gAltPressed) {
-      const float fov_scale = 0.5;
-      gRenderConfig.fov = saturate<float>(gRenderConfig.fov + fov_scale * (gMousePosY - y), 0.1f, 180.0f);
     } else {
       trackball(gPrevQuat, (2.f * gMousePosX - w) / (float)w,
                 (h - 2.f * (gMousePosY - y_offset)) / (float)h,
@@ -295,33 +301,28 @@ void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
   (void)window;
   (void)mods;
 
-  if (ImGui::GetIO().WantCaptureMouse) {
-    return;
-  }
+  // (1) ALWAYS forward mouse data to ImGui! This is automatic with default backends. With your own backend:
+  ImGuiIO& io = ImGui::GetIO(); 
+  io.AddMouseButtonEvent(button, (action == GLFW_PRESS));
 
-  if (button == GLFW_MOUSE_BUTTON_LEFT) {
-    if (action == GLFW_PRESS) {
-      gMouseLeftDown = true;
-      trackball(gPrevQuat, 0.0f, 0.0f, 0.0f, 0.0f);
-      if (gCtrlPressed) {
-        double xpos, ypos;
-        glfwGetCursorPos(window, &xpos, &ypos);
-        int xPic = int(xpos);
-        int yPic = gHeight - int(ypos);
-        if (xPic > 0 && xPic < gRenderConfig.width && yPic > 0 &&
-            yPic < gRenderConfig.height) {
-          float depth = gRenderConfig.depthImage[4 * (yPic * gRenderConfig.width + xPic) + 0];
-          if (depth > 0) {
-            for (int i = 0; i < 3; i++)
-              gRenderConfig.look_at[i] = gRenderConfig.positionImage[4 * (yPic * gRenderConfig.width + xPic) + i];
-            RequestRender();
-          }
-        }
+  //if (ImGui::GetIO().WantCaptureMouse) {
+  //  return;
+  //}
+
+  std::cout << "mouseButtonCallback: button=" << button << ", action=" << action
+            << ", mods=" << mods << "\n";
+  std::cout << std::fflush;
+
+  //if (!ImGui::GetIO().WantCaptureMouse) {
+    if (button == GLFW_MOUSE_BUTTON_LEFT) {
+      if (action == GLFW_PRESS) {
+        gMouseLeftDown = true;
+        trackball(gPrevQuat, 0.0f, 0.0f, 0.0f, 0.0f);
+      } else {
+        gMouseLeftDown = false;
       }
-    } else {
-      gMouseLeftDown = false;
     }
-  }
+  //}
 }
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
@@ -382,65 +383,111 @@ void UpdateTexture(int width, int height) {
   std::vector<unsigned char> buf(width * height * 4);
   
   if (gShowBufferMode == SHOW_BUFFER_COLOR) {
-    for (size_t i = 0; i < buf.size() / 4; i++) {
-      float r = gRGBA[4 * i + 0];
-      float g = gRGBA[4 * i + 1];
-      float b = gRGBA[4 * i + 2];
-      float a = gRGBA[4 * i + 3];
-      if (gSampleCounts[i] > 0) {
-        r /= static_cast<float>(gSampleCounts[i]);
-        g /= static_cast<float>(gSampleCounts[i]);
-        b /= static_cast<float>(gSampleCounts[i]);
-        a /= static_cast<float>(gSampleCounts[i]);
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        int src_idx = ((height - 1 - y) * width + x);
+        int dst_idx = (y * width + x);
+        
+        float r = gRGBA[4 * src_idx + 0];
+        float g = gRGBA[4 * src_idx + 1];
+        float b = gRGBA[4 * src_idx + 2];
+        float a = gRGBA[4 * src_idx + 3];
+        if (gSampleCounts[src_idx] > 0) {
+          r /= static_cast<float>(gSampleCounts[src_idx]);
+          g /= static_cast<float>(gSampleCounts[src_idx]);
+          b /= static_cast<float>(gSampleCounts[src_idx]);
+          a /= static_cast<float>(gSampleCounts[src_idx]);
+        }
+        buf[4 * dst_idx + 0] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, r * 255.0f)));
+        buf[4 * dst_idx + 1] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, g * 255.0f)));
+        buf[4 * dst_idx + 2] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, b * 255.0f)));
+        buf[4 * dst_idx + 3] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, a * 255.0f)));
       }
-      buf[4 * i + 0] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, r * 255.0f)));
-      buf[4 * i + 1] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, g * 255.0f)));
-      buf[4 * i + 2] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, b * 255.0f)));
-      buf[4 * i + 3] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, a * 255.0f)));
     }
   } else if (gShowBufferMode == SHOW_BUFFER_NORMAL) {
-    for (size_t i = 0; i < buf.size(); i++) {
-      float val = gNormalRGBA[i] * 0.5f + 0.5f;
-      buf[i] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, val * 255.0f)));
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        for (int c = 0; c < 4; c++) {
+          int src_idx = ((height - 1 - y) * width + x) * 4 + c;
+          int dst_idx = (y * width + x) * 4 + c;
+          float val = gNormalRGBA[src_idx] * 0.5f + 0.5f;
+          buf[dst_idx] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, val * 255.0f)));
+        }
+      }
     }
   } else if (gShowBufferMode == SHOW_BUFFER_POSITION) {
-    for (size_t i = 0; i < buf.size(); i++) {
-      float val = gPositionRGBA[i] * gShowPositionScale;
-      buf[i] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, val * 255.0f)));
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        for (int c = 0; c < 4; c++) {
+          int src_idx = ((height - 1 - y) * width + x) * 4 + c;
+          int dst_idx = (y * width + x) * 4 + c;
+          float val = gPositionRGBA[src_idx] * gShowPositionScale;
+          buf[dst_idx] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, val * 255.0f)));
+        }
+      }
     }
   } else if (gShowBufferMode == SHOW_BUFFER_DEPTH) {
     float d_min = std::min(gShowDepthRange[0], gShowDepthRange[1]);
     float d_diff = fabsf(gShowDepthRange[1] - gShowDepthRange[0]);
     d_diff = std::max(d_diff, std::numeric_limits<float>::epsilon());
-    for (size_t i = 0; i < buf.size(); i++) {
-      float v = (gDepthRGBA[i] - d_min) / d_diff;
-      if (gShowDepthPeseudoColor) {
-        float val = pesudoColor(v, i % 4);
-        buf[i] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, val * 255.0f)));
-      } else {
-        buf[i] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, v * 255.0f)));
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        for (int c = 0; c < 4; c++) {
+          int src_idx = ((height - 1 - y) * width + x) * 4 + c;
+          int dst_idx = (y * width + x) * 4 + c;
+          float v = (gDepthRGBA[src_idx] - d_min) / d_diff;
+          if (gShowDepthPeseudoColor) {
+            float val = pesudoColor(v, c);
+            buf[dst_idx] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, val * 255.0f)));
+          } else {
+            buf[dst_idx] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, v * 255.0f)));
+          }
+        }
       }
     }
   } else if (gShowBufferMode == SHOW_BUFFER_TEXCOORD) {
-    for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, gTexCoordRGBA[i] * 255.0f)));
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        for (int c = 0; c < 4; c++) {
+          int src_idx = ((height - 1 - y) * width + x) * 4 + c;
+          int dst_idx = (y * width + x) * 4 + c;
+          buf[dst_idx] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, gTexCoordRGBA[src_idx] * 255.0f)));
+        }
+      }
     }
   } else if (gShowBufferMode == SHOW_BUFFER_VARYCOORD) {
-    for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, gVaryCoordRGBA[i] * 255.0f)));
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        for (int c = 0; c < 4; c++) {
+          int src_idx = ((height - 1 - y) * width + x) * 4 + c;
+          int dst_idx = (y * width + x) * 4 + c;
+          buf[dst_idx] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, gVaryCoordRGBA[src_idx] * 255.0f)));
+        }
+      }
     }
   } else if (gShowBufferMode == SHOW_BUFFER_VERTEXCOLOR) {
-    for (size_t i = 0; i < buf.size(); i++) {
-      buf[i] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, gVertexColorRGBA[i] * 255.0f)));
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        for (int c = 0; c < 4; c++) {
+          int src_idx = ((height - 1 - y) * width + x) * 4 + c;
+          int dst_idx = (y * width + x) * 4 + c;
+          buf[dst_idx] = static_cast<unsigned char>(std::min(255.0f, std::max(0.0f, gVertexColorRGBA[src_idx] * 255.0f)));
+        }
+      }
     }
   } else if (gShowBufferMode == SHOW_BUFFER_MATERIALID) {
-    for (size_t i = 0; i < buf.size() / 4; i++) {
-      float rgb[3];
-      IdToCol(rgb, gMaterialID[i]);
-      buf[4 * i + 0] = static_cast<unsigned char>(rgb[0] * 255.0f);
-      buf[4 * i + 1] = static_cast<unsigned char>(rgb[1] * 255.0f);
-      buf[4 * i + 2] = static_cast<unsigned char>(rgb[2] * 255.0f);
-      buf[4 * i + 3] = 255;
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
+        int src_idx = (height - 1 - y) * width + x;
+        int dst_idx = y * width + x;
+        
+        float rgb[3];
+        IdToCol(rgb, gMaterialID[src_idx]);
+        buf[4 * dst_idx + 0] = static_cast<unsigned char>(rgb[0] * 255.0f);
+        buf[4 * dst_idx + 1] = static_cast<unsigned char>(rgb[1] * 255.0f);
+        buf[4 * dst_idx + 2] = static_cast<unsigned char>(rgb[2] * 255.0f);
+        buf[4 * dst_idx + 3] = 255;
+      }
     }
   }
 
@@ -497,20 +544,20 @@ int main(int argc, char** argv) {
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-  window = glfwCreateWindow(1024, 800, "NanoRT GUI", nullptr, nullptr);
-  if (window == nullptr) {
+  gWindow = glfwCreateWindow(1024, 800, "NanoRT GUI", nullptr, nullptr);
+  if (gWindow == nullptr) {
     fprintf(stderr, "Failed to create GLFW window\n");
     glfwTerminate();
     return -1;
   }
 
-  glfwMakeContextCurrent(window);
+  glfwMakeContextCurrent(gWindow);
   glfwSwapInterval(1);
 
-  glfwSetKeyCallback(window, keyCallback);
-  glfwSetCursorPosCallback(window, cursorPosCallback);
-  glfwSetMouseButtonCallback(window, mouseButtonCallback);
-  glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
+  glfwSetKeyCallback(gWindow, keyCallback);
+  glfwSetCursorPosCallback(gWindow, cursorPosCallback);
+  glfwSetMouseButtonCallback(gWindow, mouseButtonCallback);
+  glfwSetFramebufferSizeCallback(gWindow, framebufferSizeCallback);
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -518,7 +565,7 @@ int main(int argc, char** argv) {
 
   ImGui::StyleColorsDark();
 
-  ImGui_ImplGlfw_InitForOpenGL(window, true);
+  ImGui_ImplGlfw_InitForOpenGL(gWindow, true);
   ImGui_ImplOpenGL3_Init(glsl_version);
 
   InitRender(&gRenderConfig);
@@ -526,7 +573,7 @@ int main(int argc, char** argv) {
   std::thread renderThread(RenderThread);
   RequestRender();
 
-  while (!glfwWindowShouldClose(window)) {
+  while (!glfwWindowShouldClose(gWindow)) {
     glfwPollEvents();
 
     ImGui_ImplOpenGL3_NewFrame();
@@ -543,7 +590,7 @@ int main(int argc, char** argv) {
         RequestRender();
       }
 
-      if (ImGui::InputFloat3("look-at", gRenderConfig.look_at)) {
+      if (ImGui::DragFloat3("look-at", gRenderConfig.look_at, 0.1f)) {
         RequestRender();
       }
 
@@ -583,21 +630,21 @@ int main(int argc, char** argv) {
     ImGui::End();
 
     int display_w, display_h;
-    glfwGetFramebufferSize(window, &display_w, &display_h);
+    glfwGetFramebufferSize(gWindow, &display_w, &display_h);
     glViewport(0, 0, display_w, display_h);
     glClearColor(0.0f, 0.1f, 0.2f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
     UpdateTexture(gRenderConfig.width, gRenderConfig.height);
 
-    ImGui::Begin("Render");
+    ImGui::Begin("Render"); //, nullptr, ImGuiWindowFlags_NoMove);
     ImGui::Image((void*)(intptr_t)gTextureID, ImVec2(gRenderConfig.width, gRenderConfig.height));
     ImGui::End();
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-    glfwSwapBuffers(window);
+    glfwSwapBuffers(gWindow);
     std::this_thread::sleep_for(std::chrono::milliseconds(16));
   }
 
@@ -611,7 +658,7 @@ int main(int argc, char** argv) {
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
 
-  glfwDestroyWindow(window);
+  glfwDestroyWindow(gWindow);
   glfwTerminate();
 
   return EXIT_SUCCESS;

@@ -2004,13 +2004,16 @@ class TriangleIntersector {
       W = static_cast<T>(BxAy - ByAx);
     }
 
-    if (U < static_cast<T>(0.0) || V < static_cast<T>(0.0) ||
-        W < static_cast<T>(0.0)) {
-      if (trace_options_.cull_back_face ||
-          (U > static_cast<T>(0.0) || V > static_cast<T>(0.0) ||
-           W > static_cast<T>(0.0))) {
-        return false;
-      }
+    // Check for mixed signs (invalid intersection)
+    if ((U < static_cast<T>(0.0) || V < static_cast<T>(0.0) || W < static_cast<T>(0.0)) &&
+        (U > static_cast<T>(0.0) || V > static_cast<T>(0.0) || W > static_cast<T>(0.0))) {
+      return false;
+    }
+
+    // Handle backface culling
+    if (trace_options_.cull_back_face && 
+        U < static_cast<T>(0.0) && V < static_cast<T>(0.0) && W < static_cast<T>(0.0)) {
+      return false;
     }
 
     T det = U + V + W;
@@ -2130,11 +2133,16 @@ class TriangleIntersector {
       W = static_cast<T>(BxAy - ByAx);
     }
 
-    if (U < static_cast<T>(0.0) || V < static_cast<T>(0.0) || W < static_cast<T>(0.0)) {
-      if (trace_options_.cull_back_face ||
-          (U > static_cast<T>(0.0) || V > static_cast<T>(0.0) || W > static_cast<T>(0.0))) {
-        return false;
-      }
+    // Check for mixed signs (invalid intersection)
+    if ((U < static_cast<T>(0.0) || V < static_cast<T>(0.0) || W < static_cast<T>(0.0)) &&
+        (U > static_cast<T>(0.0) || V > static_cast<T>(0.0) || W > static_cast<T>(0.0))) {
+      return false;
+    }
+
+    // Handle backface culling
+    if (trace_options_.cull_back_face && 
+        U < static_cast<T>(0.0) && V < static_cast<T>(0.0) && W < static_cast<T>(0.0)) {
+      return false;
     }
 
     T det = U + V + W;
@@ -2214,7 +2222,7 @@ class TriangleIntersector {
     T V = vgetq_lane_f32(cross_vec, 1);
     T W = vgetq_lane_f32(cross_vec, 2);
 
-    // Edge case handling continues as before...
+    // Edge case handling with double precision fallback
     if (U == static_cast<T>(0.0) || V == static_cast<T>(0.0) || W == static_cast<T>(0.0)) {
       double CxBy = static_cast<double>(Cx) * static_cast<double>(By);
       double CyBx = static_cast<double>(Cy) * static_cast<double>(Bx);
@@ -2229,11 +2237,16 @@ class TriangleIntersector {
       W = static_cast<T>(BxAy - ByAx);
     }
 
-    if (U < static_cast<T>(0.0) || V < static_cast<T>(0.0) || W < static_cast<T>(0.0)) {
-      if (trace_options_.cull_back_face ||
-          (U > static_cast<T>(0.0) || V > static_cast<T>(0.0) || W > static_cast<T>(0.0))) {
-        return false;
-      }
+    // Check for mixed signs (invalid intersection)
+    if ((U < static_cast<T>(0.0) || V < static_cast<T>(0.0) || W < static_cast<T>(0.0)) &&
+        (U > static_cast<T>(0.0) || V > static_cast<T>(0.0) || W > static_cast<T>(0.0))) {
+      return false;
+    }
+
+    // Handle backface culling
+    if (trace_options_.cull_back_face && 
+        U < static_cast<T>(0.0) && V < static_cast<T>(0.0) && W < static_cast<T>(0.0)) {
+      return false;
     }
 
     T det = U + V + W;
