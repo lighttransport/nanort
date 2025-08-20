@@ -8,7 +8,7 @@
     "example": "node example.js"
   },
   "dependencies": {
-    "webgpu": "^0.1.38"
+    "webgpu": "^0.3.0"
   },
   "keywords": [
     "raytracing",
